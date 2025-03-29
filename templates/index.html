@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <title>Словозв'яз</title>
+    <!-- Підключаємо ваші стилі -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+<!-- Верхня панель -->
+<div class="header">
+    <h2 class="gameTitle">Словозв'яз</h2>
+    <div class="gameStats">Спроб: <span id="guessCount">0</span></div>
+</div>
+
+<div class="container">
+    <!-- Блок привітання (спочатку прихований) -->
+    <div id="congratsBlock" class="congratsBlock hidden">
+        <h2>Вітаємо!</h2>
+        <p>
+            Ви відгадали слово №<span id="gameNumber">???</span> за
+            <span id="guessesUsed">0</span> спроб(и)!
+        </p>
+        <button id="shareButton">Поділитися</button>
+    </div>
+
+    <!-- Розміщуємо кнопку "Closest words" над заголовком "Введіть слово" -->
+    <button id="closestWordsBtn" class="hidden">Closest words</button>
+
+    <h1>Введіть слово</h1>
+
+    <div class="input-section">
+        <input type="text" id="guessInput" placeholder="Введіть слово" autocomplete="off">
+        <button id="submitGuess">Відправити</button>
+    </div>
+
+    <div id="howToPlayBlock" class="howToPlayBlock">
+        <h2>Як грати?</h2>
+        <p>
+            Знайдіть секретне слово. Кількість спроб необмежена.<br>
+            Слова відсортовані за схожістю до секретного слова. Секретне слово — номер 1.<br>
+            Після введення слова ви побачите його позицію (ранг).
+        </p>
+        <details>
+            <summary>Як визначається порядок слів?</summary>
+            <p>Алгоритм аналізує контекст слів у великих масивах тексту і сортує їх за близькістю.</p>
+        </details>
+        <details>
+            <summary>Як попросити підказку?</summary>
+            <p>Натисніть кнопку «Hint», щоб отримати допоміжне слово.</p>
+        </details>
+        <button id="readMoreBtn">Докладніше...</button>
+    </div>
+
+    <!-- Блок для відображення останньої спроби -->
+    <div id="lastGuessWrapper" class="lastGuessWrapper hidden">
+        <div id="lastGuessDisplay"></div>
+    </div>
+
+    <!-- Контейнер зі здогадками -->
+    <div id="guessesContainer"></div>
+</div>
+
+<!-- Модальне вікно (спочатку приховане) -->
+<div id="closestWordsModal" class="modal hidden">
+    <div class="modal-content">
+        <span id="closeModalBtn" class="close">&times;</span>
+        <h2 id="closestWordsTitle">These were the 500 closest words:</h2>
+        <div id="closestWordsList"></div>
+    </div>
+</div>
+
+<script type="module" src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
