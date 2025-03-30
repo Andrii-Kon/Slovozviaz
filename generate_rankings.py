@@ -60,7 +60,7 @@ if __name__ == "__main__":
         definitions = json.load(f)
 
     # Визначаємо цільове слово та його фразу (визначення)
-    target_word = "надія"
+    target_word = "програма"
     target_phrase = definitions.get(target_word, target_word)
     print(f"Отримуємо embedding для фрази: {target_phrase}")
     target_emb = get_embeddings_batch([target_phrase])[0]
