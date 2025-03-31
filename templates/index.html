@@ -3,19 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <title>Словозв'яз</title>
-    <!-- Підключаємо ваші стилі -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-
-<!-- Верхня панель -->
 <div class="header">
     <h2 class="gameTitle">Словозв'яз</h2>
     <div class="gameStats">Спроб: <span id="guessCount">0</span></div>
 </div>
-
 <div class="container">
-    <!-- Блок привітання (спочатку прихований) -->
     <div id="congratsBlock" class="congratsBlock hidden">
         <h2>Вітаємо!</h2>
         <p>
@@ -24,17 +19,13 @@
         </p>
         <button id="shareButton">Поділитися</button>
     </div>
-
-    <!-- Розміщуємо кнопку "Closest words" над заголовком "Введіть слово" -->
     <button id="closestWordsBtn" class="hidden">Closest words</button>
-
     <h1>Введіть слово</h1>
-
     <div class="input-section">
         <input type="text" id="guessInput" placeholder="Введіть слово" autocomplete="off">
         <button id="submitGuess">Відправити</button>
+        <button id="previousGamesBtn">Попередні ігри</button>
     </div>
-
     <div id="howToPlayBlock" class="howToPlayBlock">
         <h2>Як грати?</h2>
         <p>
@@ -52,17 +43,12 @@
         </details>
         <button id="readMoreBtn">Докладніше...</button>
     </div>
-
-    <!-- Блок для відображення останньої спроби -->
     <div id="lastGuessWrapper" class="lastGuessWrapper hidden">
         <div id="lastGuessDisplay"></div>
     </div>
-
-    <!-- Контейнер зі здогадками -->
     <div id="guessesContainer"></div>
 </div>
-
-<!-- Модальне вікно (спочатку приховане) -->
+<!-- Модальне вікно "Closest words" -->
 <div id="closestWordsModal" class="modal hidden">
     <div class="modal-content">
         <span id="closeModalBtn" class="close">&times;</span>
@@ -70,7 +56,15 @@
         <div id="closestWordsList"></div>
     </div>
 </div>
-
+<!-- Модальне вікно "Попередні ігри" -->
+<div id="previousGamesModal" class="modal hidden">
+    <div class="modal-content">
+        <span id="closePreviousGamesModal" class="close">&times;</span>
+        <h2>Виберіть попередню гру</h2>
+        <button id="randomGameBtn">Random</button>
+        <div id="previousGamesList"></div>
+    </div>
+</div>
 <script type="module" src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
 </html>

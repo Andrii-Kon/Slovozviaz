@@ -1,42 +1,30 @@
-// static/js/main.js
 import { fetchRankedWords, submitGuess } from "./api.js";
 import { renderGuesses, createGuessItem } from "./ui.js";
 
 /**
- * Глобальний прапорець: поки не дійдемо до rank=2, рухаємося "до низу" (діленням на 2).
- * Як тільки дійшли до rank=2, ставимо isGoingUp = true, і рухаємося вгору (3,4,5...).
+ * Глобальні змінні гри
  */
 let isGoingUp = false;
+let allowedWords = new Set();
+let guessCount = 0;
+let bestRank = Infinity;
+let rankedWords = [];
+let guesses = [];
+let lastWord = null;
+let MAX_RANK = 0;
+let dayNumber = null;
 
-/**
- * Функція для визначення наступного рангу підказки.
- * Логіка:
- *   1) Якщо bestRank === Infinity => повертаємо 500 (якщо є).
- *   2) Якщо bestRank === 1 => повертаємо null (слово відгадане).
- *   3) Якщо isGoingUp === false => намагаємося поділити bestRank на 2,
- *      доки не дістанемося до 2. Якщо вже нижчі ранги вгадані, йдемо ще нижче.
- *      Коли дійшли до 2 — виставляємо isGoingUp=true і далі даємо rank=3,4,5...
- *   4) Якщо isGoingUp === true => рухаємося вгору: bestRank+1, +2 і т. д.
- */
 function getNextHintRank(bestRank, guesses, rankedWords, maxRank) {
-    // Якщо спроб ще не було – повертаємо 500, якщо таке є
     if (bestRank === Infinity) {
         const wordObj = rankedWords.find(x => x.rank === 500);
         if (wordObj) return 500;
         return null;
     }
-
-    // Якщо вже відгадали секретне слово
     if (bestRank === 1) {
         return null;
     }
-
-    // Перевіряємо, чи ранг уже вгаданий
     const isGuessed = (r) => guesses.some(g => g.rank === r);
-
-    // Якщо ми ще не дійшли до 2 (isGoingUp === false), продовжуємо "ділення"
     if (!isGoingUp) {
-        // Якщо bestRank > 2, пробуємо взяти floor(bestRank/2)
         if (bestRank > 2) {
             let candidate = Math.floor(bestRank / 2);
             while (candidate >= 2) {
@@ -45,24 +33,15 @@ function getNextHintRank(bestRank, guesses, rankedWords, maxRank) {
                 }
                 candidate = Math.floor(candidate / 2);
             }
-            // Якщо не знайшли нічого нижчого за 2,
-            // можна "проскочити" відразу до rank=2 (якщо воно ще не вгадане)
             if (!isGuessed(2)) {
                 return 2;
             }
-            // Якщо 2 вже вгадане, тоді починаємо рухатися вгору
             isGoingUp = true;
         }
-
-        // Якщо bestRank = 2 або ми з'ясували, що 2 теж вгадане,
-        // переходимо в "зворотний" режим (isGoingUp = true).
         if (bestRank === 2) {
             isGoingUp = true;
         }
     }
-
-    // Якщо дійшли сюди, значить isGoingUp = true
-    // => рухаємося вгору (bestRank+1, +2, +3 ...)
     let bigger = bestRank + 1;
     while (bigger <= maxRank) {
         if (!isGuessed(bigger)) {
@@ -70,14 +49,40 @@ function getNextHintRank(bestRank, guesses, rankedWords, maxRank) {
         }
         bigger++;
     }
+    return null;
+}
 
-    return null; // Нічого не знайшли
+function computeGameNumber(dateStr) {
+    const baseDate = new Date(2025, 2, 31);
+    const [year, month, day] = dateStr.split("-").map(Number);
+    const currentDate = new Date(year, month - 1, day);
+    const diffMs = currentDate - baseDate;
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    return diffDays + 1;
+}
+
+function formatDateToString(dateStr) {
+    const [year, month, day] = dateStr.split("-").map(Number);
+    const d = new Date(year, month - 1, day);
+    const weekdayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const dayOfWeek = weekdayNames[d.getDay()];
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    return `${dayOfWeek}, ${monthNames[d.getMonth()]} ${day}`;
+}
+
+async function fetchAllowedWords() {
+    try {
+        const response = await fetch("/api/wordlist");
+        const data = await response.json();
+        allowedWords = new Set(data.map(word => word.toLowerCase()));
+    } catch (err) {
+        console.error("[Error] Failed to fetch allowed words:", err);
+    }
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
-    console.log("[Debug] DOMContentLoaded triggered");
+    await fetchAllowedWords();
 
-    // Отримуємо посилання на елементи
     const guessInput = document.getElementById("guessInput");
     const submitGuessBtn = document.getElementById("submitGuess");
     const guessesContainer = document.getElementById("guessesContainer");
@@ -85,62 +90,72 @@ document.addEventListener("DOMContentLoaded", async () => {
     const lastGuessWrapper = document.getElementById("lastGuessWrapper");
     const lastGuessDisplay = document.getElementById("lastGuessDisplay");
     const howToPlayBlock = document.getElementById("howToPlayBlock");
-
-    // Модальне вікно та кнопки
     const closestWordsBtn = document.getElementById("closestWordsBtn");
+    const previousGamesBtn = document.getElementById("previousGamesBtn");
+    const previousGamesModal = document.getElementById("previousGamesModal");
+    const closePreviousGamesModal = document.getElementById("closePreviousGamesModal");
+    const previousGamesList = document.getElementById("previousGamesList");
+    const randomGameBtn = document.getElementById("randomGameBtn");
+
     const closestWordsModal = document.getElementById("closestWordsModal");
-    const closestWordsList = document.getElementById("closestWordsList");
     const closeModalBtn = document.getElementById("closeModalBtn");
 
-    console.log("[Debug] guessInput =", guessInput);
-    console.log("[Debug] submitGuessBtn =", submitGuessBtn);
-    console.log("[Debug] guessesContainer =", guessesContainer);
-    console.log("[Debug] guessCountElem =", guessCountElem);
-    console.log("[Debug] lastGuessWrapper =", lastGuessWrapper);
-    console.log("[Debug] lastGuessDisplay =", lastGuessDisplay);
-    console.log("[Debug] howToPlayBlock =", howToPlayBlock);
-    console.log("[Debug] closestWordsBtn =", closestWordsBtn);
-    console.log("[Debug] closestWordsModal =", closestWordsModal);
-    console.log("[Debug] closestWordsList =", closestWordsList);
-    console.log("[Debug] closeModalBtn =", closeModalBtn);
+    try {
+        const response = await fetch("/api/daily-index");
+        const dailyIndexData = await response.json();
+        dayNumber = dailyIndexData.day_number;
+    } catch (err) {
+        console.error("[Error] Failed to fetch daily index:", err);
+    }
 
-    let guessCount = 0;
-    let bestRank = Infinity;
-    let rankedWords = [];
-    let guesses = [];
-    let lastWord = null;
-    let MAX_RANK = 0;
-
-    // Завантажуємо список слів
     try {
         rankedWords = await fetchRankedWords();
-        console.log("[Debug] fetched rankedWords, length =", rankedWords.length);
     } catch (err) {
         console.error("[Error] fetchRankedWords failed:", err);
     }
-
-    // Визначаємо MAX_RANK (якщо список відсортований – беремо .length)
     MAX_RANK = rankedWords.length;
-    console.log("[Debug] MAX_RANK =", MAX_RANK);
 
-    // Функція відправки слова
+    async function loadArchive(game_date) {
+        try {
+            const response = await fetch(`/archive/${game_date}`);
+            if (!response.ok) {
+                alert("Архів не знайдено для цієї дати");
+                return;
+            }
+            const archiveData = await response.json();
+            rankedWords = archiveData.ranking;
+            MAX_RANK = rankedWords.length;
+            guesses = [];
+            guessCount = 0;
+            guessCountElem.textContent = 0;
+            alert(`Завантажено гру #${computeGameNumber(game_date)} (${formatDateToString(game_date)})`);
+        } catch (err) {
+            console.error("Error loading archive for date", game_date, err);
+            alert("Помилка завантаження архіву");
+        }
+    }
+
     async function handleSubmit() {
-        console.log("[Debug] handleSubmit called");
-
         const word = guessInput.value.trim().toLowerCase();
-        console.log("[Debug] user typed word =", word);
         if (!word) return;
 
-        // Ховаємо блок "Як грати?" після першої спроби
+        if (guesses.some(g => g.word === word)) {
+            alert(`Слово "${word}" уже вгадали`);
+            return;
+        }
+
+        if (!allowedWords.has(word)) {
+            alert("Вибачте, я не знаю цього слова");
+            return;
+        }
+
         if (howToPlayBlock && howToPlayBlock.style.display !== "none") {
             howToPlayBlock.style.display = "none";
-            console.log("[Debug] hide howToPlayBlock");
         }
 
         let data;
         try {
             data = await submitGuess(word);
-            console.log("[Debug] response from /guess =", data);
         } catch (err) {
             console.error("[Error] submitGuess failed:", err);
             return;
@@ -151,46 +166,40 @@ document.addEventListener("DOMContentLoaded", async () => {
         lastWord = word;
 
         if (data.error) {
-            guesses.push({ word, rank: Infinity, error: true });
-            console.log("[Debug] word not found in the list");
+            guesses.push({ word, rank: Infinity, error: true, errorMessage: data.error });
         } else {
             guesses.push({ word, rank: data.rank, error: false });
-            console.log("[Debug] push guess:", { word, rank: data.rank });
-
             if (data.rank < bestRank) {
                 bestRank = data.rank;
-                console.log("[Debug] new bestRank =", bestRank);
             }
 
-            // Якщо відгадали слово (rank === 1)
             if (data.rank === 1) {
-                console.log("[Debug] user guessed the secret word!");
                 const congratsBlock = document.getElementById("congratsBlock");
                 if (congratsBlock) {
                     congratsBlock.classList.remove("hidden");
-                    console.log("[Debug] show congratsBlock");
                 }
-                // Оновлюємо кількість спроб у блоці привітання
+
                 const guessesUsedElem = document.getElementById("guessesUsed");
                 if (guessesUsedElem) {
                     guessesUsedElem.textContent = guessCount;
                 }
+
+                // ✅ ВСТАВЛЯЄМО НОМЕР ГРИ
+                const gameNumberElem = document.getElementById("gameNumber");
+                if (gameNumberElem) {
+                    gameNumberElem.textContent = dayNumber;
+                }
+
                 guessInput.disabled = true;
                 submitGuessBtn.disabled = true;
-
-                // Вимикаємо кнопку Hint після виграшу
                 const hintButton = document.getElementById("hintButton");
                 if (hintButton) {
                     hintButton.disabled = true;
                 }
-
-                // Показуємо кнопку "Closest words"
                 closestWordsBtn.classList.remove("hidden");
-                console.log("[Debug] show closestWordsBtn");
             }
         }
 
-        // Рендеримо всі здогадки
         renderGuesses(
             guesses,
             lastWord,
@@ -199,12 +208,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             lastGuessWrapper,
             lastGuessDisplay
         );
-
         guessInput.value = "";
         guessInput.focus();
     }
 
-    // Слухачі подій (Enter + клік)
     guessInput.addEventListener("keypress", (e) => {
         if (e.key === "Enter") {
             handleSubmit();
@@ -212,56 +219,38 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
     submitGuessBtn.addEventListener("click", handleSubmit);
 
-    // Додаємо кнопку Hint динамічно
     const hintButton = document.createElement("button");
     hintButton.textContent = "Hint";
     hintButton.id = "hintButton";
     document.querySelector(".input-section").appendChild(hintButton);
 
     hintButton.addEventListener("click", () => {
-        console.log("[Debug] hintButton clicked");
-
-        // Ховаємо блок "Як грати?" при натисканні Hint
         if (howToPlayBlock && howToPlayBlock.style.display !== "none") {
             howToPlayBlock.style.display = "none";
-            console.log("[Debug] hide howToPlayBlock on hint");
         }
-
         if (rankedWords.length === 0) {
             alert("Список слів порожній або не завантажений!");
             return;
         }
-        // Використовуємо функцію для визначення наступного рангу
         const nextHintRank = getNextHintRank(bestRank, guesses, rankedWords, MAX_RANK);
-        console.log("[Debug] nextHintRank =", nextHintRank);
-
         if (!nextHintRank) {
             alert("Немає підходящої підказки.");
             return;
         }
-
         const hintWordObj = rankedWords.find(item => item.rank === nextHintRank);
-        console.log("[Debug] hintWordObj =", hintWordObj);
-
         if (!hintWordObj) {
             alert("Не знайдено слово з рангу " + nextHintRank);
             return;
         }
-
         lastWord = hintWordObj.word;
         guesses.push({
             word: hintWordObj.word,
             rank: hintWordObj.rank,
             error: false
         });
-        console.log("[Debug] added hint guess:", hintWordObj.word);
-
-        // Оновлюємо bestRank, якщо отриманий ранг є кращим (меншим)
         if (hintWordObj.rank < bestRank) {
             bestRank = hintWordObj.rank;
-            console.log("[Debug] updated bestRank =", bestRank);
         }
-
         renderGuesses(
             guesses,
             lastWord,
@@ -272,18 +261,58 @@ document.addEventListener("DOMContentLoaded", async () => {
         );
     });
 
-    // Модальне вікно "Closest words"
+    previousGamesBtn.addEventListener("click", async () => {
+        try {
+            const response = await fetch("/archive");
+            const dates = await response.json();
+            if (!Array.isArray(dates) || dates.length === 0) {
+                previousGamesList.innerHTML = "<p>Поки немає архівів</p>";
+            } else {
+                previousGamesList.innerHTML = "";
+                dates.forEach(dateStr => {
+                    const gameNumber = computeGameNumber(dateStr);
+                    const labelDate = formatDateToString(dateStr);
+                    const btn = document.createElement("button");
+                    btn.textContent = `#${gameNumber} ${labelDate}`;
+                    btn.addEventListener("click", () => {
+                        loadArchive(dateStr);
+                        previousGamesModal.classList.add("hidden");
+                    });
+                    previousGamesList.appendChild(btn);
+                });
+            }
+            previousGamesModal.classList.remove("hidden");
+        } catch (err) {
+            console.error("[Error] Failed to fetch archive list:", err);
+            previousGamesList.innerHTML = "<p>Помилка завантаження архіву</p>";
+            previousGamesModal.classList.remove("hidden");
+        }
+    });
+
+    closePreviousGamesModal.addEventListener("click", () => {
+        previousGamesModal.classList.add("hidden");
+    });
+
+    randomGameBtn.addEventListener("click", async () => {
+        try {
+            const response = await fetch("/archive");
+            const dates = await response.json();
+            if (dates.length === 0) {
+                alert("Немає архівів");
+                return;
+            }
+            const randomDate = dates[Math.floor(Math.random() * dates.length)];
+            await loadArchive(randomDate);
+            previousGamesModal.classList.add("hidden");
+        } catch (err) {
+            console.error("[Error] Random game:", err);
+        }
+    });
+
     function showClosestWords() {
-        console.log("[Debug] showClosestWords called");
-
-        // Очищаємо контейнер
+        const closestWordsList = document.getElementById("closestWordsList");
         closestWordsList.innerHTML = "";
-
-        // Беремо перші 500 (або менше)
         const top500 = rankedWords.slice(0, 500);
-        console.log("[Debug] top500.length =", top500.length);
-
-        // Рендеримо кожне слово
         top500.forEach(item => {
             const guessItem = createGuessItem(
                 { word: item.word, rank: item.rank, error: false },
@@ -291,17 +320,12 @@ document.addEventListener("DOMContentLoaded", async () => {
             );
             closestWordsList.appendChild(guessItem);
         });
-
-        console.log("[Debug] removing 'hidden' from #closestWordsModal");
         closestWordsModal.classList.remove("hidden");
     }
 
-    // При натисканні на кнопку "Closest words" — відкриваємо модалку
     closestWordsBtn.addEventListener("click", showClosestWords);
 
-    // При натисканні на "Х" — закриваємо модалку
     closeModalBtn.addEventListener("click", () => {
-        console.log("[Debug] adding 'hidden' to #closestWordsModal");
         closestWordsModal.classList.add("hidden");
     });
 });

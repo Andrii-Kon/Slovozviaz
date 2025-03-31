@@ -1,3 +1,4 @@
+// static/js/ui.js
 import { getFillPercent, getBarColor } from "./utils.js";
 
 /**
@@ -7,20 +8,17 @@ export function createGuessItem(guessObj, maxRank) {
     const guessItem = document.createElement("div");
     guessItem.classList.add("guessItem");
 
-    // Якщо слово не знайдено
     if (guessObj.error) {
         guessItem.textContent = `${guessObj.word} — не знайдено у списку`;
         return guessItem;
     }
 
-    // Смуга (рівень близькості)
     const fillBar = document.createElement("div");
     fillBar.classList.add("fillBar");
     const fillPercent = getFillPercent(guessObj.rank, maxRank);
     fillBar.style.width = fillPercent + "%";
     fillBar.style.backgroundColor = getBarColor(guessObj.rank);
 
-    // Текст зліва (слово) і справа (ранг)
     const guessText = document.createElement("div");
     guessText.classList.add("guessText");
 
@@ -45,19 +43,16 @@ export function createGuessItem(guessObj, maxRank) {
 export function renderGuesses(guesses, lastWord, maxRank, container, lastGuessWrapper, lastGuessDisplay) {
     container.innerHTML = "";
 
-    // Сортуємо за зростанням рангу
     guesses.sort((a, b) => a.rank - b.rank);
 
     guesses.forEach(guessObj => {
         const guessItem = createGuessItem(guessObj, maxRank);
-        // Якщо це останнє введене слово і НЕ було помилки
         if (guessObj.word === lastWord && !guessObj.error) {
             guessItem.classList.add("highlightGuess");
         }
         container.appendChild(guessItem);
     });
 
-    // Знаходимо останню коректну спробу
     const lastGuessObj = guesses.find(g => g.word === lastWord && !g.error);
     if (lastGuessObj) {
         const cloned = createGuessItem(lastGuessObj, maxRank);

@@ -1,3 +1,4 @@
+// static/js/api.js
 export async function fetchRankedWords() {
     const response = await fetch("/ranked");
     const data = await response.json();
