@@ -1,4 +1,5 @@
 openai
 flask
+flask_sqlalchemy
 numpy
 gunicorn
