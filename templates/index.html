@@ -20,6 +20,7 @@
         <button id="shareButton">Поділитися</button>
     </div>
     <button id="closestWordsBtn" class="hidden">Closest words</button>
+    <h3 id="gameDateLabel" class="game-date-label"></h3>
     <h1>Введіть слово</h1>
     <div class="input-section">
         <input type="text" id="guessInput" placeholder="Введіть слово" autocomplete="off">
@@ -61,7 +62,9 @@
     <div class="modal-content">
         <span id="closePreviousGamesModal" class="close">&times;</span>
         <h2>Виберіть попередню гру</h2>
+        <div id="randomGameContainer">
         <button id="randomGameBtn">Random</button>
+    </div>
         <div id="previousGamesList"></div>
     </div>
 </div>
