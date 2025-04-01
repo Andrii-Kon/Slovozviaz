@@ -50,7 +50,7 @@ def get_today_game_date():
             return BASE_DATE + timedelta(days=offset)
         except ValueError:
             pass
-    today_real = date.today()
+    today_real = date(2025, 4, 2)
     if today_real < BASE_DATE:
         return BASE_DATE
     return today_real
