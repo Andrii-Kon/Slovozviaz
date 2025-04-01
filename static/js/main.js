@@ -14,6 +14,9 @@ let lastWord = null;
 let MAX_RANK = 0;
 let dayNumber = null;
 
+// Глобальна змінна для збереження дати гри (наприклад, архівної)
+let currentGameDate = null;
+
 function getNextHintRank(bestRank, guesses, rankedWords, maxRank) {
     if (bestRank === Infinity) {
         const wordObj = rankedWords.find(x => x.rank === 500);
@@ -75,14 +78,18 @@ async function fetchAllowedWords() {
         const response = await fetch("/api/wordlist");
         const data = await response.json();
         allowedWords = new Set(data.map(word => word.toLowerCase()));
+        console.log("[Debug] Allowed words loaded, count =", allowedWords.size);
     } catch (err) {
         console.error("[Error] Failed to fetch allowed words:", err);
     }
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
+    console.log("[Debug] DOMContentLoaded triggered");
+
     await fetchAllowedWords();
 
+    // Отримання DOM-елементів
     const guessInput = document.getElementById("guessInput");
     const submitGuessBtn = document.getElementById("submitGuess");
     const guessesContainer = document.getElementById("guessesContainer");
@@ -104,17 +111,21 @@ document.addEventListener("DOMContentLoaded", async () => {
         const response = await fetch("/api/daily-index");
         const dailyIndexData = await response.json();
         dayNumber = dailyIndexData.day_number;
+        console.log("[Debug] Daily game number =", dayNumber);
     } catch (err) {
         console.error("[Error] Failed to fetch daily index:", err);
     }
 
     try {
         rankedWords = await fetchRankedWords();
+        console.log("[Debug] fetched rankedWords, length =", rankedWords.length);
     } catch (err) {
         console.error("[Error] fetchRankedWords failed:", err);
     }
     MAX_RANK = rankedWords.length;
+    console.log("[Debug] MAX_RANK =", MAX_RANK);
 
+    // Функція завантаження архіву гри
     async function loadArchive(game_date) {
         try {
             const response = await fetch(`/archive/${game_date}`);
@@ -128,6 +139,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             guesses = [];
             guessCount = 0;
             guessCountElem.textContent = 0;
+
+            // Запам'ятовуємо дату архівної гри
+            currentGameDate = game_date;
+
             alert(`Завантажено гру #${computeGameNumber(game_date)} (${formatDateToString(game_date)})`);
         } catch (err) {
             console.error("Error loading archive for date", game_date, err);
@@ -135,6 +150,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
+    // Функція обробки здогадки
     async function handleSubmit() {
         const word = guessInput.value.trim().toLowerCase();
         if (!word) return;
@@ -151,11 +167,20 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         if (howToPlayBlock && howToPlayBlock.style.display !== "none") {
             howToPlayBlock.style.display = "none";
+            console.log("[Debug] hide howToPlayBlock");
         }
 
         let data;
         try {
-            data = await submitGuess(word);
+            // Якщо завантажено архівну гру, додаємо параметр game_date
+            const dateParam = currentGameDate ? `?game_date=${currentGameDate}` : "";
+            const response = await fetch(`/guess${dateParam}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ word })
+            });
+            data = await response.json();
+            console.log("[Debug] response from /guess =", data);
         } catch (err) {
             console.error("[Error] submitGuess failed:", err);
             return;
@@ -167,29 +192,32 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         if (data.error) {
             guesses.push({ word, rank: Infinity, error: true, errorMessage: data.error });
+            console.log("[Debug] server returned error:", data.error);
         } else {
             guesses.push({ word, rank: data.rank, error: false });
+            console.log("[Debug] push guess:", { word, rank: data.rank });
             if (data.rank < bestRank) {
                 bestRank = data.rank;
+                console.log("[Debug] new bestRank =", bestRank);
             }
-
             if (data.rank === 1) {
+                console.log("[Debug] user guessed the secret word!");
                 const congratsBlock = document.getElementById("congratsBlock");
                 if (congratsBlock) {
                     congratsBlock.classList.remove("hidden");
+                    console.log("[Debug] show congratsBlock");
                 }
-
                 const guessesUsedElem = document.getElementById("guessesUsed");
                 if (guessesUsedElem) {
                     guessesUsedElem.textContent = guessCount;
                 }
-
-                // ✅ ВСТАВЛЯЄМО НОМЕР ГРИ
+                // Вставляємо номер гри, який відповідає архівній даті (якщо є)
                 const gameNumberElem = document.getElementById("gameNumber");
                 if (gameNumberElem) {
-                    gameNumberElem.textContent = dayNumber;
+                    // Якщо currentGameDate не встановлена, використовуємо dayNumber (сьогодні)
+                    gameNumberElem.textContent = currentGameDate ? computeGameNumber(currentGameDate) : dayNumber;
+                    console.log("[Debug] set game number to", currentGameDate ? computeGameNumber(currentGameDate) : dayNumber);
                 }
-
                 guessInput.disabled = true;
                 submitGuessBtn.disabled = true;
                 const hintButton = document.getElementById("hintButton");
@@ -197,6 +225,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     hintButton.disabled = true;
                 }
                 closestWordsBtn.classList.remove("hidden");
+                console.log("[Debug] show closestWordsBtn");
             }
         }
 
