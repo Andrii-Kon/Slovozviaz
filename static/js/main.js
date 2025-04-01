@@ -61,7 +61,8 @@ function formatDateToString(dateStr) {
 
 function updateGameDateLabel() {
     const label = document.getElementById("gameDateLabel");
-    const today = new Date().toISOString().split("T")[0];
+    // Використовуємо локальну дату у форматі ISO (YYYY-MM-DD)
+    const today = new Date().toLocaleDateString('en-CA');
     const targetDate = currentGameDate || today;
     label.textContent = `${formatDateToString(targetDate)} (№${computeGameNumber(targetDate)})`;
 }
@@ -209,8 +210,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             const response = await fetch("/archive");
             const dates = await response.json();
             previousGamesList.innerHTML = "";
-            const today = new Date().toISOString().split("T")[0];
+            // Використовуємо локальну дату у форматі ISO (YYYY-MM-DD)
+            const today = new Date().toLocaleDateString('en-CA');
             dates.forEach(dateStr => {
+                // Фільтруємо лише ігри з датою, що не перевищує сьогоднішню
                 if (dateStr > today) return;
                 const gameNumber = computeGameNumber(dateStr);
                 const labelDate = formatDateToString(dateStr);
@@ -229,6 +232,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             previousGamesModal.classList.remove("hidden");
         }
     });
+
 
     closePreviousGamesModal.addEventListener("click", () => {
         previousGamesModal.classList.add("hidden");

@@ -34,33 +34,33 @@ DAILY_WORDS = load_daily_words()
 VALID_WORDS = load_wordlist()
 BASE_DATE = date(2025, 3, 31)
 
-loaded = False
+# Змінна для відстеження останньої завантаженої дати
+last_loaded_date = None
 
 @app.before_request
 def load_precomputed():
-    global loaded
-    if loaded:
-        return
-
+    global last_loaded_date
     db.create_all()
     today = date.today()
-    delta = (today - BASE_DATE).days % len(DAILY_WORDS)
-    secret_word = DAILY_WORDS[delta]
-
-    existing_game = ArchivedGame.query.filter_by(game_date=today).first()
-    if not existing_game:
-        archive_path = os.path.join("archive", f"{secret_word}.json")
-        if os.path.exists(archive_path):
-            with open(archive_path, "r", encoding="utf-8") as f:
-                ranking_data = json.load(f)
-            new_game = ArchivedGame(
-                game_date=today,
-                secret_word=secret_word,
-                ranking_json=json.dumps(ranking_data, ensure_ascii=False)
-            )
-            db.session.add(new_game)
-            db.session.commit()
-    loaded = True
+    # Якщо для поточної дати ще не виконувалось завантаження
+    if last_loaded_date != today:
+        delta = (today - BASE_DATE).days % len(DAILY_WORDS)
+        secret_word = DAILY_WORDS[delta]
+        existing_game = ArchivedGame.query.filter_by(game_date=today).first()
+        if not existing_game:
+            # Шлях до згенерованого файлу з рейтингом у папці precomputed
+            archive_path = os.path.join("precomputed", f"{today.isoformat()}.json")
+            if os.path.exists(archive_path):
+                with open(archive_path, "r", encoding="utf-8") as f:
+                    ranking_data = json.load(f)
+                new_game = ArchivedGame(
+                    game_date=today,
+                    secret_word=secret_word,
+                    ranking_json=json.dumps(ranking_data, ensure_ascii=False)
+                )
+                db.session.add(new_game)
+                db.session.commit()
+        last_loaded_date = today
 
 @app.route("/")
 def index():
