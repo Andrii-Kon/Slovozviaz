@@ -50,13 +50,13 @@ def get_today_game_date():
             return BASE_DATE + timedelta(days=offset)
         except ValueError:
             pass
-    today_real = date(2025, 4, 2)
+    today_real = date.today()
     if today_real < BASE_DATE:
         return BASE_DATE
     return today_real
 
-@app.before_request
-def update_daily_ranking():
+    #@app.before_request
+#def update_daily_ranking():
     from flask import request
     # Пропускаємо запити до статичних файлів
     if request.path.startswith('/static'):
