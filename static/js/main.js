@@ -88,7 +88,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     const lastGuessDisplay = document.getElementById("lastGuessDisplay");
     const howToPlayBlock = document.getElementById("howToPlayBlock");
     const closestWordsBtn = document.getElementById("closestWordsBtn");
+
+    // Оскільки кнопки "Підказка" і "Попередні ігри" тепер знаходяться у випадаючому меню,
+    // отримуємо їх без створення динамічно:
+    const hintButton = document.getElementById("hintButton");
     const previousGamesBtn = document.getElementById("previousGamesBtn");
+
     const previousGamesModal = document.getElementById("previousGamesModal");
     const closePreviousGamesModal = document.getElementById("closePreviousGamesModal");
     const previousGamesList = document.getElementById("previousGamesList");
@@ -174,7 +179,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                 if (gameNumberElem) gameNumberElem.textContent = currentGameDate ? computeGameNumber(currentGameDate) : dayNumber;
                 guessInput.disabled = true;
                 submitGuessBtn.disabled = true;
-                const hintButton = document.getElementById("hintButton");
                 if (hintButton) hintButton.disabled = true;
                 closestWordsBtn.classList.remove("hidden");
             }
@@ -185,20 +189,23 @@ document.addEventListener("DOMContentLoaded", async () => {
         guessInput.focus();
     }
 
-    guessInput.addEventListener("keypress", (e) => { if (e.key === "Enter") handleSubmit(); });
+    guessInput.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") handleSubmit();
+    });
     submitGuessBtn.addEventListener("click", handleSubmit);
 
-    const hintButton = document.createElement("button");
-    hintButton.textContent = "Підказка";
-    hintButton.id = "hintButton";
-    document.querySelector(".input-section").appendChild(hintButton);
+    // Обробка події для кнопки "Підказка"
     hintButton.addEventListener("click", () => {
-        if (howToPlayBlock && howToPlayBlock.style.display !== "none") howToPlayBlock.style.display = "none";
-        if (rankedWords.length === 0) return alert("Список слів порожній або не завантажений!");
+        if (howToPlayBlock && howToPlayBlock.style.display !== "none")
+            howToPlayBlock.style.display = "none";
+        if (rankedWords.length === 0)
+            return alert("Список слів порожній або не завантажений!");
         const nextHintRank = getNextHintRank(bestRank, guesses, rankedWords, MAX_RANK);
-        if (!nextHintRank) return alert("Немає підходящої підказки.");
+        if (!nextHintRank)
+            return alert("Немає підходящої підказки.");
         const hintWordObj = rankedWords.find(item => item.rank === nextHintRank);
-        if (!hintWordObj) return alert("Не знайдено слово з рангу " + nextHintRank);
+        if (!hintWordObj)
+            return alert("Не знайдено слово з рангу " + nextHintRank);
         lastWord = hintWordObj.word;
         guesses.push({ word: hintWordObj.word, rank: hintWordObj.rank, error: false });
         if (hintWordObj.rank < bestRank) bestRank = hintWordObj.rank;
@@ -232,7 +239,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             previousGamesModal.classList.remove("hidden");
         }
     });
-
 
     closePreviousGamesModal.addEventListener("click", () => {
         previousGamesModal.classList.add("hidden");
@@ -268,5 +274,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     closestWordsBtn.addEventListener("click", showClosestWords);
-    closeModalBtn.addEventListener("click", () => closestWordsModal.classList.add("hidden"));
+    closeModalBtn.addEventListener("click", () => {
+        closestWordsModal.classList.add("hidden");
+    });
 });

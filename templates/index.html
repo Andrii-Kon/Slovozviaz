@@ -24,8 +24,24 @@
     <h1>Введіть слово</h1>
     <div class="input-section">
         <input type="text" id="guessInput" placeholder="Введіть слово" autocomplete="off">
-        <button id="submitGuess">Відправити</button>
-        <button id="previousGamesBtn">Попередні ігри</button>
+        <button id="submitGuess" class="btn-wide">Відправити</button>
+
+        <!-- Контейнер для випадаючого меню -->
+        <div class="menu-container">
+            <!-- Кнопка "⋮" для відкриття меню -->
+            <button class="menu-button" id="menuButton">⋮</button>
+            <!-- Випадаюче меню (спочатку приховане) -->
+            <div class="dropdown-menu hidden" id="dropdownMenu">
+                <button class="menu-item" id="hintButton">
+                    <span class="menu-icon">💡</span>
+                    Підказка
+                </button>
+                <button class="menu-item" id="previousGamesBtn">
+                    <span class="menu-icon">📅</span>
+                    Попередні ігри
+                </button>
+            </div>
+        </div>
     </div>
     <div id="howToPlayBlock" class="howToPlayBlock">
         <h2>Як грати?</h2>
@@ -45,7 +61,6 @@
         <button id="readMoreBtn">Докладніше...</button>
     </div>
     <div id="lastGuessWrapper" class="lastGuessWrapper hidden">
-
         <div id="lastGuessDisplay"></div>
     </div>
     <div id="guessesContainer"></div>
@@ -64,11 +79,28 @@
         <span id="closePreviousGamesModal" class="close">&times;</span>
         <h2>Виберіть попередню гру</h2>
         <div id="randomGameContainer">
-        <button id="randomGameBtn">Random</button>
-    </div>
+            <button id="randomGameBtn">Random</button>
+        </div>
         <div id="previousGamesList"></div>
     </div>
 </div>
 <script type="module" src="{{ url_for('static', filename='js/main.js') }}"></script>
+<script>
+    // JS для перемикання випадаючого меню
+    const menuButton = document.getElementById("menuButton");
+    const dropdownMenu = document.getElementById("dropdownMenu");
+
+    menuButton.addEventListener("click", (event) => {
+        event.stopPropagation(); // запобігаємо спливанню події
+        dropdownMenu.classList.toggle("hidden");
+    });
+
+    // Закриваємо меню при кліку поза ним
+    document.addEventListener("click", (event) => {
+        if (!menuButton.contains(event.target) && !dropdownMenu.contains(event.target)) {
+            dropdownMenu.classList.add("hidden");
+        }
+    });
+</script>
 </body>
 </html>

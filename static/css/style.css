@@ -41,13 +41,14 @@ h1 {
 /* Поле вводу + кнопки */
 .input-section {
     display: flex;
+    align-items: center;
     justify-content: center;
     gap: 10px;
     margin-bottom: 20px;
 }
 #guessInput {
-    width: 200px;
-    padding: 8px;
+    width: 400px;
+    padding: 10px;
     border-radius: 5px;
     border: none;
     background-color: #2a2a2a;
@@ -58,10 +59,14 @@ h1 {
     color: #bbb;
 }
 
-/* Кнопки (єдиний стиль) */
+/* Основні кнопки (для основного інтерфейсу) */
 #submitGuess,
 #hintButton,
-#previousGamesBtn {
+#previousGamesBtn,
+#readMoreBtn,
+#shareButton,
+#closestWordsBtn,
+#randomGameBtn {
     padding: 8px 12px;
     cursor: pointer;
     background-color: #2196f3;
@@ -73,7 +78,11 @@ h1 {
 }
 #submitGuess:hover,
 #hintButton:hover,
-#previousGamesBtn:hover {
+#previousGamesBtn:hover,
+#readMoreBtn:hover,
+#shareButton:hover,
+#closestWordsBtn:hover,
+#randomGameBtn:hover {
     background-color: #1976d2;
 }
 
@@ -146,19 +155,6 @@ details summary {
 }
 details p {
     margin: 5px 0 0 0;
-}
-#readMoreBtn {
-    background-color: #2196f3;
-    color: #fff;
-    font-weight: bold;
-    border: none;
-    border-radius: 5px;
-    padding: 8px 12px;
-    cursor: pointer;
-    margin-top: 10px;
-}
-#readMoreBtn:hover {
-    background-color: #1976d2;
 }
 
 /* Блок "Вітаємо!" */
@@ -290,7 +286,7 @@ details p {
 #previousGamesList button {
     width: 100%;
     background-color: #2196f3;
-    color: white;
+    color: #fff;
     border: none;
     padding: 14px 18px;
     margin: 6px 0;
@@ -318,7 +314,7 @@ details p {
 }
 #randomGameBtn {
     background-color: #2196f3;
-    color: white;
+    color: #fff;
     padding: 0.6rem 1.2rem;
     border: none;
     border-radius: 10px;
@@ -347,4 +343,76 @@ details p {
 }
 .guess-count {
     color: #bbb;
+}
+
+/* ====== Контейнер для меню ====== */
+.menu-container {
+    position: relative; /* для позиціонування випадаючого меню */
+}
+
+/* Кнопка з трьома крапками */
+.menu-button {
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 1.4em;
+    cursor: pointer;
+    padding: 0 8px;
+    line-height: 1;
+}
+
+/* Випадаюче меню */
+.dropdown-menu {
+    position: absolute;
+    top: 110%;
+    right: 0;
+    background-color: #2a2a2a; /* фон як у поля вводу */
+    border-radius: 8px;
+    padding: 8px 8px;
+    min-width: 180px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Кнопки (пункти) всередині меню */
+.dropdown-menu button.menu-item {
+    display: flex;
+    align-items: center;
+    background-color: #2a2a2a;
+    border: none;
+    color: #fff;
+    text-align: left;
+    padding: 10px 16px;
+    width: 100%;
+    cursor: pointer;
+    font-size: 1em;
+    border-radius: 5px;
+    transition: background-color 0.001s ease-in-out;
+}
+
+/* Hover-ефект для кнопок у меню */
+.dropdown-menu button.menu-item#hintButton:hover,
+.dropdown-menu button.menu-item#previousGamesBtn:hover {
+    background-color: #212121 !important;
+}
+
+/* Якщо всередині меню використовуються кнопки з ID,
+   примусово скидаємо їх стилі, щоб вони відповідали дизайну меню */
+.dropdown-menu button#hintButton,
+.dropdown-menu button#previousGamesBtn,
+.dropdown-menu button#submitGuess {
+    background-color: transparent !important;
+    color: #fff !important;
+    width: 180px;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 5px;
+    font-weight: normal;
+}
+.btn-wide {
+    padding: 10px 10px;
+    min-width: 100px;
+    height: 38px;
 }
