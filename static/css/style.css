@@ -1,8 +1,8 @@
 /* ====== Базові стилі сторінки ====== */
 body {
-    background-color: #2a2a2a;
+    background-color: #1e1e1e;
     color: #fff;
-    font-family: sans-serif;
+    font-family: "Open Sans", sans-serif;
     margin: 0;
     padding: 0;
 }
@@ -17,13 +17,13 @@ body {
 }
 .gameTitle {
     margin: 0;
-    font-size: 1.2em;
+    font-size: 1.3em;
     font-weight: bold;
     color: #fff;
 }
 .gameStats {
     font-size: 0.9em;
-    color: #bdbdbd;
+    color: #bbb;
 }
 
 /* Основний контейнер */
@@ -35,6 +35,7 @@ body {
 }
 h1 {
     margin-bottom: 10px;
+    font-size: 1.5em;
 }
 
 /* Поле вводу + кнопки */
@@ -49,18 +50,21 @@ h1 {
     padding: 8px;
     border-radius: 5px;
     border: none;
-    background-color: #3a3a3a;
+    background-color: #2a2a2a;
     color: #fff;
     font-size: 1em;
 }
 #guessInput::placeholder {
     color: #bbb;
 }
+
+/* Кнопки (єдиний стиль) */
 #submitGuess,
-#hintButton {
+#hintButton,
+#previousGamesBtn {
     padding: 8px 12px;
     cursor: pointer;
-    background-color: #ff9800;
+    background-color: #2196f3;
     border: none;
     border-radius: 5px;
     color: #fff;
@@ -68,8 +72,9 @@ h1 {
     transition: background-color 0.2s ease-in-out;
 }
 #submitGuess:hover,
-#hintButton:hover {
-    background-color: #e68900;
+#hintButton:hover,
+#previousGamesBtn:hover {
+    background-color: #1976d2;
 }
 
 /* Контейнер для списку здогадок */
@@ -82,16 +87,16 @@ h1 {
 .guessItem {
     box-sizing: border-box;
     position: relative;  /* Для смуги .fillBar */
-    display: flex;       /* Щоб текст по центру вертикалі */
+    display: flex;
     align-items: center;
     margin: 10px 0;
     height: 40px;
     border-radius: 5px;
-    background-color: #3a3a3a;
+    background-color: #2a2a2a;
     overflow: hidden;    /* Щоб смуга не виходила за межі */
     font-weight: bold;
     color: #fff;
-    padding: 0 10px;     /* Відступи всередині блоку */
+    padding: 0 10px;
 }
 
 /* Смуга заповнення (рівень близькості) */
@@ -106,30 +111,30 @@ h1 {
 
 /* Контейнер тексту (слово і ранг) */
 .guessText {
-    position: relative; /* Щоб бути над .fillBar */
+    position: relative;
     z-index: 1;
     display: flex;
     justify-content: space-between; /* слово ліворуч, ранг праворуч */
-    width: 100%; /* займає всю ширину .guessItem */
+    width: 100%;
 }
 
 /* Блок "Як грати?" */
 .howToPlayBlock {
-    background-color: #3a3a3a;
-    border: 1px solid #4a4a4a;
+    background-color: #2a2a2a;
+    border: 1px solid #444;
     border-radius: 8px;
     padding: 15px;
     margin-bottom: 20px;
-    text-align: left; /* Текст вирівняний ліворуч */
+    text-align: left;
 }
 .howToPlayBlock h2 {
     margin-top: 0;
     margin-bottom: 10px;
     font-size: 1.2em;
-    color: #ff9800;
+    color: #2196f3;
 }
 details {
-    background-color: #2a2a2a;
+    background-color: #1f1f1f;
     border-radius: 5px;
     margin: 8px 0;
     padding: 8px;
@@ -143,7 +148,7 @@ details p {
     margin: 5px 0 0 0;
 }
 #readMoreBtn {
-    background-color: #ff9800;
+    background-color: #2196f3;
     color: #fff;
     font-weight: bold;
     border: none;
@@ -153,13 +158,13 @@ details p {
     margin-top: 10px;
 }
 #readMoreBtn:hover {
-    background-color: #e68900;
+    background-color: #1976d2;
 }
 
 /* Блок "Вітаємо!" */
 .congratsBlock {
-    background-color: #3a3a3a;
-    border: 2px solid #ff9800;
+    background-color: #2a2a2a;
+    border: 2px solid #2196f3;
     border-radius: 10px;
     padding: 15px;
     margin-bottom: 20px;
@@ -173,7 +178,7 @@ details p {
 
 /* Кнопка "Поділитися" */
 #shareButton {
-    background-color: #ff9800;
+    background-color: #2196f3;
     color: #fff;
     font-weight: bold;
     border: none;
@@ -183,10 +188,10 @@ details p {
     margin-top: 10px;
 }
 #shareButton:hover {
-    background-color: #e68900;
+    background-color: #1976d2;
 }
 
-/* ====== Біла "рамка" для останнього слова ====== */
+/* Виділення останнього вгаданого слова */
 .highlightGuess {
     box-shadow: 0 0 0 3px #fff;
     box-sizing: border-box;
@@ -233,7 +238,7 @@ details p {
 /* Контейнер модалки */
 .modal-content {
     position: relative;
-    background-color: #3a3a3a;
+    background-color: #2a2a2a;
     border-radius: 10px;
     padding: 20px;
     width: 80%;
@@ -261,7 +266,7 @@ details p {
 #closestWordsTitle {
     margin-top: 0;
     margin-bottom: 20px;
-    color: #ff9800;
+    color: #2196f3;
     text-align: center;
 }
 
@@ -269,20 +274,8 @@ details p {
 #closestWordsList {
     padding-bottom: 20px;
 }
-#previousGamesBtn {
-    padding: 8px 12px;
-    cursor: pointer;
-    background-color: #ff9800;
-    border: none;
-    border-radius: 5px;
-    color: #fff;
-    font-weight: bold;
-    transition: background-color 0.2s ease-in-out;
-}
 
-#previousGamesBtn:hover {
-    background-color: #388e3c;
-}
+/* Дата гри та інші елементи */
 .game-date-label {
     font-size: 1.1em;
     font-weight: normal;
@@ -292,10 +285,11 @@ details p {
 .date-wrapper {
     margin-bottom: 5px;
 }
+
 /* Модальне вікно списку попередніх ігор */
 #previousGamesList button {
     width: 100%;
-    background-color: #1ea0f1;
+    background-color: #2196f3;
     color: white;
     border: none;
     padding: 14px 18px;
@@ -307,9 +301,8 @@ details p {
     align-items: center;
     transition: background-color 0.2s ease;
 }
-
 #previousGamesList button:hover {
-    background-color: #0077cc;
+    background-color: #1976d2;
     cursor: pointer;
 }
 
@@ -323,9 +316,8 @@ details p {
     text-align: center;
     margin-bottom: 1rem;
 }
-/* Кнопка Random в модальному вікні */
 #randomGameBtn {
-    background-color: #1da1f2;
+    background-color: #2196f3;
     color: white;
     padding: 0.6rem 1.2rem;
     border: none;
@@ -334,8 +326,10 @@ details p {
     cursor: pointer;
 }
 #randomGameBtn:hover {
-    background-color: #0077cc;
+    background-color: #1976d2;
 }
+
+/* Інфо-панель */
 .game-info-bar {
     display: flex;
     justify-content: space-between;
@@ -347,12 +341,10 @@ details p {
     font-size: 0.95em;
     color: #ccc;
 }
-
 .game-date {
     font-weight: bold;
     color: #fff;
 }
-
 .guess-count {
     color: #bbb;
 }

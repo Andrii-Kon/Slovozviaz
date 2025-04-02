@@ -189,7 +189,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     submitGuessBtn.addEventListener("click", handleSubmit);
 
     const hintButton = document.createElement("button");
-    hintButton.textContent = "Hint";
+    hintButton.textContent = "Підказка";
     hintButton.id = "hintButton";
     document.querySelector(".input-section").appendChild(hintButton);
     hintButton.addEventListener("click", () => {

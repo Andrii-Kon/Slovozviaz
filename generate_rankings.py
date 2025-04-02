@@ -29,7 +29,7 @@ if os.path.exists(CACHE_FILE):
 else:
     embedding_cache = {}
 
-def get_embeddings_batch(phrases, model="text-embedding-3-small"):
+def get_embeddings_batch(phrases, model="text-embedding-ada-002"):
     uncached = [p for p in phrases if p not in embedding_cache]
 
     if uncached:

@@ -1,6 +1,6 @@
 from flask import Flask, render_template, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import os
 import json
 
@@ -34,33 +34,29 @@ DAILY_WORDS = load_daily_words()
 VALID_WORDS = load_wordlist()
 BASE_DATE = date(2025, 3, 31)
 
-# Змінна для відстеження останньої завантаженої дати
-last_loaded_date = None
-
 @app.before_request
 def load_precomputed():
-    global last_loaded_date
     db.create_all()
     today = date.today()
-    # Якщо для поточної дати ще не виконувалось завантаження
-    if last_loaded_date != today:
-        delta = (today - BASE_DATE).days % len(DAILY_WORDS)
-        secret_word = DAILY_WORDS[delta]
-        existing_game = ArchivedGame.query.filter_by(game_date=today).first()
-        if not existing_game:
-            # Шлях до згенерованого файлу з рейтингом у папці precomputed
-            archive_path = os.path.join("precomputed", f"{today.isoformat()}.json")
+    current_date = BASE_DATE
+    # Проходимо всі дні від BASE_DATE до сьогоднішньої дати
+    while current_date <= today:
+        if not ArchivedGame.query.filter_by(game_date=current_date).first():
+            delta = (current_date - BASE_DATE).days % len(DAILY_WORDS)
+            secret_word = DAILY_WORDS[delta]
+            # Шлях до файлу з рейтингом для поточної дати
+            archive_path = os.path.join("precomputed", f"{current_date.isoformat()}.json")
             if os.path.exists(archive_path):
                 with open(archive_path, "r", encoding="utf-8") as f:
                     ranking_data = json.load(f)
                 new_game = ArchivedGame(
-                    game_date=today,
+                    game_date=current_date,
                     secret_word=secret_word,
                     ranking_json=json.dumps(ranking_data, ensure_ascii=False)
                 )
                 db.session.add(new_game)
-                db.session.commit()
-        last_loaded_date = today
+        current_date += timedelta(days=1)
+    db.session.commit()
 
 @app.route("/")
 def index():
