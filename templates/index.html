@@ -10,31 +10,37 @@
     <h2 class="gameTitle">Словозв'яз</h2>
     <div class="gameStats">Спроб: <span id="guessCount">0</span></div>
 </div>
+
 <div class="container">
     <div id="congratsBlock" class="congratsBlock hidden">
         <h2>Вітаємо!</h2>
         <p>
-            Ви відгадали слово №<span id="gameNumber">???</span> за
+            Ви відгадали слово #<span id="gameNumber">???</span> за
             <span id="guessesUsed">0</span> спроб(и)!
         </p>
         <button id="shareButton">Поділитися</button>
     </div>
     <button id="closestWordsBtn" class="hidden">Найближчі слова</button>
-    <h3 id="gameDateLabel" class="game-date-label"></h3>
-    <h1>Введіть слово</h1>
+
+    <h1>Словозв'яз</h1>
+    <!-- Підпис гри (вирівняний ліворуч, значення встановиться через JS) -->
+    <h3 id="gameDateLabel" class="game-date-label" style="text-align: left;">Гра: #?</h3>
+
     <div class="input-section">
         <input type="text" id="guessInput" placeholder="Введіть слово" autocomplete="off">
         <button id="submitGuess" class="btn-wide">Відправити</button>
-
         <!-- Контейнер для випадаючого меню -->
         <div class="menu-container">
-            <!-- Кнопка "⋮" для відкриття меню -->
             <button class="menu-button" id="menuButton">⋮</button>
-            <!-- Випадаюче меню (спочатку приховане) -->
             <div class="dropdown-menu hidden" id="dropdownMenu">
                 <button class="menu-item" id="hintButton">
                     <span class="menu-icon">💡</span>
                     Підказка
+                </button>
+                <!-- Нова кнопка "Здатися" -->
+                <button class="menu-item" id="giveUpBtn">
+                    <span class="menu-icon">🚩</span>
+                    Здатися
                 </button>
                 <button class="menu-item" id="previousGamesBtn">
                     <span class="menu-icon">📅</span>
@@ -43,6 +49,7 @@
             </div>
         </div>
     </div>
+
     <div id="howToPlayBlock" class="howToPlayBlock">
         <h2>Як грати?</h2>
         <p>
@@ -52,19 +59,21 @@
         </p>
         <details>
             <summary>Як визначається порядок слів?</summary>
-            <p>Алгоритм аналізує контекст слів у великих масивах тексту і сортує їх за близькістю.</p>
+            <p>Слова сортуються за схожістю до секретного за допомогою векторного аналізу: секретне слово отримує ранг 1, а інші – залежно від ступеня подібності, обчисленої за допомогою косинусної міри.</p>
         </details>
         <details>
             <summary>Як попросити підказку?</summary>
-            <p>Натисніть кнопку «Підказка», щоб отримати допоміжне слово.</p>
+            <p>Натисніть на три крапки, розташовані у верхньому правому куті екрана, і виберіть опцію «Підказка», і вона покаже одне слово.</p>
         </details>
         <button id="readMoreBtn">Докладніше...</button>
     </div>
+
     <div id="lastGuessWrapper" class="lastGuessWrapper hidden">
         <div id="lastGuessDisplay"></div>
     </div>
     <div id="guessesContainer"></div>
 </div>
+
 <!-- Модальне вікно "Closest words" -->
 <div id="closestWordsModal" class="modal hidden">
     <div class="modal-content">
@@ -73,6 +82,7 @@
         <div id="closestWordsList"></div>
     </div>
 </div>
+
 <!-- Модальне вікно "Попередні ігри" -->
 <div id="previousGamesModal" class="modal hidden">
     <div class="modal-content">
@@ -84,23 +94,19 @@
         <div id="previousGamesList"></div>
     </div>
 </div>
+
+<!-- НОВЕ Модальне вікно "Здатися" -->
+<div id="giveUpModal" class="modal hidden">
+    <div class="modal-content" style="text-align: center;">
+        <span id="closeGiveUpModal" class="close">&times;</span>
+        <h2>Ви впевнені що хочете здатись?</h2>
+        <div style="margin-top: 20px;">
+            <button id="giveUpYesBtn" class="btn-wide" style="margin-right: 10px;">Так</button>
+            <button id="giveUpNoBtn" class="btn-wide">Ні</button>
+        </div>
+    </div>
+</div>
+
 <script type="module" src="{{ url_for('static', filename='js/main.js') }}"></script>
-<script>
-    // JS для перемикання випадаючого меню
-    const menuButton = document.getElementById("menuButton");
-    const dropdownMenu = document.getElementById("dropdownMenu");
-
-    menuButton.addEventListener("click", (event) => {
-        event.stopPropagation(); // запобігаємо спливанню події
-        dropdownMenu.classList.toggle("hidden");
-    });
-
-    // Закриваємо меню при кліку поза ним
-    document.addEventListener("click", (event) => {
-        if (!menuButton.contains(event.target) && !dropdownMenu.contains(event.target)) {
-            dropdownMenu.classList.add("hidden");
-        }
-    });
-</script>
 </body>
 </html>

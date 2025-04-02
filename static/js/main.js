@@ -50,21 +50,10 @@ function computeGameNumber(dateStr) {
     return diffDays + 1;
 }
 
-function formatDateToString(dateStr) {
-    const [year, month, day] = dateStr.split("-").map(Number);
-    const d = new Date(year, month - 1, day);
-    const weekdayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    const dayOfWeek = weekdayNames[d.getDay()];
-    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    return `${dayOfWeek}, ${monthNames[d.getMonth()]} ${day}`;
-}
-
+// Функція updateGameDateLabel оновлює текст підпису гри у форматі "Гра №X"
 function updateGameDateLabel() {
     const label = document.getElementById("gameDateLabel");
-    // Використовуємо локальну дату у форматі ISO (YYYY-MM-DD)
-    const today = new Date().toLocaleDateString('en-CA');
-    const targetDate = currentGameDate || today;
-    label.textContent = `${formatDateToString(targetDate)} (№${computeGameNumber(targetDate)})`;
+    label.textContent = `Гра: #${ currentGameDate ? computeGameNumber(currentGameDate) : dayNumber }`;
 }
 
 async function fetchAllowedWords() {
@@ -89,23 +78,32 @@ document.addEventListener("DOMContentLoaded", async () => {
     const howToPlayBlock = document.getElementById("howToPlayBlock");
     const closestWordsBtn = document.getElementById("closestWordsBtn");
 
-    // Оскільки кнопки "Підказка" і "Попередні ігри" тепер знаходяться у випадаючому меню,
-    // отримуємо їх без створення динамічно:
+    // Кнопки меню
     const hintButton = document.getElementById("hintButton");
     const previousGamesBtn = document.getElementById("previousGamesBtn");
+    const giveUpBtn = document.getElementById("giveUpBtn");
 
+    // Модалка "Здатися"
+    const giveUpModal = document.getElementById("giveUpModal");
+    const closeGiveUpModal = document.getElementById("closeGiveUpModal");
+    const giveUpYesBtn = document.getElementById("giveUpYesBtn");
+    const giveUpNoBtn = document.getElementById("giveUpNoBtn");
+
+    // Модалка "Попередні ігри"
     const previousGamesModal = document.getElementById("previousGamesModal");
     const closePreviousGamesModal = document.getElementById("closePreviousGamesModal");
     const previousGamesList = document.getElementById("previousGamesList");
     const randomGameBtn = document.getElementById("randomGameBtn");
     randomGameBtn.textContent = "🔀 Random";
+
+    // Модалка "Closest words"
     const closestWordsModal = document.getElementById("closestWordsModal");
     const closeModalBtn = document.getElementById("closeModalBtn");
 
     try {
         const response = await fetch("/api/daily-index");
         const dailyIndexData = await response.json();
-        dayNumber = dailyIndexData.day_number;
+        dayNumber = dailyIndexData.game_number;
     } catch (err) {
         console.error("[Error] Failed to fetch daily index:", err);
     }
@@ -171,16 +169,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             guesses.push({ word, rank: data.rank, error: false });
             if (data.rank < bestRank) bestRank = data.rank;
             if (data.rank === 1) {
-                const congratsBlock = document.getElementById("congratsBlock");
-                if (congratsBlock) congratsBlock.classList.remove("hidden");
-                const guessesUsedElem = document.getElementById("guessesUsed");
-                if (guessesUsedElem) guessesUsedElem.textContent = guessCount;
-                const gameNumberElem = document.getElementById("gameNumber");
-                if (gameNumberElem) gameNumberElem.textContent = currentGameDate ? computeGameNumber(currentGameDate) : dayNumber;
-                guessInput.disabled = true;
-                submitGuessBtn.disabled = true;
-                if (hintButton) hintButton.disabled = true;
-                closestWordsBtn.classList.remove("hidden");
+                endGameAsWin();
             }
         }
 
@@ -189,12 +178,27 @@ document.addEventListener("DOMContentLoaded", async () => {
         guessInput.focus();
     }
 
+    // Функція, яка завершує гру як перемогу
+    function endGameAsWin() {
+        const congratsBlock = document.getElementById("congratsBlock");
+        if (congratsBlock) congratsBlock.classList.remove("hidden");
+        const guessesUsedElem = document.getElementById("guessesUsed");
+        if (guessesUsedElem) guessesUsedElem.textContent = guessCount;
+        const gameNumberElem = document.getElementById("gameNumber");
+        if (gameNumberElem) {
+            gameNumberElem.textContent = currentGameDate ? computeGameNumber(currentGameDate) : dayNumber;
+        }
+        guessInput.disabled = true;
+        submitGuessBtn.disabled = true;
+        if (hintButton) hintButton.disabled = true;
+        closestWordsBtn.classList.remove("hidden");
+    }
+
     guessInput.addEventListener("keypress", (e) => {
         if (e.key === "Enter") handleSubmit();
     });
     submitGuessBtn.addEventListener("click", handleSubmit);
 
-    // Обробка події для кнопки "Підказка"
     hintButton.addEventListener("click", () => {
         if (howToPlayBlock && howToPlayBlock.style.display !== "none")
             howToPlayBlock.style.display = "none";
@@ -210,22 +214,57 @@ document.addEventListener("DOMContentLoaded", async () => {
         guesses.push({ word: hintWordObj.word, rank: hintWordObj.rank, error: false });
         if (hintWordObj.rank < bestRank) bestRank = hintWordObj.rank;
         renderGuesses(guesses, lastWord, MAX_RANK, guessesContainer, lastGuessWrapper, lastGuessDisplay);
+        // Приховуємо випадаюче меню після натискання на підказку
+        dropdownMenu.classList.add("hidden");
     });
+    // --- Логіка модального вікна "Здатися" ---
+    giveUpBtn.addEventListener("click", () => {
+        // Відкриваємо модальне вікно "Are you sure you want to give up?"
+        giveUpModal.classList.remove("hidden");
+    });
+
+    // Якщо користувач натискає "Yes" -> робимо вигляд, що він "вгадав" секретне слово
+    giveUpYesBtn.addEventListener("click", () => {
+        if (rankedWords.length > 0) {
+            // Беремо перше слово зі списку (rank=1 зазвичай іде в rankedWords[0], але переконаємося)
+            const secretWordObj = rankedWords.find(item => item.rank === 1);
+            if (!secretWordObj) {
+                // На випадок, якщо rank=1 не знайдено, візьмемо все одно rankedWords[0]
+                // і вважатимемо, що це секретне слово
+                guesses.push({ word: rankedWords[0].word, rank: 1, error: false });
+            } else {
+                guesses.push({ word: secretWordObj.word, rank: 1, error: false });
+            }
+            bestRank = 1;
+            guessCount++;
+            guessCountElem.textContent = guessCount;
+            renderGuesses(guesses, lastWord, MAX_RANK, guessesContainer, lastGuessWrapper, lastGuessDisplay);
+            endGameAsWin();
+        }
+        giveUpModal.classList.add("hidden");
+    });
+
+    // Якщо натискає "No" або хрестик -> просто закриваємо модалку
+    giveUpNoBtn.addEventListener("click", () => {
+        giveUpModal.classList.add("hidden");
+    });
+    closeGiveUpModal.addEventListener("click", () => {
+        giveUpModal.classList.add("hidden");
+    });
+
+    // --- Кінець логіки "Здатися" ---
 
     previousGamesBtn.addEventListener("click", async () => {
         try {
             const response = await fetch("/archive");
             const dates = await response.json();
             previousGamesList.innerHTML = "";
-            // Використовуємо локальну дату у форматі ISO (YYYY-MM-DD)
             const today = new Date().toLocaleDateString('en-CA');
             dates.forEach(dateStr => {
-                // Фільтруємо лише ігри з датою, що не перевищує сьогоднішню
                 if (dateStr > today) return;
                 const gameNumber = computeGameNumber(dateStr);
-                const labelDate = formatDateToString(dateStr);
                 const btn = document.createElement("button");
-                btn.textContent = `#${gameNumber} ${labelDate}`;
+                btn.textContent = `Гра #${gameNumber}`;
                 btn.addEventListener("click", () => {
                     loadArchive(dateStr);
                     previousGamesModal.classList.add("hidden");
@@ -276,5 +315,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     closestWordsBtn.addEventListener("click", showClosestWords);
     closeModalBtn.addEventListener("click", () => {
         closestWordsModal.classList.add("hidden");
+    });
+
+    // Кнопка меню (⋮)
+    const menuButton = document.getElementById("menuButton");
+    const dropdownMenu = document.getElementById("dropdownMenu");
+    menuButton.addEventListener("click", (event) => {
+        event.stopPropagation();
+        dropdownMenu.classList.toggle("hidden");
+    });
+    document.addEventListener("click", (event) => {
+        if (!menuButton.contains(event.target) && !dropdownMenu.contains(event.target)) {
+            dropdownMenu.classList.add("hidden");
+        }
     });
 });

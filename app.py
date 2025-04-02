@@ -44,7 +44,6 @@ def load_precomputed():
         if not ArchivedGame.query.filter_by(game_date=current_date).first():
             delta = (current_date - BASE_DATE).days % len(DAILY_WORDS)
             secret_word = DAILY_WORDS[delta]
-            # Шлях до файлу з рейтингом для поточної дати
             archive_path = os.path.join("precomputed", f"{current_date.isoformat()}.json")
             if os.path.exists(archive_path):
                 with open(archive_path, "r", encoding="utf-8") as f:
@@ -78,7 +77,7 @@ def wordlist_api():
 def daily_index():
     delta_days = (date.today() - BASE_DATE).days
     game_number = (delta_days % len(DAILY_WORDS)) + 1
-    return jsonify({"day_number": game_number})
+    return jsonify({"game_number": game_number})
 
 @app.route("/guess", methods=["POST"])
 def guess():
