@@ -12,6 +12,9 @@ let MAX_RANK = 0;
 let dayNumber = null;
 let currentGameDate = null;
 
+// Глобальний об'єкт для збереження станів ігор
+const gameStates = {};
+
 function getNextHintRank(bestRank, guesses, rankedWords, maxRank) {
     if (bestRank === Infinity) {
         const wordObj = rankedWords.find(x => x.rank === 500);
@@ -50,7 +53,7 @@ function computeGameNumber(dateStr) {
     return diffDays + 1;
 }
 
-// Функція updateGameDateLabel оновлює текст підпису гри у форматі "Гра №X"
+// Функція updateGameDateLabel оновлює текст підпису гри у форматі "Гра: #X"
 function updateGameDateLabel() {
     const label = document.getElementById("gameDateLabel");
     label.textContent = `Гра: #${ currentGameDate ? computeGameNumber(currentGameDate) : dayNumber }`;
@@ -104,6 +107,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         const response = await fetch("/api/daily-index");
         const dailyIndexData = await response.json();
         dayNumber = dailyIndexData.game_number;
+        // Якщо currentGameDate не встановлено, встановлюємо її на сьогоднішню дату
+        if (!currentGameDate) {
+            currentGameDate = new Date().toISOString().split("T")[0];
+        }
     } catch (err) {
         console.error("[Error] Failed to fetch daily index:", err);
     }
@@ -117,17 +124,51 @@ document.addEventListener("DOMContentLoaded", async () => {
     updateGameDateLabel();
 
     async function loadArchive(game_date) {
+        // Зберігаємо поточний стан, якщо є активна гра
+        if (currentGameDate) {
+            gameStates[currentGameDate] = {
+                guesses: guesses,
+                guessCount: guessCount,
+            };
+        }
         try {
             const response = await fetch(`/archive/${game_date}`);
             if (!response.ok) return alert("Архів не знайдено для цієї дати");
             const archiveData = await response.json();
+
             rankedWords = archiveData.ranking;
             MAX_RANK = rankedWords.length;
-            guesses = [];
-            guessCount = 0;
-            guessCountElem.textContent = 0;
+
+            // Завантажуємо збережений стан гри, якщо він є; інакше ініціалізуємо новий стан
+            if (gameStates[game_date]) {
+                guesses = gameStates[game_date].guesses;
+                guessCount = gameStates[game_date].guessCount;
+            } else {
+                guesses = [];
+                guessCount = 0;
+            }
+            guessCountElem.textContent = guessCount;
+            renderGuesses(guesses, lastWord, MAX_RANK, guessesContainer, lastGuessWrapper, lastGuessDisplay);
+
             currentGameDate = game_date;
             updateGameDateLabel();
+
+            // Якщо гра виграна (є слово з рангом 1) – залишаємо блок "Вітаємо!",
+            // інакше – ховаємо його та розблокуємо поле вводу
+            const congratsBlock = document.getElementById("congratsBlock");
+            if (guesses.some(g => g.rank === 1)) {
+                if (congratsBlock) congratsBlock.classList.remove("hidden");
+                guessInput.disabled = true;
+                submitGuessBtn.disabled = true;
+                if (hintButton) hintButton.disabled = true;
+                closestWordsBtn.classList.remove("hidden");
+            } else {
+                if (congratsBlock) congratsBlock.classList.add("hidden");
+                guessInput.disabled = false;
+                submitGuessBtn.disabled = false;
+                if (hintButton) hintButton.disabled = false;
+                closestWordsBtn.classList.add("hidden");
+            }
         } catch (err) {
             console.error("Error loading archive for date", game_date, err);
             alert("Помилка завантаження архіву");
@@ -178,7 +219,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         guessInput.focus();
     }
 
-    // Функція, яка завершує гру як перемогу
     function endGameAsWin() {
         const congratsBlock = document.getElementById("congratsBlock");
         if (congratsBlock) congratsBlock.classList.remove("hidden");
@@ -217,24 +257,16 @@ document.addEventListener("DOMContentLoaded", async () => {
         // Приховуємо випадаюче меню після натискання на підказку
         dropdownMenu.classList.add("hidden");
     });
+
     // --- Логіка модального вікна "Здатися" ---
     giveUpBtn.addEventListener("click", () => {
-        // Відкриваємо модальне вікно "Are you sure you want to give up?"
         giveUpModal.classList.remove("hidden");
     });
 
-    // Якщо користувач натискає "Yes" -> робимо вигляд, що він "вгадав" секретне слово
     giveUpYesBtn.addEventListener("click", () => {
         if (rankedWords.length > 0) {
-            // Беремо перше слово зі списку (rank=1 зазвичай іде в rankedWords[0], але переконаємося)
-            const secretWordObj = rankedWords.find(item => item.rank === 1);
-            if (!secretWordObj) {
-                // На випадок, якщо rank=1 не знайдено, візьмемо все одно rankedWords[0]
-                // і вважатимемо, що це секретне слово
-                guesses.push({ word: rankedWords[0].word, rank: 1, error: false });
-            } else {
-                guesses.push({ word: secretWordObj.word, rank: 1, error: false });
-            }
+            const secretWordObj = rankedWords.find(item => item.rank === 1) || rankedWords[0];
+            guesses.push({ word: secretWordObj.word, rank: 1, error: false });
             bestRank = 1;
             guessCount++;
             guessCountElem.textContent = guessCount;
@@ -244,14 +276,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         giveUpModal.classList.add("hidden");
     });
 
-    // Якщо натискає "No" або хрестик -> просто закриваємо модалку
     giveUpNoBtn.addEventListener("click", () => {
         giveUpModal.classList.add("hidden");
     });
     closeGiveUpModal.addEventListener("click", () => {
         giveUpModal.classList.add("hidden");
     });
-
     // --- Кінець логіки "Здатися" ---
 
     previousGamesBtn.addEventListener("click", async () => {
@@ -317,7 +347,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         closestWordsModal.classList.add("hidden");
     });
 
-    // Кнопка меню (⋮)
+    // --- Логіка кнопки меню (⋮) ---
     const menuButton = document.getElementById("menuButton");
     const dropdownMenu = document.getElementById("dropdownMenu");
     menuButton.addEventListener("click", (event) => {
