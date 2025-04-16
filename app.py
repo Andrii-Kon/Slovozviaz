@@ -32,7 +32,7 @@ def load_wordlist():
 
 DAILY_WORDS = load_daily_words()
 VALID_WORDS = load_wordlist()
-BASE_DATE = date(2025, 3, 31)
+BASE_DATE = date(2025, 4, 15)
 
 @app.before_request
 def load_precomputed():

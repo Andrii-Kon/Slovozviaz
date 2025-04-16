@@ -12,14 +12,16 @@
 </div>
 
 <div class="container">
+    <!-- Блок для фінального повідомлення (як при перемозі, так і при здачі) -->
     <div id="congratsBlock" class="congratsBlock hidden">
-        <h2>Вітаємо!</h2>
-        <p>
+        <h2 id="congratsTitle">Вітаємо!</h2>
+        <p id="congratsMessage">
             Ви відгадали слово #<span id="gameNumber">???</span> за
             <span id="guessesUsed">0</span> спроб(и)!
         </p>
         <button id="shareButton">Поділитися</button>
     </div>
+
     <button id="closestWordsBtn" class="hidden">Найближчі слова</button>
 
     <h1>Словозв'яз</h1>
@@ -99,7 +101,7 @@
 <div id="giveUpModal" class="modal hidden">
     <div class="modal-content" style="text-align: center;">
         <span id="closeGiveUpModal" class="close">&times;</span>
-        <h2>Ви впевнені що хочете здатись?</h2>
+        <h2>Ви впевнені що хочете здатися?</h2>
         <div style="margin-top: 20px;">
             <button id="giveUpYesBtn" class="btn-wide" style="margin-right: 10px;">Так</button>
             <button id="giveUpNoBtn" class="btn-wide">Ні</button>
@@ -107,6 +109,7 @@
     </div>
 </div>
 
+<!-- Підключення основного JS-файлу -->
 <script type="module" src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
 </html>
