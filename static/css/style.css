@@ -1,4 +1,3 @@
-/* ====== Глобальні стилі та Скидання ====== */
 * {
     box-sizing: border-box; /* Враховуємо padding та border у розмірах елементів */
     margin: 0;
@@ -6,21 +5,19 @@
 }
 
 html {
-    /* Можна встановити базовий розмір шрифту для використання rem, якщо бажаєте */
-    /* font-size: 16px; */
+
 }
 
 body {
     background-color: #1e1e1e;
     color: #fff;
     font-family: "Open Sans", sans-serif;
-    line-height: 1.5; /* Покращує читабельність */
+    line-height: 1.5;
 }
 
-/* ====== Верхня панель ====== */
 .header {
     background-color: #1f1f1f;
-    padding: 10px 15px; /* Трохи менше горизонтального відступу для моб */
+    padding: 10px 15px;
     display: flex;
     justify-content: flex-end;
     align-items: center;
@@ -36,30 +33,27 @@ body {
     color: #bbb;
 }
 
-/* ====== Основний контейнер ====== */
 .container {
-    max-width: 500px; /* Збільшено max-width, але можна налаштувати */
-    width: 100%;      /* Займає всю ширину */
+    max-width: 500px;
+    width: 100%;
     margin: 0 auto;
-    padding: 15px;    /* Зменшено відступи для моб */
+    padding: 15px;
     text-align: center;
 }
 h1 {
     margin-bottom: 10px;
-    font-size: 1.4em; /* Трохи зменшено */
+    font-size: 1.4em;
 }
 
-/* Підпис обраної гри */
 #gameDateLabel {
-    margin: 0 0 5px 0; /* Додано нижній відступ */
+    margin: 0 0 5px 0;
     padding: 1px 10px;
     border-radius: 5px;
     color: #fff;
     font-size: 1em;
-    text-align: center; /* Залишено по центру */
+    text-align: center;
 }
 
-/* ====== Секція вводу + Кнопки ====== */
 .input-section {
     display: flex;
     align-items: stretch;
