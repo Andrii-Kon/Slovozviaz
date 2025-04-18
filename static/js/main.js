@@ -67,13 +67,17 @@ function getNextHintRank(currentBestRank, currentGuesses, currentRankedWords, cu
 
 // Обчислює номер гри для заданої дати (формат "YYYY-MM-DD")
 function computeGameNumber(dateStr) {
-    const baseDate = new Date(2025, 3, 15); // Month is 0-indexed (3 = April)
+    const baseDate = new Date(2025, 3, 15); // Month is 0-indexed (3 = April) - !! ОНОВЛЕНО РІК БАЗИ !!
     const [year, month, day] = dateStr.split("-").map(Number);
-    const currentDate = new Date(year, month - 1, day);
+    const currentDate = new Date(year, month - 1, day); // Month is 0-indexed
+    // Встановлюємо час на початок дня для уникнення проблем з часовими поясами
+    baseDate.setHours(0, 0, 0, 0);
+    currentDate.setHours(0, 0, 0, 0);
     const diffMs = currentDate - baseDate;
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24)); // Використовуємо Math.round для надійності
     return diffDays + 1;
 }
+
 
 // Оновлює підпис гри
 function updateGameDateLabel() {
@@ -184,6 +188,7 @@ function showWinMessageUI() {
     const hintButton = document.getElementById("hintButton");
     const closestWordsBtn = document.getElementById("closestWordsBtn");
     const giveUpBtn = document.getElementById("giveUpBtn"); // Also disable give up
+    const authorshipBtn = document.getElementById("authorshipBtn"); // Get authorship button too
 
     if (congratsBlock) {
         const congratsTitle = document.getElementById("congratsTitle");
@@ -205,6 +210,8 @@ function showWinMessageUI() {
     if (submitGuessBtn) submitGuessBtn.disabled = true;
     if (hintButton) hintButton.disabled = true;
     if (giveUpBtn) giveUpBtn.disabled = true; // Disable give up button on win
+    // Authorship button should generally remain enabled, it's informational
+    // if (authorshipBtn) authorshipBtn.disabled = true;
     if (closestWordsBtn) closestWordsBtn.classList.remove("hidden"); // Show closest words button
 }
 
@@ -215,6 +222,7 @@ function showLoseMessageUI(secretWord) {
     const hintButton = document.getElementById("hintButton");
     const closestWordsBtn = document.getElementById("closestWordsBtn");
     const giveUpBtn = document.getElementById("giveUpBtn"); // Also disable give up
+    const authorshipBtn = document.getElementById("authorshipBtn"); // Get authorship button too
 
     if (!congratsBlock) return;
 
@@ -238,6 +246,8 @@ function showLoseMessageUI(secretWord) {
     if (submitGuessBtn) submitGuessBtn.disabled = true;
     if (hintButton) hintButton.disabled = true;
     if (giveUpBtn) giveUpBtn.disabled = true; // Disable give up button on lose
+    // Authorship button should generally remain enabled
+    // if (authorshipBtn) authorshipBtn.disabled = true;
     if (closestWordsBtn) closestWordsBtn.classList.remove("hidden"); // Show closest words button
 }
 
@@ -249,6 +259,7 @@ function resetUIForActiveGame() {
     const hintButton = document.getElementById("hintButton");
     const closestWordsBtn = document.getElementById("closestWordsBtn");
     const giveUpBtn = document.getElementById("giveUpBtn");
+    const authorshipBtn = document.getElementById("authorshipBtn"); // Get authorship button too
 
     if (congratsBlock) congratsBlock.classList.add("hidden");
     if (closestWordsBtn) closestWordsBtn.classList.add("hidden");
@@ -257,6 +268,7 @@ function resetUIForActiveGame() {
     if (submitGuessBtn) submitGuessBtn.disabled = false;
     if (hintButton) hintButton.disabled = false;
     if (giveUpBtn) giveUpBtn.disabled = false; // Ensure give up is enabled
+    if (authorshipBtn) authorshipBtn.disabled = false; // Ensure authorship is enabled
 }
 
 
@@ -306,6 +318,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     const closeModalBtn = document.getElementById("closeModalBtn");
     const menuButton = document.getElementById("menuButton");
     const dropdownMenu = document.getElementById("dropdownMenu");
+    const shareButton = document.getElementById("shareButton"); // Get share button
+    const readMoreBtn = document.getElementById("readMoreBtn"); // Get read more button
+
+    // === НОВІ ЕЛЕМЕНТИ ДЛЯ "АВТОРСТВА" ===
+    const authorshipBtn = document.getElementById('authorshipBtn');
+    const authorshipModal = document.getElementById('authorshipModal');
+    const closeAuthorshipModalBtn = document.getElementById('closeAuthorshipModal');
+    // === Кінець нових елементів ===
+
 
     // --- Initial Setup ---
     randomGameBtn.textContent = "🔀 Випадкова"; // Set text content maybe based on locale later
@@ -346,15 +367,20 @@ document.addEventListener("DOMContentLoaded", async () => {
     // or defaults to the daily game if `currentGameDate` corresponds to today.
     // Modify fetchRankedWords API/call if it needs the date explicitly.
     try {
-        rankedWords = await fetchRankedWords(/* pass currentGameDate if needed */);
+        // Pass date only if it's not today, otherwise backend uses daily
+        const dateParam = currentGameDate === new Date().toISOString().split("T")[0] ? null : currentGameDate;
+        rankedWords = await fetchRankedWords(dateParam); // Pass date if it's an archive game
         if (!Array.isArray(rankedWords)) throw new Error("Ranked words data is not an array");
         MAX_RANK = rankedWords.length > 0 ? Math.max(...rankedWords.map(w => w.rank)) : 0; // More robust MAX_RANK
-        console.log(`Loaded ${rankedWords.length} ranked words. Max rank: ${MAX_RANK}`);
+        console.log(`Loaded ${rankedWords.length} ranked words for ${currentGameDate}. Max rank: ${MAX_RANK}`);
     } catch (err) {
-        console.error("[Error] fetchRankedWords failed:", err);
+        console.error(`[Error] fetchRankedWords failed for ${currentGameDate}:`, err);
         // Display an error? Maybe disable guessing.
         if (guessInput) guessInput.disabled = true;
         if (submitGuessBtn) submitGuessBtn.disabled = true;
+        if (document.getElementById("gameDateLabel")) {
+            document.getElementById("gameDateLabel").textContent = "Помилка слів";
+        }
         return; // Stop if words can't be loaded
     }
 
@@ -374,10 +400,12 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         if (guesses.some(g => g.word === word)) {
             alert(`Слово "${word}" вже було використано.`);
+            guessInput.value = ""; // Clear input on used word
             return;
         }
         if (!allowedWords.has(word)) {
             alert(`Вибачте, слово "${word}" не знайдено у словнику.`);
+            guessInput.value = ""; // Clear input on invalid word
             return;
         }
 
@@ -401,6 +429,15 @@ document.addEventListener("DOMContentLoaded", async () => {
         lastWord = word; // Update last word tried
 
         guesses.push({ word, rank: data.rank, error: data.error || false, errorMessage: data.errorMessage });
+
+        // Sort guesses: errors first, then by rank ascending
+        guesses.sort((a, b) => {
+            if (a.error && !b.error) return -1; // Errors first
+            if (!a.error && b.error) return 1;
+            if (a.error && b.error) return 0; // Keep original order for errors
+            return a.rank - b.rank; // Sort by rank ascending
+        });
+
 
         if (!data.error) {
             if (data.rank < bestRank) {
@@ -433,19 +470,30 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         console.log(`Loading archive for date: ${game_date}`);
 
-        // 2. Fetch archive data
+        // Display loading indicator immediately
+        if (guessesContainer) guessesContainer.innerHTML = '<p style="text-align: center;">Завантаження гри...</p>';
+        if (lastGuessWrapper) lastGuessWrapper.classList.add('hidden');
+        if (guessCountElem) guessCountElem.textContent = '...';
+        if (document.getElementById("gameDateLabel")) document.getElementById("gameDateLabel").textContent = 'Завантаження...';
+
+
+        // 2. Fetch archive data (ranking + secret word for give up)
         try {
-            const response = await fetch(`/archive/${game_date}`);
+            const response = await fetch(`/archive/${game_date}`); // API endpoint might need adjustment
             if (!response.ok) {
                 if (response.status === 404) {
                     alert(`Архів для дати ${game_date} не знайдено.`);
                 } else {
                     alert(`Помилка завантаження архіву: ${response.statusText}`);
                 }
-                return; // Stop if fetch failed
+                // Revert UI or load today's game?
+                // For now, just stop.
+                if (guessesContainer) guessesContainer.innerHTML = '<p style="text-align: center;">Помилка завантаження.</p>';
+                return;
             }
+            // Assuming API returns { ranking: [...], secret_word: "..." }
             const archiveData = await response.json();
-            if (!archiveData || !Array.isArray(archiveData.ranking)) {
+            if (!archiveData || !Array.isArray(archiveData.ranking)) { //|| !archiveData.secret_word) { // Secret word might not be needed if rank 1 is always present
                 throw new Error("Invalid archive data format");
             }
 
@@ -460,210 +508,272 @@ document.addEventListener("DOMContentLoaded", async () => {
             lastWord = null;
             didWin = false;
             didGiveUp = false;
-            giveUpWord = null;
+            giveUpWord = null; // Reset give up word state
 
             console.log(`Loaded ${rankedWords.length} words for ${game_date}. Max rank: ${MAX_RANK}`);
 
-            // 4. Update UI elements
+            // 4. Update UI elements (initial clear before loadGameState)
             updateGameDateLabel();
-            if (guessCountElem) guessCountElem.textContent = guessCount; // Reset count display
-            // Clear previous guesses display before rendering potentially saved ones
-            if (guessesContainer) guessesContainer.innerHTML = '';
+            if (guessCountElem) guessCountElem.textContent = '0'; // Reset count display
+            if (guessesContainer) guessesContainer.innerHTML = ''; // Clear loading/previous guesses display
             if (lastGuessWrapper) lastGuessWrapper.classList.add('hidden');
-
+            if (howToPlayBlock) howToPlayBlock.style.display = ""; // Show help block initially
 
             // 5. Load saved state specifically for this archive date (if any)
-            loadGameState(); // This will populate guesses, count, final state etc. if saved
+            loadGameState(); // This will populate UI based on saved state or defaults
 
             // 6. Ensure UI reflects the loaded state (loadGameState handles this)
+            // E.g., if game was already won/lost, inputs will be disabled.
+
 
         } catch (err) {
             console.error("Error loading archive for date", game_date, err);
             alert("Помилка завантаження архіву. Див. консоль для деталей.");
+            if (guessesContainer) guessesContainer.innerHTML = '<p style="text-align: center;">Помилка завантаження.</p>';
             // Maybe revert currentGameDate to previous value? Or to today?
         } finally {
             // Close modal regardless of success/failure
             if (previousGamesModal) previousGamesModal.classList.add("hidden");
             if (dropdownMenu) dropdownMenu.classList.add("hidden"); // Close menu
+            if (guessInput) guessInput.focus(); // Focus input after loading
         }
     }
 
     // --- Event Listeners ---
 
     // Guess Input & Button
-    guessInput.addEventListener("keypress", (e) => {
-        if (e.key === "Enter") {
-            handleSubmit();
-        }
-    });
-    submitGuessBtn.addEventListener("click", handleSubmit);
+    if (guessInput) {
+        guessInput.addEventListener("keypress", (e) => {
+            if (e.key === "Enter") {
+                handleSubmit();
+            }
+        });
+    }
+    if (submitGuessBtn) {
+        submitGuessBtn.addEventListener("click", handleSubmit);
+    }
+
 
     // Hint Button
-    hintButton.addEventListener("click", () => {
-        if (didWin || didGiveUp) return; // No hints if game over
+    if (hintButton) {
+        hintButton.addEventListener("click", () => {
+            if (didWin || didGiveUp) return; // No hints if game over
 
-        if (howToPlayBlock && howToPlayBlock.style.display !== "none") {
-            howToPlayBlock.style.display = "none"; // Hide help on first action
-        }
-        if (rankedWords.length === 0) {
-            alert("Список слів ще не завантажено!");
-            return;
-        }
-
-        const nextHintRank = getNextHintRank(bestRank, guesses, rankedWords, MAX_RANK);
-
-        if (nextHintRank === null) {
-            alert("Не вдалося знайти підходящу підказку (можливо, всі слова вже відгадані?).");
-            return;
-        }
-
-        const hintWordObj = rankedWords.find(item => item.rank === nextHintRank);
-        if (!hintWordObj) {
-            // This case should ideally not happen if getNextHintRank is correct
-            alert(`Помилка: Не знайдено слово з рангом ${nextHintRank}.`);
-            console.error("Hint logic error: rank found but word missing?", nextHintRank, rankedWords);
-            return;
-        }
-
-        console.log(`Hint: Providing word '${hintWordObj.word}' with rank ${hintWordObj.rank}`);
-
-        // Treat hint as a guess
-        guessCount++; // Increment guess count for hints
-        if (guessCountElem) guessCountElem.textContent = guessCount;
-        lastWord = hintWordObj.word; // Set hint word as last word
-        guesses.push({ word: hintWordObj.word, rank: hintWordObj.rank, error: false, isHint: true }); // Add 'isHint' flag?
-
-        if (hintWordObj.rank < bestRank) {
-            bestRank = hintWordObj.rank;
-            // Optional: reset hint direction 'isGoingUp' = false;
-        }
-
-        renderGuesses(guesses, lastWord, MAX_RANK, guessesContainer, lastGuessWrapper, lastGuessDisplay);
-
-        if (hintWordObj.rank === 1) {
-            endGameAsWin(); // Handle win if hint was rank 1
-        } else {
-            saveGameState(); // Save state after hint
-        }
-
-        if (dropdownMenu) dropdownMenu.classList.add("hidden"); // Close menu
-    });
-
-    // Give Up Modal
-    giveUpBtn.addEventListener("click", () => {
-        if (didWin || didGiveUp) return; // Don't show if game already over
-        if (giveUpModal) giveUpModal.classList.remove("hidden");
-        if (dropdownMenu) dropdownMenu.classList.add("hidden"); // Close menu
-    });
-    closeGiveUpModal.addEventListener("click", () => {
-        if (giveUpModal) giveUpModal.classList.add("hidden");
-    });
-    giveUpNoBtn.addEventListener("click", () => {
-        if (giveUpModal) giveUpModal.classList.add("hidden");
-    });
-    giveUpYesBtn.addEventListener("click", () => {
-        if (didWin || didGiveUp) { // Double check state before proceeding
-            if (giveUpModal) giveUpModal.classList.add("hidden");
-            return;
-        }
-
-        if (howToPlayBlock && howToPlayBlock.style.display !== "none") {
-            howToPlayBlock.style.display = "none";
-        }
-
-        const secretWordObj = rankedWords.find(item => item.rank === 1);
-        const secretWord = secretWordObj ? secretWordObj.word : (rankedWords.length > 0 ? rankedWords[0].word : "невідомо"); // Fallback word
-
-        // Add the secret word as the final guess (optional, but shows it in the list)
-        // This counts as a guess attempt
-        guessCount++;
-        if (guessCountElem) guessCountElem.textContent = guessCount;
-        guesses.push({ word: secretWord, rank: 1, error: false, gaveUp: true }); // Mark this guess
-        lastWord = secretWord; // Show the secret word as the last one
-        bestRank = 1; // Set best rank to 1
-
-        renderGuesses(guesses, lastWord, MAX_RANK, guessesContainer, lastGuessWrapper, lastGuessDisplay); // Update UI with final word
-
-        // End the game as give up
-        endGameAsGiveUp(secretWord); // This handles UI changes and saving state
-
-        if (giveUpModal) giveUpModal.classList.add("hidden");
-    });
-
-    // Previous Games Modal
-    previousGamesBtn.addEventListener("click", async () => {
-        if (previousGamesModal) previousGamesModal.classList.remove("hidden");
-        if (dropdownMenu) dropdownMenu.classList.add("hidden"); // Close menu
-
-        if (previousGamesList) previousGamesList.innerHTML = "<p>Завантаження архіву...</p>"; // Loading indicator
-
-        try {
-            const response = await fetch("/archive");
-            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-            const dates = await response.json();
-            if (!Array.isArray(dates)) throw new Error("Archive list format incorrect");
-
-            if (previousGamesList) previousGamesList.innerHTML = ""; // Clear loading/previous list
-            const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD format
-
-            // Sort dates descending (newest first)
-            dates.sort((a, b) => b.localeCompare(a));
-
-            dates.forEach(dateStr => {
-                if (dateStr > today) return; // Don't show future games
-
-                const gameNumber = computeGameNumber(dateStr);
-                const dateObj = new Date(dateStr + "T00:00:00"); // Ensure correct date parsing
-
-                const weekday = dateObj.toLocaleDateString('uk-UA', { weekday: 'short' });
-                const day = dateObj.getDate();
-                const month = dateObj.toLocaleDateString('uk-UA', { month: 'short' });
-
-                const btn = document.createElement("button");
-                btn.className = "archive-button"; // Add class for styling
-                btn.textContent = `#${gameNumber}⠀${weekday}, ${day} ${month.replace('.', '')}`; // Clean month abbreviation
-                btn.dataset.date = dateStr; // Store date in data attribute
-
-                btn.addEventListener("click", () => {
-                    loadArchive(dateStr); // Load the selected archive game
-                    // loadArchive handles closing the modal now
-                });
-                if (previousGamesList) previousGamesList.appendChild(btn);
-            });
-
-            if (dates.length === 0) {
-                if (previousGamesList) previousGamesList.innerHTML = "<p>Архівних ігор не знайдено.</p>";
+            if (howToPlayBlock && howToPlayBlock.style.display !== "none") {
+                howToPlayBlock.style.display = "none"; // Hide help on first action
             }
-
-        } catch (err) {
-            console.error("[Error] Failed to fetch archive list:", err);
-            if (previousGamesList) previousGamesList.innerHTML = "<p>Помилка завантаження архіву. Спробуйте пізніше.</p>";
-        }
-    });
-    closePreviousGamesModal.addEventListener("click", () => {
-        if (previousGamesModal) previousGamesModal.classList.add("hidden");
-    });
-    randomGameBtn.addEventListener("click", async () => {
-        if (dropdownMenu) dropdownMenu.classList.add("hidden"); // Close menu
-        try {
-            const response = await fetch("/archive");
-            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-            const dates = await response.json();
-            const today = new Date().toISOString().split("T")[0];
-            const validDates = dates.filter(date => date <= today); // Only past/present games
-
-            if (validDates.length === 0) {
-                alert("Не знайдено доступних архівних ігор.");
+            if (rankedWords.length === 0) {
+                alert("Список слів ще не завантажено!");
                 return;
             }
-            const randomDate = validDates[Math.floor(Math.random() * validDates.length)];
-            await loadArchive(randomDate); // Load the random game
-            // loadArchive handles closing the modal
-        } catch (err) {
-            console.error("[Error] Failed to load random game:", err);
-            alert("Помилка при завантаженні випадкової гри.");
-        }
-    });
+
+            const nextHintRank = getNextHintRank(bestRank, guesses, rankedWords, MAX_RANK);
+
+            if (nextHintRank === null) {
+                alert("Не вдалося знайти підходящу підказку (можливо, всі слова вже відгадані?).");
+                return;
+            }
+
+            const hintWordObj = rankedWords.find(item => item.rank === nextHintRank);
+            if (!hintWordObj) {
+                // This case should ideally not happen if getNextHintRank is correct
+                alert(`Помилка: Не знайдено слово з рангом ${nextHintRank}.`);
+                console.error("Hint logic error: rank found but word missing?", nextHintRank);
+                return;
+            }
+
+            console.log(`Hint: Providing word '${hintWordObj.word}' with rank ${hintWordObj.rank}`);
+
+            // Treat hint as a guess
+            guessCount++; // Increment guess count for hints
+            if (guessCountElem) guessCountElem.textContent = guessCount;
+            lastWord = hintWordObj.word; // Set hint word as last word
+            guesses.push({ word: hintWordObj.word, rank: hintWordObj.rank, error: false, isHint: true }); // Add 'isHint' flag?
+
+            // Sort guesses after adding hint
+            guesses.sort((a, b) => {
+                if (a.error && !b.error) return -1;
+                if (!a.error && b.error) return 1;
+                if (a.error && b.error) return 0;
+                return a.rank - b.rank;
+            });
+
+
+            if (hintWordObj.rank < bestRank) {
+                bestRank = hintWordObj.rank;
+                // Optional: reset hint direction 'isGoingUp' = false;
+            }
+
+            renderGuesses(guesses, lastWord, MAX_RANK, guessesContainer, lastGuessWrapper, lastGuessDisplay);
+
+            if (hintWordObj.rank === 1) {
+                endGameAsWin(); // Handle win if hint was rank 1
+            } else {
+                saveGameState(); // Save state after hint
+            }
+
+            if (dropdownMenu) dropdownMenu.classList.add("hidden"); // Close menu
+        });
+    }
+
+
+    // Give Up Modal
+    if (giveUpBtn) {
+        giveUpBtn.addEventListener("click", () => {
+            if (didWin || didGiveUp) return; // Don't show if game already over
+            if (giveUpModal) giveUpModal.classList.remove("hidden");
+            if (dropdownMenu) dropdownMenu.classList.add("hidden"); // Close menu
+        });
+    }
+    if (closeGiveUpModal) {
+        closeGiveUpModal.addEventListener("click", () => {
+            if (giveUpModal) giveUpModal.classList.add("hidden");
+        });
+    }
+    if (giveUpNoBtn) {
+        giveUpNoBtn.addEventListener("click", () => {
+            if (giveUpModal) giveUpModal.classList.add("hidden");
+        });
+    }
+    if (giveUpYesBtn) {
+        giveUpYesBtn.addEventListener("click", () => {
+            if (didWin || didGiveUp) { // Double check state before proceeding
+                if (giveUpModal) giveUpModal.classList.add("hidden");
+                return;
+            }
+
+            if (howToPlayBlock && howToPlayBlock.style.display !== "none") {
+                howToPlayBlock.style.display = "none";
+            }
+
+            const secretWordObj = rankedWords.find(item => item.rank === 1);
+            const secretWord = secretWordObj ? secretWordObj.word : (rankedWords.length > 0 ? rankedWords[0].word : "невідомо"); // Fallback word
+
+            // Add the secret word as the final guess (optional, but shows it in the list)
+            // This counts as a guess attempt
+            guessCount++;
+            if (guessCountElem) guessCountElem.textContent = guessCount;
+            guesses.push({ word: secretWord, rank: 1, error: false, gaveUp: true }); // Mark this guess
+            lastWord = secretWord; // Show the secret word as the last one
+            bestRank = 1; // Set best rank to 1
+
+            // Sort guesses after adding the secret word
+            guesses.sort((a, b) => {
+                if (a.error && !b.error) return -1;
+                if (!a.error && b.error) return 1;
+                if (a.error && b.error) return 0;
+                return a.rank - b.rank;
+            });
+
+
+            renderGuesses(guesses, lastWord, MAX_RANK, guessesContainer, lastGuessWrapper, lastGuessDisplay); // Update UI with final word
+
+            // End the game as give up
+            endGameAsGiveUp(secretWord); // This handles UI changes and saving state
+
+            if (giveUpModal) giveUpModal.classList.add("hidden");
+        });
+    }
+    // Close GiveUp modal on background click
+    if (giveUpModal) {
+        giveUpModal.addEventListener('click', (event) => {
+            if (event.target === giveUpModal) {
+                giveUpModal.classList.add('hidden');
+            }
+        });
+    }
+
+
+    // Previous Games Modal
+    if (previousGamesBtn) {
+        previousGamesBtn.addEventListener("click", async () => {
+            if (previousGamesModal) previousGamesModal.classList.remove("hidden");
+            if (dropdownMenu) dropdownMenu.classList.add("hidden"); // Close menu
+
+            if (previousGamesList) previousGamesList.innerHTML = "<p>Завантаження архіву...</p>"; // Loading indicator
+
+            try {
+                const response = await fetch("/archive");
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const dates = await response.json();
+                if (!Array.isArray(dates)) throw new Error("Archive list format incorrect");
+
+                if (previousGamesList) previousGamesList.innerHTML = ""; // Clear loading/previous list
+                const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD format
+
+                // Sort dates descending (newest first)
+                dates.sort((a, b) => b.localeCompare(a));
+
+                dates.forEach(dateStr => {
+                    if (dateStr > today) return; // Don't show future games
+
+                    const gameNumber = computeGameNumber(dateStr);
+                    const dateObj = new Date(dateStr + "T00:00:00"); // Ensure correct date parsing
+
+                    const weekday = dateObj.toLocaleDateString('uk-UA', { weekday: 'short' });
+                    const day = dateObj.getDate();
+                    const month = dateObj.toLocaleDateString('uk-UA', { month: 'short' });
+
+                    const btn = document.createElement("button");
+                    btn.className = "archive-button"; // Add class for styling
+                    btn.textContent = `#${gameNumber}⠀${weekday}, ${day} ${month.replace('.', '')}`; // Clean month abbreviation
+                    btn.dataset.date = dateStr; // Store date in data attribute
+
+                    btn.addEventListener("click", () => {
+                        loadArchive(dateStr); // Load the selected archive game
+                        // loadArchive handles closing the modal now
+                    });
+                    if (previousGamesList) previousGamesList.appendChild(btn);
+                });
+
+                if (dates.length === 0) {
+                    if (previousGamesList) previousGamesList.innerHTML = "<p>Архівних ігор не знайдено.</p>";
+                }
+
+            } catch (err) {
+                console.error("[Error] Failed to fetch archive list:", err);
+                if (previousGamesList) previousGamesList.innerHTML = "<p>Помилка завантаження архіву. Спробуйте пізніше.</p>";
+            }
+        });
+    }
+    if (closePreviousGamesModal) {
+        closePreviousGamesModal.addEventListener("click", () => {
+            if (previousGamesModal) previousGamesModal.classList.add("hidden");
+        });
+    }
+    // Close PreviousGames modal on background click
+    if (previousGamesModal) {
+        previousGamesModal.addEventListener('click', (event) => {
+            if (event.target === previousGamesModal) {
+                previousGamesModal.classList.add('hidden');
+            }
+        });
+    }
+
+    if (randomGameBtn) {
+        randomGameBtn.addEventListener("click", async () => {
+            if (dropdownMenu) dropdownMenu.classList.add("hidden"); // Close menu
+            try {
+                const response = await fetch("/archive");
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const dates = await response.json();
+                const today = new Date().toISOString().split("T")[0];
+                const validDates = dates.filter(date => date <= today); // Only past/present games
+
+                if (validDates.length === 0) {
+                    alert("Не знайдено доступних архівних ігор.");
+                    return;
+                }
+                const randomDate = validDates[Math.floor(Math.random() * validDates.length)];
+                await loadArchive(randomDate); // Load the random game
+                // loadArchive handles closing the modal
+            } catch (err) {
+                console.error("[Error] Failed to load random game:", err);
+                alert("Помилка при завантаженні випадкової гри.");
+            }
+        });
+    }
+
 
     // Closest Words Modal
     function showClosestWords() {
@@ -672,7 +782,15 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         closestWordsList.innerHTML = ""; // Clear previous list
         // Show top N words, e.g., top 500 or all if less than 500
-        const topN = rankedWords.slice(0, 500);
+        const topN = rankedWords.slice(0, 500); // Get top 500 ranked words
+        // Sort them by rank ascending (API might already do this, but good to ensure)
+        topN.sort((a, b) => a.rank - b.rank);
+
+        const closestWordsTitle = document.getElementById("closestWordsTitle");
+        if (closestWordsTitle) {
+            closestWordsTitle.textContent = `Це були ${topN.length} найближчих слів:`;
+        }
+
 
         if (topN.length === 0) {
             closestWordsList.innerHTML = "<p>Список слів порожній.</p>";
@@ -686,21 +804,131 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         if (closestWordsModal) closestWordsModal.classList.remove("hidden");
     }
-    closestWordsBtn.addEventListener("click", showClosestWords);
-    closeModalBtn.addEventListener("click", () => {
-        if (closestWordsModal) closestWordsModal.classList.add("hidden");
-    });
+    if (closestWordsBtn) {
+        closestWordsBtn.addEventListener("click", showClosestWords);
+    }
+    if (closeModalBtn) {
+        closeModalBtn.addEventListener("click", () => {
+            if (closestWordsModal) closestWordsModal.classList.add("hidden");
+        });
+    }
+    // Close ClosestWords modal on background click
+    if (closestWordsModal) {
+        closestWordsModal.addEventListener('click', (event) => {
+            if (event.target === closestWordsModal) {
+                closestWordsModal.classList.add('hidden');
+            }
+        });
+    }
+
 
     // Dropdown Menu
-    menuButton.addEventListener("click", (event) => {
-        event.stopPropagation(); // Prevent click from immediately closing menu
-        if (dropdownMenu) dropdownMenu.classList.toggle("hidden");
-    });
+    if (menuButton && dropdownMenu) {
+        menuButton.addEventListener("click", (event) => {
+            event.stopPropagation(); // Prevent click from immediately closing menu
+            dropdownMenu.classList.toggle("hidden");
+        });
+    }
     // Close menu if clicking outside
     document.addEventListener("click", (event) => {
         if (menuButton && dropdownMenu && !menuButton.contains(event.target) && !dropdownMenu.contains(event.target)) {
             dropdownMenu.classList.add("hidden");
         }
     });
+
+
+    // Share Button Functionality
+    if (shareButton) {
+        shareButton.addEventListener('click', async () => {
+            // Check if game is won or given up to generate meaningful summary
+            if (!didWin && !didGiveUp) {
+                alert("Ви ще не завершили гру, щоб поділитися результатом!");
+                return;
+            }
+
+            const gameNum = currentGameDate ? computeGameNumber(currentGameDate) : dayNumber;
+            let shareText = `Словозв'яз #${gameNum}\n`;
+            shareText += `Спроб: ${guessCount}\n`;
+
+            // Generate simple emoji summary (optional)
+            // Find the closest guess that wasn't rank 1
+            const closestGuessRank = guesses
+                .filter(g => !g.error && g.rank !== 1 && g.rank !== Infinity) // Filter valid, non-winning guesses
+                .reduce((minRank, g) => Math.min(minRank, g.rank), Infinity); // Find the minimum rank among them
+
+            if (didWin) {
+                shareText += "✅ Знайдено!\n";
+                // Add distance indicator? e.g., ⭐⭐⭐☆☆ if best rank was 3/5 of max? Too complex?
+            } else if (didGiveUp) {
+                shareText += `🏳️ Здався. Найближче слово: ${closestGuessRank !== Infinity ? `(ранг ${closestGuessRank})` : '(немає)'}\n`;
+            }
+
+            // Add link to the game
+            shareText += `\n${window.location.href}`; // Share current URL
+
+            try {
+                // Use Web Share API if available
+                if (navigator.share) {
+                    await navigator.share({
+                        title: `Словозв'яз #${gameNum}`,
+                        text: shareText,
+                        // url: window.location.href // URL included in text now
+                    });
+                    console.log('Result shared successfully');
+                } else {
+                    // Fallback: Copy to clipboard
+                    await navigator.clipboard.writeText(shareText);
+                    alert('Результат скопійовано до буферу обміну!');
+                }
+            } catch (err) {
+                console.error('Error sharing:', err);
+                // Fallback if even clipboard fails (rare)
+                alert('Не вдалося поділитися або скопіювати. Спробуйте вручну.');
+            }
+        });
+    }
+
+    // Read More Button (Link to external page/rules)
+    if (readMoreBtn) {
+        readMoreBtn.addEventListener('click', () => {
+            // Replace with your actual link to detailed rules or about page
+            window.open('https://github.com/Konon-hub/Slovozviaz', '_blank');
+        });
+    }
+
+
+    // === ОБРОБНИКИ ДЛЯ "АВТОРСТВА" ===
+    // Перевірка, чи всі елементи знайдено
+    if (authorshipBtn && authorshipModal && closeAuthorshipModalBtn && dropdownMenu) {
+
+        // Обробник для кнопки "Авторство" в меню
+        authorshipBtn.addEventListener('click', () => {
+            authorshipModal.classList.remove('hidden'); // Показати модальне вікно
+            dropdownMenu.classList.add('hidden'); // Закрити випадаюче меню
+        });
+
+        // Обробник для кнопки закриття (X) модального вікна "Авторство"
+        closeAuthorshipModalBtn.addEventListener('click', () => {
+            authorshipModal.classList.add('hidden'); // Сховати модальне вікно
+        });
+
+        // Закриття модального вікна "Авторство" при кліку на фон
+        authorshipModal.addEventListener('click', (event) => {
+            // Перевіряємо, чи клік був саме на фоні (modal), а не на його вмісті (modal-content)
+            if (event.target === authorshipModal) {
+                authorshipModal.classList.add('hidden'); // Сховати модальне вікно
+            }
+        });
+
+    } else {
+        // Повідомлення про помилку, якщо елементи не знайдено (допомагає при відлагодженні)
+        console.error('Error: Could not find all elements for the Authorship modal.');
+        if (!authorshipBtn) console.error('Authorship button (#authorshipBtn) not found.');
+        if (!authorshipModal) console.error('Authorship modal (#authorshipModal) not found.');
+        if (!closeAuthorshipModalBtn) console.error('Close Authorship modal button (#closeAuthorshipModal) not found.');
+        // dropdownMenu check is likely elsewhere, but good to be aware
+    }
+    // === Кінець обробників для "Авторства" ===
+
 
 }); // End DOMContentLoaded

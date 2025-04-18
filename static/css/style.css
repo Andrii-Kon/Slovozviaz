@@ -1,11 +1,10 @@
+/* ====================
+   Базові стилі та скидання
+   ==================== */
 * {
-    box-sizing: border-box; /* Враховуємо padding та border у розмірах елементів */
+    box-sizing: border-box;
     margin: 0;
     padding: 0;
-}
-
-html {
-
 }
 
 body {
@@ -15,6 +14,9 @@ body {
     line-height: 1.5;
 }
 
+/* ====================
+   Верхня панель (Header)
+   ==================== */
 .header {
     background-color: #1f1f1f;
     padding: 10px 15px;
@@ -22,17 +24,15 @@ body {
     justify-content: flex-end;
     align-items: center;
 }
-.gameTitle {
-    margin: 0;
-    font-size: 1.2em; /* Трохи зменшено для моб */
-    font-weight: bold;
-    color: #fff;
-}
+
 .gameStats {
     font-size: 0.9em;
     color: #bbb;
 }
 
+/* ====================
+   Основний контейнер
+   ==================== */
 .container {
     max-width: 500px;
     width: 100%;
@@ -40,43 +40,43 @@ body {
     padding: 15px;
     text-align: center;
 }
+
 h1 {
     margin-bottom: 10px;
     font-size: 1.4em;
 }
 
 #gameDateLabel {
-    margin: 0 0 5px 0;
-    padding: 1px 10px;
+    margin: 0 0 1px 0;
+    padding: 8px 12px;
     border-radius: 5px;
     color: #fff;
     font-size: 1em;
-    text-align: center;
+    text-align: left; /* Вирівнювання тексту по лівому краю */
 }
 
+/* ====================
+   Секція Вводу
+   ==================== */
 .input-section {
     display: flex;
     align-items: stretch;
-    gap: 8px; /* Можна зменшити, якщо потрібно більше місця, напр. 5px */
+    gap: 8px;
     margin-bottom: 20px;
     width: 100%;
 }
 
 #guessInput {
-    /* === ЗМІНИ ТУТ === */
-    flex-grow: 3;  /* Забирає 3 частини вільного місця */
-    flex-basis: 0; /* Розрахунок розміру з нуля, пропорційно до grow */
-    flex-shrink: 1; /* Дозволити стискатись (за замовчуванням) */
-    min-width: 100px; /* Мінімальна ширина, щоб не зникнути */
-    /* === Кінець змін === */
-
+    flex-grow: 3;
+    flex-basis: 0;
+    flex-shrink: 1;
+    min-width: 100px;
     padding: 10px;
     border-radius: 5px;
     border: none;
     background-color: #2a2a2a;
     color: #fff;
     font-size: 1em;
-    /* min-width: 0; <-- Це було для flex-grow, але тепер не так критично, min-width важливіше */
     min-height: 44px;
 }
 
@@ -84,52 +84,44 @@ h1 {
     color: #bbb;
 }
 
-/* Контейнер для меню (кнопка з крапками) */
 .menu-container {
     position: relative;
-    flex-shrink: 0; /* <<< Залишаємо, щоб ця кнопка не росла/стискалась сильно */
-    display: flex; /* Додано, щоб кнопка всередині могла зайняти всю висоту */
+    flex-shrink: 0;
+    display: flex;
 }
 
-/* Кнопка меню (три крапки) */
 .menu-button {
     background: none;
     border: none;
     color: #fff;
-    font-size: 1.6em; /* Трохи збільшено для натискання */
+    font-size: 1.6em;
     cursor: pointer;
-    padding: 0 6px; /* Горизонтальний відступ */
+    padding: 0 10px;
     line-height: 1;
-    height: 100%; /* Займати всю висоту input-section */
-    min-width: 25px; /* Мінімальна ширина для натискання */
+    height: 100%;
+    min-width: 25px;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 5px; /* Додано для візуальної цілісності */
+    border-radius: 5px;
     transition: background-color 0.2s;
 }
+
 .menu-button:hover {
-    background-color: #333; /* Легкий ховер ефект */
+    background-color: #333;
 }
 
-
-/* ====== Загальні стилі для кнопок ====== */
-/* Застосовуємо до всіх основних кнопок для консистентності */
-.btn-wide, /* Ваш існуючий клас */
-#submitGuess, /* Ця та інші будуть перевизначені для меню нижче */
-#readMoreBtn,
+/* ====================
+   Загальні стилі кнопок
+   ==================== */
+.btn-wide,
+#submitGuess,
 #shareButton,
 #closestWordsBtn,
 #giveUpYesBtn,
 #giveUpNoBtn,
 #randomGameBtn {
-    flex-grow: 1; /* Забирає 1 частину вільного місця */
-    flex-basis: 0; /* Розрахунок розміру з нуля, пропорційно до grow */
-    flex-shrink: 1; /* Дозволити стискатись (замість flex-shrink: 0) */
-    min-width: 70px; /* Мінімальна ширина кнопки */
-    /* === Кінець змін === */
-
-    padding: 10px 15px; /* Padding все ще впливає на внутрішні відступи */
+    padding: 10px 15px;
     min-height: 44px;
     cursor: pointer;
     background-color: #2196f3;
@@ -146,10 +138,17 @@ h1 {
     line-height: 1.2;
 }
 
+/* Специфічні Flex властивості ТІЛЬКИ для кнопки Відправити */
+#submitGuess {
+    flex-grow: 1;
+    flex-basis: 0;
+    flex-shrink: 1;
+    min-width: 70px;
+}
+
 /* Hover ефекти для основних кнопок */
 .btn-wide:hover,
 #submitGuess:hover,
-#readMoreBtn:hover,
 #shareButton:hover,
 #closestWordsBtn:hover,
 #giveUpYesBtn:hover,
@@ -158,142 +157,130 @@ h1 {
     background-color: #1976d2;
 }
 
-/* Стилізація кнопки відправки окремо, якщо потрібно */
-#submitGuess {
-    flex-shrink: 0; /* Не стискати кнопку */
-    /* Можна видалити клас .btn-wide з HTML, якщо ці стилі достатні */
-}
 
-
-/* ====== Випадаюче меню ====== */
+/* ====================
+   Випадаюче меню
+   ==================== */
 .dropdown-menu {
     position: absolute;
-    top: 110%; /* Відступ від кнопки меню */
+    top: 110%;
     right: 0;
-    background-color: #3a3a3a; /* Трохи світліший фон для контрасту */
+    background-color: #3a3a3a;
     border-radius: 8px;
-    padding: 8px; /* Внутрішні відступи меню */
-    min-width: 200px; /* Збільшено мінімальну ширину */
+    padding: 8px;
+    min-width: 200px;
     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
-    z-index: 1000; /* Вище за інші елементи */
+    z-index: 1000;
     display: flex;
     flex-direction: column;
-    gap: 5px; /* Проміжок між пунктами меню */
+    gap: 5px;
 }
 
-/* Прихований стан меню */
 .dropdown-menu.hidden {
     display: none !important;
 }
 
-/* Пункти всередині випадаючого меню */
 .dropdown-menu .menu-item {
     display: flex;
     align-items: center;
-    gap: 10px; /* Проміжок між іконкою та текстом */
-    background-color: transparent; /* Прозорий фон за замовчуванням */
+    gap: 10px;
+    background-color: transparent;
     border: none;
     color: #fff;
     text-align: left;
-    padding: 12px 16px; /* Збільшені відступи для зручності */
+    padding: 12px 16px;
     width: 100%;
     cursor: pointer;
     font-size: 1em;
     border-radius: 5px;
     transition: background-color 0.1s ease-in-out;
-    font-weight: normal; /* Нормальна вага шрифту */
-    min-height: 44px; /* Мінімальна висота для натискання */
+    font-weight: normal;
+    min-height: 44px;
 }
 
 .dropdown-menu .menu-item .menu-icon {
-    font-size: 1.1em; /* Розмір іконки */
+    font-size: 1.1em;
     line-height: 1;
 }
 
-/* Hover-ефект для пунктів меню */
 .dropdown-menu .menu-item:hover {
-    background-color: #4a4a4a !important; /* Важливо для перевизначення */
+    background-color: #4a4a4a !important; /* Зберігаємо !important через можливі конфлікти специфічності */
     color: #fff !important;
 }
 
-/* Скидання специфічних стилів кнопок, якщо вони потрапляють у меню */
-/* Це потрібно, щоб вони виглядали як пункти меню, а не стандартні кнопки */
+/* Скидання деяких стилів для кнопок всередині меню */
 .dropdown-menu button#hintButton,
 .dropdown-menu button#previousGamesBtn,
-.dropdown-menu button#giveUpBtn {
-    /* background-color скидається через .menu-item */
-    /* color скидається через .menu-item */
-    /* width: 100%; встановлено в .menu-item */
-    /* border: none; встановлено в .menu-item */
-    /* padding встановлено в .menu-item */
-    /* border-radius встановлено в .menu-item */
-    /* font-weight: normal; встановлено в .menu-item */
-    /* min-height встановлено в .menu-item */
-    justify-content: flex-start; /* Вирівнюємо контент на початок */
+.dropdown-menu button#giveUpBtn,
+.dropdown-menu button#authorshipBtn { /* Додано #authorshipBtn */
+    justify-content: flex-start;
+    box-shadow: none;
 }
 
-/* ====== Контейнер для списку здогадок ====== */
+/* Освітлення іконки "Авторство" */
+#authorshipBtn .menu-icon {
+    color: #cccccc !important; /* Світліший колір, !important для гарантії */
+    opacity: 1 !important;
+}
+
+/* ====================
+   Список Спроб
+   ==================== */
 #guessesContainer {
     margin-top: 20px;
     text-align: left;
 }
 
-/* Кожен блок зі спробою */
 .guessItem {
     position: relative;
     display: flex;
     align-items: center;
-    margin: 8px 0; /* Трохи зменшено вертикальний відступ */
-    min-height: 44px; /* Мінімальна висота */
+    margin: 8px 0;
+    min-height: 44px;
     border-radius: 5px;
     background-color: #2a2a2a;
     overflow: hidden;
     font-weight: bold;
     color: #fff;
-    padding: 0 12px; /* Змінено відступи */
+    padding: 0 12px;
 }
 
-/* Смуга заповнення */
 .fillBar {
     position: absolute;
     left: 0;
     top: 0;
     bottom: 0;
-    width: 0%; /* Динамічно змінюється JS */
+    width: 0%;
     transition: width 0.3s ease-in-out;
-    /* Колір смуги (можна зробити залежним від близькості) */
-    background-color: rgba(33, 150, 243, 0.3); /* Напівпрозорий синій */
+    background-color: rgba(33, 150, 243, 0.3);
 }
 
-/* Контейнер тексту (слово і ранг) */
 .guessText {
     position: relative;
-    z-index: 1; /* Щоб текст був над смугою */
+    z-index: 1;
     display: flex;
     justify-content: space-between;
     align-items: center;
     width: 100%;
-    gap: 10px; /* Проміжок між словом та рангом */
+    gap: 10px;
 }
 
-/* Стилі для слова та рангу (рекомендовано додати span-и в JS) */
 .guessText .word {
-    overflow: hidden;         /* Ховати текст, що не влазить */
-    white-space: nowrap;      /* Заборонити перенос рядків */
-    text-overflow: ellipsis;  /* Додати три крапки в кінці */
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
 }
+
 .guessText .rank {
-    flex-shrink: 0; /* Не стискати ранг */
+    flex-shrink: 0;
     font-size: 0.9em;
-    color: #bbb; /* Зробити ранг менш помітним */
+    color: #bbb;
 }
 
-/* Виділення останньої спроби */
 .highlightGuess {
-    box-shadow: 0 0 0 2px #fff; /* Тонша рамка */
+    box-shadow: 0 0 0 2px #fff;
 }
 
-/* Обгортка для останньої спроби (якщо потрібна) */
 .lastGuessWrapper {
     margin-bottom: 20px;
     text-align: left;
@@ -302,7 +289,9 @@ h1 {
     margin: 10px 0;
 }
 
-/* ====== Блок "Як грати?" ====== */
+/* ====================
+   Блок "Як грати?"
+   ==================== */
 .howToPlayBlock {
     background-color: #2a2a2a;
     border: 1px solid #444;
@@ -311,21 +300,22 @@ h1 {
     margin-bottom: 20px;
     text-align: left;
 }
+
 .howToPlayBlock h2 {
     margin-top: 0;
     margin-bottom: 10px;
     font-size: 1.15em;
     color: #2196f3;
 }
+
 .howToPlayBlock p {
-    margin-bottom: 10px;
-    font-size: 0.95em; /* Трохи зменшено */
+    margin-bottom: 15px; /* Збільшено для кращого вигляду після видалення кнопки */
+    font-size: 0.95em;
 }
 
-/* Блок <details> */
 .howToPlayBlock details {
-    margin-bottom: 6px; /* <<< Зменшено відступ знизу (було 8px) */
-    padding: 6px 10px;  /* <<< Зменшено вертикальний padding (було 10px) */
+    margin-bottom: 8px;
+    padding: 8px 12px;
     background-color: #1f1f1f;
     border-radius: 5px;
     border: 1px solid #333;
@@ -335,156 +325,154 @@ h1 {
     cursor: pointer;
     font-weight: bold;
     color: #fff;
-    margin-bottom: 3px; /* <<< Зменшено відступ знизу (було 5px) */
-    font-size: 0.95em; /* <<< Трохи зменшено шрифт (було 1em) */
+    margin-bottom: 5px;
+    font-size: 0.95em;
 }
+
 .howToPlayBlock details p {
-    margin: 3px 0 0 0; /* <<< Зменшено верхній відступ (було 5px) */
-    font-size: 0.85em; /* <<< Трохи зменшено шрифт (було 0.9em) */
+    margin: 5px 0 0 0;
+    font-size: 0.85em;
     color: #ddd;
-    line-height: 1.4; /* Можна трохи зменшити міжрядковий інтервал */
+    line-height: 1.4;
 }
 
-/* Кнопка "Докладніше" */
-/* Можна додати окреме правило для кнопки Докладніше */
-#readMoreBtn {
-    margin-top: 8px;   /* <<< Зменшено відступ зверху (було 10px) */
-    padding: 6px 12px; /* <<< Зменшено вертикальний padding (було 10px) */
-    min-height: 36px;  /* <<< Перевизначаємо мінімальну висоту (було 44px) */
-    font-size: 0.9em; /* Можна трохи зменшити шрифт */
-    /* Усі інші стилі (фон, колір, border-radius) успадкуються */
-    /* від загального блоку стилів кнопок */
-}
-
-
-/* ====== Блок "Вітаємо!" / Фінальний блок ====== */
+/* ====================
+   Блок Завершення Гри
+   ==================== */
 .congratsBlock {
     background-color: #2a2a2a;
     border: 2px solid #2196f3;
     border-radius: 10px;
-    padding: 20px; /* Збільшено відступи */
+    padding: 20px;
     margin-bottom: 20px;
     text-align: center;
 }
+
 .congratsBlock h2 {
     font-size: 1.3em;
     margin-bottom: 10px;
 }
+
 .congratsBlock p {
     margin-bottom: 15px;
-}
-#shareButton {
-    /* Стилі вже визначені вище */
-}
-#closestWordsBtn {
-    /* Стилі вже визначені вище */
-    margin-top: 15px; /* Трохи більше відступу */
+    white-space: pre-wrap; /* Для коректного відображення \n у повідомленні про здачу */
 }
 
-/* Прихований елемент */
+#closestWordsBtn {
+    margin-top: 15px;
+}
+
 .hidden {
     display: none !important;
 }
 
 
-/* ====== Модальні вікна ====== */
+/* ====================
+   Модальні Вікна
+   ==================== */
 .modal {
     position: fixed;
-    z-index: 1050; /* Високий z-index */
+    z-index: 1050;
     left: 0;
     top: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0, 0, 0, 0.7); /* Темніший фон */
+    background-color: rgba(0, 0, 0, 0.7);
     display: flex;
     justify-content: center;
     align-items: center;
-    padding: 15px; /* Відступи для безпечної зони */
+    padding: 15px;
 }
 
-/* Контент модального вікна */
 .modal-content {
     position: relative;
     background-color: #2a2a2a;
     border-radius: 10px;
     padding: 20px;
-    width: 100%; /* Займає всю ширину безпечної зони */
-    max-width: 500px; /* Обмежуємо максимальну ширину */
-    max-height: 85vh; /* Обмежуємо висоту */
-    overflow-y: auto; /* Додаємо скрол, якщо контент не влазить */
+    width: 100%;
+    max-width: 500px;
+    max-height: 85vh;
+    overflow-y: auto;
     box-shadow: 0 5px 20px rgba(0,0,0,0.5);
-    border: 1px solid rgba(255, 255, 255, 0.2); /* Легка обводка */
+    border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-/* Кнопка закриття (X) */
 .close {
     position: absolute;
-    top: 10px; /* Ближче до краю */
-    right: 10px; /* Ближче до краю */
-    font-size: 28px; /* Збільшено */
+    top: 10px;
+    right: 10px;
+    font-size: 28px;
     font-weight: bold;
     line-height: 1;
     cursor: pointer;
-    color: #aaa; /* Сіруватий колір */
+    color: #aaa;
     transition: color 0.2s;
-    padding: 5px; /* Додано padding для легшого натискання */
+    padding: 5px;
 }
+
 .close:hover {
     color: #fff;
 }
 
-/* Заголовок у модалці */
 .modal-content h2 {
     margin-top: 0;
     margin-bottom: 20px;
     color: #2196f3;
     text-align: center;
-    font-size: 1.2em; /* Адаптовано */
+    font-size: 1.2em;
 }
 
-/* Список у модалці "Closest Words" */
+/* Модалка "Найближчі слова" */
 #closestWordsList {
     padding-bottom: 10px;
     font-size: 0.95em;
 }
+/* Зробимо елементи списку схожими на звичайні, але без hover-смуги */
+#closestWordsList .guessItem {
+    background-color: transparent; /* Прозорий фон */
+    border: 1px solid #444; /* Легка рамка */
+    margin: 5px 0;
+    min-height: 40px;
+}
+#closestWordsList .fillBar {
+    display: none; /* Не показувати кольорову смугу близькості */
+}
+#closestWordsList .guessText .word {
+    color: #ddd; /* Трохи світліше */
+}
+
 
 /* Модалка "Попередні ігри" */
-#previousGamesModal .modal-content {
-    /* Додаткові стилі, якщо потрібно */
-}
 #randomGameContainer {
     text-align: center;
     margin-bottom: 1rem;
 }
-#randomGameBtn {
-    /* Стилі визначені вище */
-}
 
-/* Список кнопок попередніх ігор */
 #previousGamesList button {
     width: 100%;
-    background-color: #2196f3; /* Інший фон для розрізнення */
+    background-color: #2196f3;
     color: #fff;
     border: none;
-    padding: 12px 15px; /* Оновлено padding */
+    padding: 12px 15px;
     margin: 6px 0;
     border-radius: 8px;
-    font-size: 1em; /* Змінено розмір */
+    font-size: 1em;
     display: flex;
     justify-content: space-between;
     align-items: center;
     transition: background-color 0.2s ease;
-    min-height: 44px; /* Мінімальна висота */
+    min-height: 44px;
 }
+
 #previousGamesList button:hover {
     background-color: #1976d2;
     cursor: pointer;
 }
-.game-status-label {
-    font-weight: normal; /* Зроблено звичайним */
+.game-status-label { /* Якщо використовується для позначення статусу */
+    font-weight: normal;
     font-size: 0.9em;
     opacity: 0.8;
-    margin-left: 10px; /* Відступ від дати */
+    margin-left: 10px;
 }
 
 /* Модалка "Здатися" */
@@ -492,19 +480,66 @@ h1 {
     text-align: center;
 }
 #giveUpModal h2 {
-    margin-bottom: 25px; /* Більший відступ */
+    margin-bottom: 25px;
 }
-#giveUpModal .btn-wide {
-    margin: 0 5px; /* Проміжок між кнопками Так/Ні */
+#giveUpModal .btn-wide { /* Стилі для кнопок Так/Ні */
+    margin: 0 5px;
+}
+
+/* Модалка "Авторство" */
+#authorshipModal .modal-content {
+    padding: 20px 25px;
+}
+
+#authorshipContent {
+    color: #e0e0e0;
+    font-size: 1em;
+    line-height: 1.7;
+    text-align: left;
+    margin-top: 20px;
+}
+
+#authorshipContent p {
+    margin-bottom: 15px;
+}
+
+#authorshipContent p:last-child {
+    margin-bottom: 0;
+}
+
+#authorshipContent a {
+    color: #64b5f6;
+    text-decoration: none;
+    transition: color 0.2s ease, text-decoration 0.2s ease;
+}
+
+#authorshipContent a:hover,
+#authorshipContent a:focus {
+    color: #90caf9;
+    text-decoration: underline;
+}
+
+#authorshipContent strong {
+    font-weight: 600;
+    color: #ffffff;
+}
+
+#authorshipContent code {
+    background-color: #3a3a3a;
+    color: #f0f0f0;
+    padding: 2px 5px;
+    border-radius: 4px;
+    font-family: Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace;
+    font-size: 0.9em;
 }
 
 
-/* ====== Медіа-запити для додаткової адаптації ====== */
-
-/* Наприклад, для дуже маленьких екранів (менше 360px) */
+/* ====================
+   Медіа-запити
+   ==================== */
 @media (max-width: 360px) {
     .container {
-        padding: 10px; /* Ще менше відступів */
+        padding: 10px;
     }
 
     h1 {
@@ -512,16 +547,19 @@ h1 {
     }
 
     #guessInput {
-        font-size: 0.95em; /* Трохи менший шрифт в полі вводу */
+        font-size: 0.95em;
     }
-    /* Рядок 504 */
-    .btn-wide { /* та інші кнопки - коментар можна залишити тут або перенести всередину */
-        padding: 8px 10px; /* Менший padding */
+
+    /* Зменшуємо кнопки на дуже малих екранах */
+    #submitGuess,
+    #giveUpModal .btn-wide { /* Застосовуємо до кнопки Відправити та кнопок Так/Ні */
+        padding: 8px 10px;
         font-size: 0.9em;
+        min-width: 60px; /* Ще трохи зменшуємо мінімальну ширину */
     }
 
     .menu-button {
-        font-size: 1.5em; /* Зменшити кнопку меню, якщо треба */
+        font-size: 1.5em;
         padding: 0 8px;
     }
 
@@ -536,5 +574,10 @@ h1 {
 
     .modal-content h2 {
         font-size: 1.1em;
+    }
+
+    #authorshipContent {
+        font-size: 0.95em; /* Трохи менший текст в авторстві */
+        line-height: 1.6;
     }
 }
