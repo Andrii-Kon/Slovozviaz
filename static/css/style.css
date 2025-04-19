@@ -44,6 +44,7 @@ body {
 h1 {
     margin-bottom: 10px;
     font-size: 1.4em;
+    margin-top: 25px;
 }
 
 #gameDateLabel {
@@ -52,7 +53,7 @@ h1 {
     border-radius: 5px;
     color: #fff;
     font-size: 1em;
-    text-align: left; /* Вирівнювання тексту по лівому краю */
+    text-align: left;
 }
 
 /* ====================
