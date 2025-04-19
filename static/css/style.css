@@ -224,63 +224,143 @@ h1 {
 }
 
 /* ====================
-   Список Спроб
+   Список Спроб (та Найближчих Слів)
    ==================== */
-#guessesContainer {
+#guessesContainer,
+#closestWordsList /* Застосовуємо і до списку в модалці */ {
     margin-top: 20px;
     text-align: left;
 }
 
-.guessItem {
-    position: relative;
-    display: flex;
-    align-items: center;
+.guessItem { /* Стиль для КОЖНОГО елемента списку */
+    position: relative; /* Необхідно для позиціонування .fillBar */
+    display: block; /* Змінено з flex на block, щоб .guessText був всередині */
     margin: 8px 0;
     min-height: 44px;
-    border-radius: 5px;
-    background-color: #2a2a2a;
-    overflow: hidden;
-    font-weight: bold;
-    color: #fff;
-    padding: 0 12px;
+    border-radius: 5px; /* ЗАОКРУГЛЕННЯ для всього елемента */
+    background-color: #2a2a2a; /* Основний темний фон */
+    overflow: hidden; /* ДУЖЕ ВАЖЛИВО: Обрізає все, що виходить за межі */
+    color: #fff; /* Колір тексту за замовчуванням */
 }
 
-.fillBar {
+.fillBar { /* Кольорова смуга прогресу */
     position: absolute;
     left: 0;
     top: 0;
     bottom: 0;
-    width: 0%;
-    transition: width 0.3s ease-in-out;
-    background-color: rgba(33, 150, 243, 0.3);
+    height: 100%; /* Займає всю висоту */
+    width: 0%; /* Початкова ширина, змінюється JS */
+    /* ЗАОКРУГЛЕННЯ ТЕЖ! Це важливо для правого краю */
+    /* Воно буде обрізане батьківським overflow: hidden зліва/зверху/знизу */
+    border-radius: 5px;
+
+    /* ПЛАВНІСТЬ: Анімуємо зміну ширини І кольору фону */
+    transition: width 0.4s ease-in-out, background-color 0.4s ease-in-out;
+
+    /* Колір за замовчуванням - буде перевизначений класами нижче */
+    background-color: #4CAF50; /* Зелений як приклад */
 }
 
-.guessText {
-    position: relative;
-    z-index: 1;
-    display: flex;
+.guessText { /* Контейнер для тексту (слово + ранг) */
+    position: relative; /* Щоб був НАД .fillBar */
+    z-index: 1; /* Вище ніж .fillBar (у якого z-index за замовчуванням 0) */
+
+    display: flex; /* Використовуємо flex для розміщення слова і рангу */
     justify-content: space-between;
     align-items: center;
     width: 100%;
-    gap: 10px;
+    min-height: 44px; /* Щоб висота відповідала .guessItem */
+
+    /* ПАДДІНГ: Додаємо внутрішні відступи, щоб текст не прилягав до країв */
+    /* Це створює ефект "вбудованого" прогрес-бару */
+    padding: 8px 12px;
+
+    gap: 10px; /* Відступ між словом і рангом */
+    font-weight: bold; /* Зберігаємо жирність */
 }
 
 .guessText .word {
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
+    flex-grow: 1; /* Слово займає доступне місце */
 }
 
 .guessText .rank {
-    flex-shrink: 0;
+    flex-shrink: 0; /* Ранг не стискається */
     font-size: 0.9em;
-    color: #bbb;
+    color: #eee; /* Трохи світліший колір для рангу */
+    padding: 2px 5px;
+    border-radius: 3px;
 }
 
-.highlightGuess {
+.highlightGuess { /* Стиль для підсвітки останньої спроби */
     box-shadow: 0 0 0 2px #fff;
 }
 
+/* ================================================================
+   Стилі для конкретних рангів з НАСИЧЕНИМИ ТЕМНІШИМИ кольорами
+   (Білий текст повинен добре читатися)
+   ================================================================ */
+
+/* Точне співпадіння (Ранг 1) */
+.rank-exact .fillBar {
+    background-color: #1565C0; /* Ще темніший синій (Google Blue 700) */
+}
+
+/* Дуже близько (наприклад, 2-50) */
+.rank-very-close .fillBar {
+    background-color: #2E7D32; /* Ще темніший зелений (Material Green 800) */
+}
+
+/* Близько (наприклад, 51-150) */
+.rank-close .fillBar {
+    background-color: #689F38; /* Замість бірюзового - приглушений світло-зелений (Light Green 700) */
+}
+
+/* Середньо (наприклад, 151-500) */
+.rank-medium .fillBar {
+    background-color: #FFA000; /* Темніший бурштиновий (Amber 700) */
+}
+
+/* Далеко (наприклад, 501-1000) */
+.rank-far .fillBar {
+    background-color: #F57C00; /* Темніший помаранчевий (Orange 800) */
+}
+
+/* Дуже далеко (наприклад, >1000) */
+.rank-very-far .fillBar {
+    background-color: #C62828; /* Темніший червоний (Material Red 800) */
+}
+
+/* --- Базові стилі для тексту та помилок --- */
+
+/* Залишаємо стандартний білий текст */
+.guessText {
+    /* ... інші властивості .guessText ... */
+    color: #fff;
+}
+.guessText .rank {
+    /* ... інші властивості .rank ... */
+    color: #eee;
+}
+
+/* Стиль для відображення помилки */
+.rank-error .guessText {
+    color: #EF9A9A; /* Світло-червоний текст для помилки */
+}
+.rank-error .fillBar {
+    display: none;
+}
+
+/* Загальний стиль для .fillBar (залишаємо тут transition) */
+.fillBar {
+    /* ... інші властивості .fillBar ... */
+    transition: width 0.4s ease-in-out, background-color 0.4s ease-in-out;
+}
+/* ====================
+   Відображення останньої спроби
+   ==================== */
 .lastGuessWrapper {
     margin-bottom: 20px;
     text-align: left;
@@ -396,7 +476,15 @@ h1 {
     box-shadow: 0 5px 20px rgba(0,0,0,0.5);
     border: 1px solid rgba(255, 255, 255, 0.2);
 }
+#closestWordsModal .modal-content {
+    background-color: #333333;
+}
 
+/* Модалка "Найближчі слова" - стилі для списку */
+#closestWordsList {
+    padding-bottom: 10px;
+    font-size: 0.95em;
+}
 .close {
     position: absolute;
     top: 10px;
@@ -427,19 +515,10 @@ h1 {
     padding-bottom: 10px;
     font-size: 0.95em;
 }
-/* Зробимо елементи списку схожими на звичайні, але без hover-смуги */
-#closestWordsList .guessItem {
-    background-color: transparent; /* Прозорий фон */
-    border: 1px solid #444; /* Легка рамка */
-    margin: 5px 0;
-    min-height: 40px;
-}
-#closestWordsList .fillBar {
-    display: none; /* Не показувати кольорову смугу близькості */
-}
-#closestWordsList .guessText .word {
-    color: #ddd; /* Трохи світліше */
-}
+/* Прибираємо перевизначення стилів, щоб .guessItem виглядали однаково */
+/* #closestWordsList .guessItem { ... } */
+/* #closestWordsList .fillBar { ... } */
+/* #closestWordsList .guessText .word { ... } */
 
 
 /* Модалка "Попередні ігри" */
@@ -563,9 +642,14 @@ h1 {
         padding: 0 8px;
     }
 
+    /* Зменшуємо висоту та відступи елементів списку на малих екранах */
     .guessItem {
-        padding: 0 10px;
         min-height: 40px;
+        margin: 6px 0; /* Трохи менший вертикальний відступ */
+    }
+    .guessText {
+        min-height: 40px;
+        padding: 6px 10px; /* Менші внутрішні відступи */
     }
 
     .modal-content {
