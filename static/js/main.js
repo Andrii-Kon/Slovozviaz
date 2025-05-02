@@ -294,7 +294,19 @@ function endGameAsGiveUp(secretWord) {
 // --- Initialization and Event Listeners ---
 
 document.addEventListener("DOMContentLoaded", async () => {
-    // --- Get Core DOM Elements ---
+
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js')
+                .then(registration => {
+                    console.log('Service Worker зареєстровано успішно:', registration);
+                })
+                .catch(error => {
+                    console.log('Помилка реєстрації Service Worker:', error);
+                });
+        });
+    }
+
     const guessInput = document.getElementById("guessInput");
     const submitGuessBtn = document.getElementById("submitGuess");
     const guessesContainer = document.getElementById("guessesContainer");
