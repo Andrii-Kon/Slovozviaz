@@ -5,7 +5,7 @@ from app import app, db, ArchivedGame, BASE_DATE
 from generate_rankings import generate_rankings
 
 # Завантаження слів
-with open("fornow.txt", "r", encoding="utf-8") as f:
+with open("daily_words.txt", "r", encoding="utf-8") as f:
     daily_words = [line.strip() for line in f if line.strip()]
 
 with open("wordlist.txt", "r", encoding="utf-8") as f:
@@ -18,7 +18,7 @@ with open("definitions.json", "r", encoding="utf-8") as f:
 with app.app_context():
     db.create_all()
 
-    # Генеруємо рейтинги для всіх слів із файлу fornow.txt
+    # Генеруємо рейтинги для всіх слів із файлу daily_words.txt
     for index, word in enumerate(daily_words):
         archive_date = BASE_DATE + timedelta(days=index)
         print(f"[ARCHIVE] Генеруємо для {archive_date} -> {word}")
@@ -40,4 +40,4 @@ with app.app_context():
         ))
 
     db.session.commit()
-    print("✅ Архівні ігри успішно згенеровано та збережено в БД для всіх слів з fornow.txt.")
+    print("✅ Архівні ігри успішно згенеровано та збережено в БД для всіх слів з daily_words.txt.")

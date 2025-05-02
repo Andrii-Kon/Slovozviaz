@@ -17,7 +17,7 @@ client = openai.OpenAI(api_key=api_key)
 
 CACHE_FILE = "embeddings_cache.json"
 BATCH_SIZE = 100
-BASE_DATE = date(2025, 3, 31)
+BASE_DATE = date(2025, 5, 1)
 
 if not os.path.exists("precomputed"):
     os.makedirs("precomputed")
@@ -75,7 +75,7 @@ def generate_rankings(target_word, target_date, definitions, words):
     return ranked_words
 
 if __name__ == "__main__":
-    with open("fornow.txt", "r", encoding="utf-8") as f:
+    with open("daily_words.txt", "r", encoding="utf-8") as f:
         daily_words = [line.strip() for line in f if line.strip()]
 
     with open("wordlist.txt", "r", encoding="utf-8") as f:

@@ -67,7 +67,7 @@ function getNextHintRank(currentBestRank, currentGuesses, currentRankedWords, cu
 
 // Обчислює номер гри для заданої дати (формат "YYYY-MM-DD")
 function computeGameNumber(dateStr) {
-    const baseDate = new Date(2025, 3, 15); // Month is 0-indexed (3 = April) - !! ОНОВЛЕНО РІК БАЗИ !!
+    const baseDate = new Date(2025, 4, 1); // Month is 0-indexed (3 = April) - !! ОНОВЛЕНО РІК БАЗИ !!
     const [year, month, day] = dateStr.split("-").map(Number);
     const currentDate = new Date(year, month - 1, day); // Month is 0-indexed
     // Встановлюємо час на початок дня для уникнення проблем з часовими поясами
@@ -398,21 +398,64 @@ document.addEventListener("DOMContentLoaded", async () => {
         const word = guessInput.value.trim().toLowerCase();
         if (!word) return;
 
+        const howToPlayBlock = document.getElementById("howToPlayBlock");
+        if (howToPlayBlock && howToPlayBlock.style.display !== "none") {
+            howToPlayBlock.style.display = "none";
+        }
+
         if (guesses.some(g => g.word === word)) {
-            alert(`Слово "${word}" вже було використано.`);
-            guessInput.value = ""; // Clear input on used word
+            const lastGuessDisplay = document.getElementById("lastGuessDisplay");
+            const lastGuessWrapper = document.getElementById("lastGuessWrapper");
+
+            if (lastGuessDisplay && lastGuessWrapper) {
+                const errorMsgElement = document.createElement("div");
+
+                errorMsgElement.textContent = `Слово "${word}" вже вгадано`;
+                guessInput.value = "";
+                errorMsgElement.style.color = "#ffffff";
+                errorMsgElement.style.padding = "0px 12px";
+                errorMsgElement.style.textAlign = "left";
+                errorMsgElement.style.fontStyle = "italic";
+
+                lastGuessDisplay.innerHTML = "";
+                lastGuessDisplay.appendChild(errorMsgElement);
+
+                lastGuessWrapper.classList.remove("hidden");
+            } else {
+                console.error("Не знайдено елементи lastGuessDisplay або lastGuessWrapper");
+            }
+
+            guessInput.focus();
             return;
         }
+
         if (!allowedWords.has(word)) {
-            alert(`Вибачте, слово "${word}" не знайдено у словнику.`);
-            guessInput.value = ""; // Clear input on invalid word
+
+            const lastGuessDisplay = document.getElementById("lastGuessDisplay");
+            const lastGuessWrapper = document.getElementById("lastGuessWrapper");
+
+            if (lastGuessDisplay && lastGuessWrapper) {
+                const errorMsgElement = document.createElement("div");
+                errorMsgElement.textContent = "Вибачте, я не знаю цього слова";
+
+                errorMsgElement.style.color = "#ffffff";
+                errorMsgElement.style.padding = "0px 12px";
+                errorMsgElement.style.textAlign = "left";
+                errorMsgElement.style.fontStyle = "italic";
+
+                lastGuessDisplay.innerHTML = "";
+                lastGuessDisplay.appendChild(errorMsgElement);
+
+                lastGuessWrapper.classList.remove("hidden");
+            } else {
+                console.error("Не знайдено елементи lastGuessDisplay або lastGuessWrapper");
+            }
+
+            guessInput.focus();
             return;
         }
 
         // Hide "How to Play" block on first guess
-        if (howToPlayBlock && howToPlayBlock.style.display !== "none") {
-            howToPlayBlock.style.display = "none";
-        }
 
         // Find the word's rank in the current game's list
         const match = rankedWords.find(item => item.word === word);
