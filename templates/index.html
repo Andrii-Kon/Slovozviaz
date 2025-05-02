@@ -9,7 +9,8 @@
     <meta name="google-site-verification" content="t-CIOPI5tot8PUUYCAnys5wFhm9Bjb0oX1ezi741H0g" />
     <title>Словозв'яз</title>
 
-    <meta name="theme-color" content="#1f1f1f"> <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <meta name="theme-color" content="#1f1f1f">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
@@ -85,7 +86,8 @@
 <div id="closestWordsModal" class="modal hidden">
     <div class="modal-content">
         <span id="closeModalBtn" class="close">×</span>
-        <h2 id="closestWordsTitle">Найближчі 500 слів:</h2> <div id="closestWordsList"></div>
+        <h2 id="closestWordsTitle">Найближчі 500 слів:</h2>
+        <div id="closestWordsList"></div>
     </div>
 </div>
 
@@ -101,7 +103,8 @@
 </div>
 
 <div id="giveUpModal" class="modal hidden">
-    <div class="modal-content" style="text-align: center;"> <span id="closeGiveUpModal" class="close">×</span>
+    <div class="modal-content" style="text-align: center;">
+        <span id="closeGiveUpModal" class="close">×</span>
         <h2>Ви впевнені що хочете здатися?</h2>
         <div style="margin-top: 20px;">
             <button id="giveUpYesBtn" class="btn-wide" style="margin-right: 10px;">Так</button>
@@ -115,10 +118,19 @@
         <span id="closeAuthorshipModal" class="close">×</span>
         <h2>Авторство</h2>
         <div id="authorshipContent">
-            <p><strong>Розробник:</strong> Конончук Андрій</p>
-            <p>Для розрахунку векторів слів використано <a href="https://platform.openai.com/docs/guides/embeddings" target="_blank" rel="noopener noreferrer"><strong>OpenAI API</strong></a> (<code>text-embedding-3-large</code>).</p>
-            <p>Словник слів взято з <a href="https://lang.org.ua/en/ubertext/" target="_blank" rel="noopener noreferrer"><strong>UberText 2.0</strong></a>.</p>
-            <p>Гра натхненна <a href="https://contexto.me/" target="_blank" rel="noopener noreferrer"><strong>contexto.me</strong></a>.</p>
+            <p><strong>Розробник:</strong> <a href="https://github.com/Andrii-Kon" target="_blank" rel="noopener noreferrer" title="GitHub Профіль">https://github.com/Andrii-Kon</a></p>
+            <p style="margin-top: 20px;"><strong>Технології та джерела даних:</strong></p>
+            <ul style="list-style: disc; margin-left: 20px; margin-bottom: 15px;">
+                <li style="margin-bottom: 8px;">
+                    Розрахунок векторів слів: <a href="https://platform.openai.com/docs/guides/embeddings" target="_blank" rel="noopener noreferrer">OpenAI API</a> (<code>text-embedding-3-large</code>)
+                </li>
+                <li style="margin-bottom: 8px;">
+                    Базовий словник: <a href="https://lang.org.ua/en/ubertext/" target="_blank" rel="noopener noreferrer">UberText 2.0</a>
+                </li>
+                <li style="margin-bottom: 8px;">
+                    Натхнення: <a href="https://contexto.me/" target="_blank" rel="noopener noreferrer">contexto.me</a>
+                </li>
+            </ul>
         </div>
     </div>
 </div>
