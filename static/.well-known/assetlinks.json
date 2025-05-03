@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.andriikon.slovozviaz",
+    "sha256_cert_fingerprints": ["BE:43:1E:9A:E8:D5:A9:B5:3D:2E:0F:DA:B0:59:A5:76:36:CF:E0:FB:A9:F6:F8:12:10:4D:E9:9B:3F:5C:72:1B"]
+  }
+}]
