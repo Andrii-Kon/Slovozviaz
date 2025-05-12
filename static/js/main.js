@@ -67,7 +67,7 @@ function getNextHintRank(currentBestRank, currentGuesses, currentRankedWords, cu
 
 // Обчислює номер гри для заданої дати (формат "YYYY-MM-DD")
 function computeGameNumber(dateStr) {
-    const baseDate = new Date(2025, 4, 1); // Month is 0-indexed (3 = April) - !! ОНОВЛЕНО РІК БАЗИ !!
+    const baseDate = new Date(2025, 4, 11); // Month is 0-indexed (3 = April) - !! ОНОВЛЕНО РІК БАЗИ !!
     const [year, month, day] = dateStr.split("-").map(Number);
     const currentDate = new Date(year, month - 1, day); // Month is 0-indexed
     // Встановлюємо час на початок дня для уникнення проблем з часовими поясами

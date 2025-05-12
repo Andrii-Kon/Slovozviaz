@@ -17,7 +17,7 @@ client = openai.OpenAI(api_key=api_key)
 
 CACHE_FILE = "embeddings_cache.json"
 BATCH_SIZE = 100
-BASE_DATE = date(2025, 5, 1)
+BASE_DATE = date(2025, 5, 11)
 
 if not os.path.exists("precomputed"):
     os.makedirs("precomputed")
