@@ -82,9 +82,13 @@
     </div>
 
     <div id="guessesContainer"></div>
-</div>
 
-<div id="closestWordsModal" class="modal hidden">
+    <div id="privacyPolicyBlock" class="privacy-policy-block">
+        <p>
+            <a href="{{ url_for('privacy_policy') }}">Політика Конфіденційності</a>
+        </p>
+    </div>
+</div> <div id="closestWordsModal" class="modal hidden">
     <div class="modal-content">
         <span id="closeModalBtn" class="close">×</span>
         <h2 id="closestWordsTitle">Найближчі 500 слів:</h2>
