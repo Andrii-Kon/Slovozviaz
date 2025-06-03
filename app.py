@@ -41,7 +41,7 @@ def load_wordlist():
 
 DAILY_WORDS = load_daily_words()
 VALID_WORDS = load_wordlist()
-BASE_DATE = date(2025, 5, 11) # Перевірте, чи ця дата відповідає першому дню ваших даних
+BASE_DATE = date(2025, 6, 2) # Перевірте, чи ця дата відповідає першому дню ваших даних
 
 @app.before_request
 def ensure_games_archived():

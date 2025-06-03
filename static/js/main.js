@@ -56,7 +56,7 @@ function getNextHintRank(currentBestRank, currentGuesses, currentRankedWords, cu
 }
 
 function computeGameNumber(dateStr) {
-    const baseDate = new Date(2025, 4, 11); // Травень - 4-й місяць (0-індексація)
+    const baseDate = new Date(2025, 5, 2); // Травень - 4-й місяць (0-індексація)
     const [year, month, day] = dateStr.split("-").map(Number);
     const currentDate = new Date(year, month - 1, day);
     baseDate.setHours(0, 0, 0, 0);
