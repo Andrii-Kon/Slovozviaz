@@ -1,0 +1,63 @@
+@startuml
+' --- Формальний стиль "IBM" для діаграми діяльності ---
+skinparam style strictuml
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+
+skinparam defaultFontName "Segoe UI", "Arial", sans-serif
+skinparam defaultFontSize 14
+skinparam titleFontSize 20
+scale 4
+
+skinparam activity {
+    StartColor #000000
+    EndColor #000000
+    BackgroundColor #F8F8F8
+    BorderColor #555555
+    ArrowColor #333333
+}
+skinparam partition {
+    BorderColor #AAAAAA
+    BackgroundColor #FFFFFF
+    HeaderBackgroundColor #E0E0E0
+}
+skinparam diamond {
+    BackgroundColor #FFFFFF
+    BorderColor #555555
+}
+' --- Кінець налаштувань стилю ---
+
+title Діаграма діяльності
+
+|Гравець|
+start
+:Вводить слово і відправляє;
+
+|Система|
+:Отримує та нормалізує слово;
+
+if (Слово вже було введено?) then ([так])
+  :Показати повідомлення про помилку;
+  stop
+else ([ні])
+  if (Слово є у словнику?) then ([так])
+    :Знайти ранг слова в рейтингу;
+    :Додати здогадку до списку спроб;
+    :Оновити інтерфейс (список, лічильник);
+
+    if (Ранг слова == 1?) then ([так, перемога])
+      :Показати екран перемоги;
+      :Завершити гру;
+      end
+    else ([ні])
+      :Зберегти стан гри в localStorage;
+      :Очистити поле введення;
+      stop
+    endif
+  else ([ні])
+    :Показати повідомлення "Слово не знайдено";
+    stop
+  endif
+endif
+
+@enduml
