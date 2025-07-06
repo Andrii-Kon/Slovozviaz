@@ -71,14 +71,52 @@ h1 {
     margin-top: 25px;
 }
 
+/* ====================
+   Інформація про гру та лічільники
+   ==================== */
+.game-info {
+    font-family: "Inter", "Roboto", "Segoe UI", sans-serif;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    font-variant-numeric: tabular-nums;
+    display: flex;
+    align-items: center;
+    gap: 1px;
+    margin-bottom: 0px;
+    margin-top: 10px;
+    text-align: left;
+    font-size: 0.9em;
+}
+
 #gameDateLabel {
-    margin: 0 0 1px 0;
-    padding: 8px 12px;
+    margin: 0;
+    padding: 6px 9px;
     border-radius: 5px;
     color: #fff;
     font-size: 1em;
-    text-align: left;
+    flex-shrink: 0;
 }
+
+.gameStats {
+    display: flex;
+    gap: 1px;
+    font-size: 1em;
+    color: #fff;
+}
+
+.guess-counter, .hint-counter {
+    padding: 6px 9px;
+    font-weight: bold;
+    border-radius: 1px;
+    color: #fff;
+    font-size: 1em;
+    white-space: nowrap;
+}
+
+.hint-counter {
+    color: #fff; /* Світло-блакитний колір для підказок */
+}
+
 
 /* ====================
    Секція Вводу

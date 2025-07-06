@@ -1,12 +1,18 @@
+
 import { fetchRankedWords } from "./api.js";
 import { renderGuesses, createGuessItem } from "./ui.js";
 
 let isGoingUp = false;
 let allowedWords = new Set();
-let guessCount = 0;
+// Замість одного масиву guesses
+const gameState = {
+    guesses: [],      // Реальні спроби гравця
+    hints: [],        // Підказки (окремо)
+    guessCount: 0,    // Лічильник спроб
+    hintCount: 0      // Лічильник підказок
+};
 let bestRank = Infinity;
 let rankedWords = [];
-let guesses = [];
 let lastWord = null;
 let MAX_RANK = 0;
 let dayNumber = null;
@@ -14,6 +20,14 @@ let currentGameDate = null;
 let didWin = false;
 let didGiveUp = false;
 let giveUpWord = null;
+
+// Функція для оновлення відображення лічильника підказок
+function updateHintCountDisplay() {
+    const hintCountElem = document.getElementById("hintCount");
+    if (hintCountElem) {
+        hintCountElem.textContent = gameState.hintCount;
+    }
+}
 
 // const gameStates = {}; // Закоментовано, оскільки не використовується активно
 
@@ -88,8 +102,10 @@ async function fetchAllowedWords() {
 function saveGameState() {
     if (!currentGameDate) return;
     const state = {
-        guesses,
-        guessCount,
+        guesses: gameState.guesses,
+        hints: gameState.hints,
+        guessCount: gameState.guessCount,
+        hintCount: gameState.hintCount,
         bestRank,
         isGoingUp,
         lastWord,
@@ -128,7 +144,6 @@ function showInitialInfoBlocks() {
     }
 }
 
-
 function loadGameState() {
     if (!currentGameDate) return;
 
@@ -140,7 +155,6 @@ function loadGameState() {
     const howToPlayBlock = document.getElementById("howToPlayBlock");
     const privacyPolicyBlock = document.getElementById("privacyPolicyBlock");
 
-
     if (!savedState) {
         resetUIForActiveGame();
         if (howToPlayBlock) howToPlayBlock.style.display = ""; // Show on new game
@@ -150,8 +164,10 @@ function loadGameState() {
 
     try {
         const state = JSON.parse(savedState);
-        guesses = state.guesses || [];
-        guessCount = state.guessCount || 0;
+        gameState.guesses = state.guesses || [];
+        gameState.hints = state.hints || [];
+        gameState.guessCount = state.guessCount || 0;
+        gameState.hintCount = state.hintCount || 0;
         bestRank = state.bestRank !== undefined ? state.bestRank : Infinity;
         isGoingUp = state.isGoingUp || false;
         lastWord = state.lastWord || null;
@@ -159,10 +175,11 @@ function loadGameState() {
         didGiveUp = state.didGiveUp || false;
         giveUpWord = state.giveUpWord || null;
 
-        if (guessCountElem) guessCountElem.textContent = guessCount;
-        renderGuesses(guesses, lastWord, MAX_RANK, guessesContainer, lastGuessWrapper, lastGuessDisplay);
+        if (guessCountElem) guessCountElem.textContent = gameState.guessCount;
+        updateHintCountDisplay(); // Оновлюємо лічільник підказок
+        renderGuesses([...gameState.guesses, ...gameState.hints], lastWord, MAX_RANK, guessesContainer, lastGuessWrapper, lastGuessDisplay);
 
-        if (guesses.length > 0 || didWin || didGiveUp) {
+        if (gameState.guesses.length > 0 || gameState.hints.length > 0 || didWin || didGiveUp) {
             if (howToPlayBlock) howToPlayBlock.style.display = "none";
             if (privacyPolicyBlock) privacyPolicyBlock.style.display = "none";
         } else {
@@ -203,9 +220,9 @@ function showWinMessageUI() {
         const gameNumberElem = document.getElementById("gameNumber");
         if (congratsMessageElem && guessesUsedElem && gameNumberElem) {
             const gameNum = currentGameDate ? computeGameNumber(currentGameDate) : dayNumber;
-            guessesUsedElem.textContent = guessCount;
+            guessesUsedElem.textContent = gameState.guessCount;
             gameNumberElem.textContent = gameNum;
-            congratsMessageElem.textContent = `Ви знайшли секретне слово #${gameNum} за ${guessCount} спроб(и)!`;
+            congratsMessageElem.textContent = `Ви знайшли секретне слово #${gameNum} за ${gameState.guessCount} спроб(и)!`;
         }
         congratsBlock.classList.remove("hidden");
     }
@@ -231,7 +248,7 @@ function showLoseMessageUI(secretWord) {
     const congratsMessageElem = document.getElementById("congratsMessage");
     if (congratsMessageElem) {
         const gameNum = currentGameDate ? computeGameNumber(currentGameDate) : dayNumber;
-        congratsMessageElem.textContent = `Ви здалися на слові #${gameNum} за ${guessCount} спроб(и).\nСлово було: "${secretWord}".`;
+        congratsMessageElem.textContent = `Ви здалися на слові #${gameNum} за ${gameState.guessCount} спроб(и).\nСлово було: "${secretWord}".`;
     }
     congratsBlock.classList.remove("hidden");
 
@@ -329,8 +346,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         dayNumber = dailyIndexData.game_number;
         if (!currentGameDate) {
             currentGameDate = new Date().toISOString().split("T")[0];
-            guesses = [];
-            guessCount = 0;
+            gameState.guesses = [];
+            gameState.hints = [];
+            gameState.guessCount = 0;
+            gameState.hintCount = 0;
             bestRank = Infinity;
             isGoingUp = false;
             lastWord = null;
@@ -369,7 +388,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         hideInitialInfoBlocks(); // Ховаємо блоки при першій спробі
 
-        if (guesses.some(g => g.word === word)) {
+        if (gameState.guesses.some(g => g.word === word)) {
             if (lastGuessDisplay && lastGuessWrapper) {
                 const errorMsgElement = document.createElement("div");
                 errorMsgElement.textContent = `Слово "${word}" вже вгадано`;
@@ -399,12 +418,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         const match = rankedWords.find(item => item.word === word);
         let data = match ? { rank: match.rank } : { rank: Infinity, error: true, errorMessage: "Цього слова немає у рейтингу цього дня." };
 
-        guessCount++;
-        if (guessCountElem) guessCountElem.textContent = guessCount;
+        gameState.guessCount++;
+        if (guessCountElem) guessCountElem.textContent = gameState.guessCount;
         lastWord = word;
-        guesses.push({ word, rank: data.rank, error: data.error || false, errorMessage: data.errorMessage });
+        gameState.guesses.push({ word, rank: data.rank, error: data.error || false, errorMessage: data.errorMessage });
 
-        guesses.sort((a, b) => {
+        gameState.guesses.sort((a, b) => {
             if (a.error && !b.error) return -1;
             if (!a.error && b.error) return 1;
             if (a.error && b.error) return 0;
@@ -414,12 +433,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (!data.error) {
             if (data.rank < bestRank) bestRank = data.rank;
             if (data.rank === 1) {
-                renderGuesses(guesses, lastWord, MAX_RANK, guessesContainer, lastGuessWrapper, lastGuessDisplay);
+                renderGuesses([...gameState.guesses, ...gameState.hints], lastWord, MAX_RANK, guessesContainer, lastGuessWrapper, lastGuessDisplay);
                 endGameAsWin();
                 return;
             }
         }
-        renderGuesses(guesses, lastWord, MAX_RANK, guessesContainer, lastGuessWrapper, lastGuessDisplay);
+        renderGuesses([...gameState.guesses, ...gameState.hints], lastWord, MAX_RANK, guessesContainer, lastGuessWrapper, lastGuessDisplay);
         guessInput.value = "";
         guessInput.focus();
         saveGameState();
@@ -447,8 +466,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             rankedWords = archiveData.ranking;
             MAX_RANK = rankedWords.length > 0 ? Math.max(...rankedWords.map(w => w.rank)) : 0;
             currentGameDate = game_date;
-            guesses = [];
-            guessCount = 0;
+            gameState.guesses = [];
+            gameState.hints = [];
+            gameState.guessCount = 0;
+            gameState.hintCount = 0;
             bestRank = Infinity;
             isGoingUp = false;
             lastWord = null;
@@ -459,6 +480,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             console.log(`Loaded ${rankedWords.length} words for ${game_date}. Max rank: ${MAX_RANK}`);
             updateGameDateLabel();
             if (guessCountElem) guessCountElem.textContent = '0';
+            updateHintCountDisplay(); // Оновлюємо лічільник підказок
             if (guessesContainer) guessesContainer.innerHTML = '';
             if (lastGuessWrapper) lastGuessWrapper.classList.add('hidden');
 
@@ -487,7 +509,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 alert("Список слів ще не завантажено!");
                 return;
             }
-            const nextHintRank = getNextHintRank(bestRank, guesses, rankedWords, MAX_RANK);
+            const nextHintRank = getNextHintRank(bestRank, [...gameState.guesses, ...gameState.hints], rankedWords, MAX_RANK);
             if (nextHintRank === null) {
                 alert("Не вдалося знайти підходящу підказку.");
                 return;
@@ -497,13 +519,16 @@ document.addEventListener("DOMContentLoaded", async () => {
                 alert(`Помилка: Не знайдено слово з рангом ${nextHintRank}.`);
                 return;
             }
-            guessCount++;
-            if (guessCountElem) guessCountElem.textContent = guessCount;
+
+            // ✅ ВИПРАВЛЕННЯ: Збільшуємо тільки hintCount
+            gameState.hintCount++;
+            updateHintCountDisplay(); // Оновлюємо відображення підказок
+
             lastWord = hintWordObj.word;
-            guesses.push({ word: hintWordObj.word, rank: hintWordObj.rank, error: false, isHint: true });
-            guesses.sort((a, b) => (a.error && !b.error) ? -1 : (!a.error && b.error) ? 1 : (a.error && b.error) ? 0 : a.rank - b.rank);
+            gameState.hints.push({ word: hintWordObj.word, rank: hintWordObj.rank, error: false, isHint: true });
+            gameState.hints.sort((a, b) => (a.error && !b.error) ? -1 : (!a.error && b.error) ? 1 : (a.error && b.error) ? 0 : a.rank - b.rank);
             if (hintWordObj.rank < bestRank) bestRank = hintWordObj.rank;
-            renderGuesses(guesses, lastWord, MAX_RANK, guessesContainer, lastGuessWrapper, lastGuessDisplay);
+            renderGuesses([...gameState.guesses, ...gameState.hints], lastWord, MAX_RANK, guessesContainer, lastGuessWrapper, lastGuessDisplay);
             if (hintWordObj.rank === 1) endGameAsWin();
             else saveGameState();
             if (dropdownMenu) dropdownMenu.classList.add("hidden");
@@ -517,6 +542,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
     if (closeGiveUpModal) closeGiveUpModal.addEventListener("click", () => giveUpModal && giveUpModal.classList.add("hidden"));
     if (giveUpNoBtn) giveUpNoBtn.addEventListener("click", () => giveUpModal && giveUpModal.classList.add("hidden"));
+
     if (giveUpYesBtn) {
         giveUpYesBtn.addEventListener("click", () => {
             if (didWin || didGiveUp) {
@@ -526,13 +552,16 @@ document.addEventListener("DOMContentLoaded", async () => {
             hideInitialInfoBlocks(); // Ховаємо інфо-блоки
             const secretWordObj = rankedWords.find(item => item.rank === 1);
             const secretWord = secretWordObj ? secretWordObj.word : (rankedWords.length > 0 ? rankedWords[0].word : "невідомо");
-            guessCount++;
-            if (guessCountElem) guessCountElem.textContent = guessCount;
-            guesses.push({ word: secretWord, rank: 1, error: false, gaveUp: true });
+
+            // ✅ ВИПРАВЛЕННЯ: НЕ збільшуємо guessCount при здачі
+            // gameState.guessCount++; // Закоментовано - здача не є спробою
+            // if (guessCountElem) guessCountElem.textContent = gameState.guessCount; // Закоментовано
+
+            gameState.guesses.push({ word: secretWord, rank: 1, error: false, gaveUp: true });
             lastWord = secretWord;
             bestRank = 1;
-            guesses.sort((a, b) => (a.error && !b.error) ? -1 : (!a.error && b.error) ? 1 : (a.error && b.error) ? 0 : a.rank - b.rank);
-            renderGuesses(guesses, lastWord, MAX_RANK, guessesContainer, lastGuessWrapper, lastGuessDisplay);
+            gameState.guesses.sort((a, b) => (a.error && !b.error) ? -1 : (!a.error && b.error) ? 1 : (a.error && b.error) ? 0 : a.rank - b.rank);
+            renderGuesses([...gameState.guesses, ...gameState.hints], lastWord, MAX_RANK, guessesContainer, lastGuessWrapper, lastGuessDisplay);
             endGameAsGiveUp(secretWord);
             if (giveUpModal) giveUpModal.classList.add("hidden");
         });
@@ -630,8 +659,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                 return;
             }
             const gameNum = currentGameDate ? computeGameNumber(currentGameDate) : dayNumber;
-            let shareText = `Словозв'яз #${gameNum}\nСпроб: ${guessCount}\n`;
-            const closestGuessRank = guesses.filter(g => !g.error && g.rank !== 1 && g.rank !== Infinity).reduce((minRank, g) => Math.min(minRank, g.rank), Infinity);
+            let shareText = `Словозв'яз #${gameNum}\nСпроб: ${gameState.guessCount}\nПідказок: ${gameState.hintCount}\n`;
+            const closestGuessRank = gameState.guesses.filter(g => !g.error && g.rank !== 1 && g.rank !== Infinity).reduce((minRank, g) => Math.min(minRank, g.rank), Infinity);
             if (didWin) shareText += "✅ Знайдено!\n";
             else if (didGiveUp) shareText += `🏳️ Здався. Найближче слово: ${closestGuessRank !== Infinity ? `(ранг ${closestGuessRank})` : '(немає)'}\n`;
             shareText += `\n${window.location.href}`;

@@ -15,11 +15,11 @@
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/favicon.png') }}">
 </head>
 <body>
-<div class="header">
-    <div class="gameStats">Спроб: <span id="guessCount">0</span></div>
-</div>
 
 <div class="container">
+    <h1>Словозв'яз</h1>
+
+    <!-- ✅ ПЕРЕМІЩЕНО: Блок привітання під заголовок -->
     <div id="congratsBlock" class="congratsBlock hidden">
         <h2 id="congratsTitle">Вітаємо!</h2>
         <p id="congratsMessage">
@@ -29,10 +29,16 @@
         <button id="shareButton">Поділитися</button>
     </div>
 
+    <!-- ✅ ПЕРЕМІЩЕНО: Кнопка "Найближчі слова" під заголовок -->
     <button id="closestWordsBtn" class="hidden">Найближчі слова</button>
 
-    <h1>Словозв'яз</h1>
-    <h3 id="gameDateLabel" class="game-date-label">Гра: #?</h3>
+    <div class="game-info">
+        <h3 id="gameDateLabel" class="game-date-label">Гра: #?</h3>
+        <div class="gameStats">
+            <span class="guess-counter">Спроб: <span id="guessCount">0</span></span>
+            <span class="hint-counter">Підказки: <span id="hintCount">0</span></span>
+        </div>
+    </div>
 
     <div class="input-section">
         <input type="text" id="guessInput" placeholder="Введіть слово" autocomplete="off">
@@ -88,7 +94,9 @@
             <a href="{{ url_for('privacy_policy') }}">Політика Конфіденційності</a>
         </p>
     </div>
-</div> <div id="closestWordsModal" class="modal hidden">
+</div>
+
+<div id="closestWordsModal" class="modal hidden">
     <div class="modal-content">
         <span id="closeModalBtn" class="close">×</span>
         <h2 id="closestWordsTitle">Найближчі 500 слів:</h2>
