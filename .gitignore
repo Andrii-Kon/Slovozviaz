@@ -1,3 +1,6 @@
 # .gitignore
 .envembeddings_cache.json
 .envembeddings_cache.json
+precomputed/
+instance/
+*.db
