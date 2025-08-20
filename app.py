@@ -100,7 +100,7 @@ def import_all_precomputed(commit_every: int = 200):
             errors += 1
             continue
 
-        # 3) upsert
+        # 3) upsert за game_date
         try:
             secret_word = _secret_for_date(game_date)
             row = ArchivedGame.query.filter_by(game_date=game_date).first()
@@ -242,6 +242,54 @@ def sitemap_xml():
   <url><loc>{base_url}/privacy.html</loc><lastmod>{last_mod}</lastmod><changefreq>monthly</changefreq><priority>0.5</priority></url>
 </urlset>"""
     return Response(xml, mimetype="application/xml")
+
+# ==== Тимчасовий адмін-ендпойнт для імпорту рядків у MySQL через HTTP =========
+# Вимкни/видали після завершення міграції!
+@app.route("/__admin/import-archived", methods=["POST"])
+def import_archived():
+    # Проста авторизація токеном
+    token = request.headers.get("X-Migration-Token")
+    if token != os.environ.get("MIGRATION_TOKEN"):
+        return "Unauthorized", 401
+
+    p = request.get_json(force=True)
+
+    # Очікуємо:
+    # id (int), game_date ('YYYY-MM-DD' або ISO), secret_word (str),
+    # ranking_json (TEXT з JSON), created_at (ISO або None)
+    gd = (p.get("game_date") or "")[:10]
+    game_date = datetime.strptime(gd, "%Y-%m-%d").date() if gd else None
+
+    created_at_str = p.get("created_at")
+    created_at = None
+    if created_at_str:
+        try:
+            created_at = datetime.fromisoformat(created_at_str)
+        except ValueError:
+            created_at = None
+
+    try:
+        # upsert за унікальним game_date (надійніше, ніж за id)
+        row = ArchivedGame.query.filter_by(game_date=game_date).first()
+        if row:
+            row.secret_word = p.get("secret_word") or row.secret_word
+            row.ranking_json = p.get("ranking_json") or row.ranking_json
+            row.created_at = created_at or row.created_at
+        else:
+            db.session.add(
+                ArchivedGame(
+                    id=p.get("id"),  # збережемо оригінальний id зі SQLite, якщо є
+                    game_date=game_date,
+                    secret_word=p.get("secret_word") or "",
+                    ranking_json=p.get("ranking_json") or "[]",
+                    created_at=created_at,
+                )
+            )
+        db.session.commit()
+        return "ok", 200
+    except Exception as e:
+        db.session.rollback()
+        return f"error: {e}", 500
 
 # Локальний запуск (python app.py) — не потрібен, якщо використовуєш `flask run`,
 # але не завадить для прямого запуску скрипта.
