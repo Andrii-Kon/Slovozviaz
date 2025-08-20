@@ -5,22 +5,23 @@ from datetime import datetime, date
 from dotenv import load_dotenv
 from sqlalchemy.dialects.mysql import LONGTEXT
 import os
-import glob
 import json
 
 # ── ENV / конфіг ───────────────────────────────────────────────────────────────
 load_dotenv()
 
 app = Flask(__name__)
-basedir = os.path.abspath(os.path.dirname(__file__))
+app.config["JSON_AS_ASCII"] = False  # коректна UTF-8 відповідь
 
+basedir = os.path.abspath(os.path.dirname(__file__))
 instance_path = os.path.join(basedir, "instance")
 os.makedirs(instance_path, exist_ok=True)
 
-# DB: спершу DATABASE_URL, інакше локальний SQLite
+# DB: на проді беремо з DATABASE_URL (MySQL), локально — SQLite
 db_uri = os.getenv("DATABASE_URL")
 if not db_uri:
     db_uri = "sqlite:///" + os.path.join(instance_path, "games.db")
+
 app.config["SQLALCHEMY_DATABASE_URI"] = db_uri
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
@@ -28,20 +29,21 @@ db = SQLAlchemy(app)
 
 # ── Модель ─────────────────────────────────────────────────────────────────────
 class ArchivedGame(db.Model):
+    __tablename__ = "archived_game"
+
     id = db.Column(db.Integer, primary_key=True)
-    game_date = db.Column(db.Date, unique=True, nullable=False)
+    game_date = db.Column(db.Date, unique=True, nullable=False, index=True)
     secret_word = db.Column(db.String(100), nullable=False)
-    # для MySQL LONGTEXT, для інших просто Text
+    # для MySQL LONGTEXT, для інших — Text
     ranking_json = db.Column(db.Text().with_variant(LONGTEXT, "mysql"), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-# ── Дані / словники ────────────────────────────────────────────────────────────
+# ── Дані / невеликі словники (опціонально) ─────────────────────────────────────
 def load_daily_words():
     try:
         with open("daily_words.txt", "r", encoding="utf-8") as f:
             return [line.strip() for line in f if line.strip()]
     except FileNotFoundError:
-        print("Помилка: daily_words.txt не знайдено.")
         return []
 
 def load_wordlist():
@@ -49,109 +51,13 @@ def load_wordlist():
         with open("wordlist.txt", "r", encoding="utf-8") as f:
             return {line.strip().lower() for line in f if line.strip()}
     except FileNotFoundError:
-        print("Помилка: wordlist.txt не знайдено.")
         return set()
 
 DAILY_WORDS = load_daily_words()
 VALID_WORDS = load_wordlist()
+
+# Базова дата циклу ігор (як і раніше)
 BASE_DATE = date(2025, 6, 2)
-PRECOMPUTED_DIR = os.path.join(basedir, "precomputed")
-
-# ── Утиліти імпорту ────────────────────────────────────────────────────────────
-def _secret_for_date(d: date) -> str:
-    if not DAILY_WORDS:
-        return ""
-    idx = (d - BASE_DATE).days % len(DAILY_WORDS)
-    return DAILY_WORDS[idx]
-
-def import_all_precomputed(commit_every: int = 200):
-    """Імпорт/оновлення ВСІХ precomputed/*.json у БД. Повертає статистику."""
-    if not os.path.isdir(PRECOMPUTED_DIR):
-        print(f"[Імпорт] Директорія відсутня: {PRECOMPUTED_DIR}")
-        return (0, 0, 0, 0)
-
-    paths = sorted(glob.glob(os.path.join(PRECOMPUTED_DIR, "*.json")))
-    if not paths:
-        print(f"[Імпорт] JSON-файлів не знайдено у {PRECOMPUTED_DIR}")
-        return (0, 0, 0, 0)
-
-    added = replaced = skipped = errors = 0
-
-    for i, path in enumerate(paths, 1):
-        fname = os.path.basename(path)
-        name_no_ext = os.path.splitext(fname)[0]
-
-        # 1) дата з назви файлу
-        try:
-            game_date = datetime.strptime(name_no_ext, "%Y-%m-%d").date()
-        except ValueError:
-            print(f"[WARN] Пропуск некоректної назви файлу: {fname}")
-            skipped += 1
-            continue
-
-        # 2) читання JSON
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                ranking = json.load(f)
-            if not isinstance(ranking, list):
-                raise ValueError("ranking is not a list")
-        except Exception as e:
-            print(f"[ERR] {fname}: не можу прочитати/розпарсити JSON: {e}")
-            errors += 1
-            continue
-
-        # 3) upsert за game_date
-        try:
-            secret_word = _secret_for_date(game_date)
-            row = ArchivedGame.query.filter_by(game_date=game_date).first()
-            if row:
-                row.secret_word = secret_word or row.secret_word
-                row.ranking_json = json.dumps(ranking, ensure_ascii=False)
-                replaced += 1
-            else:
-                db.session.add(
-                    ArchivedGame(
-                        game_date=game_date,
-                        secret_word=secret_word,
-                        ranking_json=json.dumps(ranking, ensure_ascii=False),
-                    )
-                )
-                added += 1
-
-            if (added + replaced) % commit_every == 0:
-                db.session.commit()
-
-        except Exception as e:
-            db.session.rollback()
-            print(f"[ERR] DB операція для {fname}: {e}")
-            errors += 1
-
-    try:
-        db.session.commit()
-    except Exception as e:
-        db.session.rollback()
-        print(f"[ERR] Остаточний commit: {e}")
-
-    print(f"[Імпорт завершено] додано: {added}, оновлено: {replaced}, пропущено: {skipped}, помилок: {errors}")
-    return (added, replaced, skipped, errors)
-
-# ── Одноразова ініціалізація при першому запиті ───────────────────────────────
-@app.before_request
-def bootstrap_once():
-    """Створює таблиці і одноразово імпортує усі JSON (якщо ще не імпортовано)."""
-    if app.config.get("_BOOTSTRAPPED"):
-        return
-    with app.app_context():
-        db.create_all()
-        # Імпортуємо, якщо є директорія precomputed і БД порожня,
-        # або якщо хочемо завжди оновити — можна прибрати перевірку count==0
-        try:
-            count = ArchivedGame.query.count()
-        except Exception:
-            count = 0
-        if os.path.isdir(PRECOMPUTED_DIR) and count == 0:
-            import_all_precomputed()
-    app.config["_BOOTSTRAPPED"] = True
 
 # ── Маршрути ───────────────────────────────────────────────────────────────────
 @app.route("/")
@@ -161,6 +67,7 @@ def index():
 @app.route("/ranked")
 @app.route("/api/ranked")
 def get_ranked():
+    """Рейтинг слів для конкретної дати (або сьогодні). Дані беруться з MySQL."""
     d = request.args.get("date")
     if d:
         try:
@@ -184,22 +91,24 @@ def get_ranked():
 
 @app.route("/api/wordlist")
 def wordlist_api():
+    """Список дозволених слів (якщо файл присутній у проєкті)."""
     return jsonify(sorted(list(VALID_WORDS)))
 
 @app.route("/api/daily-index")
 def daily_index():
-    if not DAILY_WORDS:
-        return jsonify({"error": "Список щоденних слів не завантажено."}), 500
+    """Номер сьогоднішньої гри відносно BASE_DATE (без залежності від файлів)."""
     delta = (date.today() - BASE_DATE).days
     return jsonify({"game_number": delta + 1})
 
 @app.route("/archive")
 def archive_list():
+    """Список усіх дат, що є в архіві (MySQL)."""
     games = ArchivedGame.query.order_by(ArchivedGame.game_date.desc()).all()
     return jsonify([g.game_date.isoformat() for g in games])
 
 @app.route("/archive/<string:game_date_str>")
 def archive_by_date(game_date_str):
+    """Дані конкретної архівної гри за датою (MySQL)."""
     try:
         d = datetime.strptime(game_date_str, "%Y-%m-%d").date()
     except ValueError:
@@ -219,10 +128,11 @@ def archive_by_date(game_date_str):
             "created_at": row.created_at.isoformat() if row.created_at else None
         })
     except Exception as e:
+        # логнемо в серверний лог
         print(f"Помилка даних для гри {game_date_str}: {e}")
         return jsonify({"error": "Помилка даних для цієї гри."}), 500
 
-# SEO / Політика
+# ── SEO / Політика ─────────────────────────────────────────────────────────────
 @app.route("/privacy.html")
 def privacy_policy():
     return render_template("privacy.html")
@@ -243,59 +153,8 @@ def sitemap_xml():
 </urlset>"""
     return Response(xml, mimetype="application/xml")
 
-# ==== Тимчасовий адмін-ендпойнт для імпорту рядків у MySQL через HTTP =========
-# Вимкни/видали після завершення міграції!
-@app.route("/__admin/import-archived", methods=["POST"])
-def import_archived():
-    # Проста авторизація токеном
-    token = request.headers.get("X-Migration-Token")
-    if token != os.environ.get("MIGRATION_TOKEN"):
-        return "Unauthorized", 401
-
-    p = request.get_json(force=True)
-
-    # Очікуємо:
-    # id (int), game_date ('YYYY-MM-DD' або ISO), secret_word (str),
-    # ranking_json (TEXT з JSON), created_at (ISO або None)
-    gd = (p.get("game_date") or "")[:10]
-    game_date = datetime.strptime(gd, "%Y-%m-%d").date() if gd else None
-
-    created_at_str = p.get("created_at")
-    created_at = None
-    if created_at_str:
-        try:
-            created_at = datetime.fromisoformat(created_at_str)
-        except ValueError:
-            created_at = None
-
-    try:
-        # upsert за унікальним game_date (надійніше, ніж за id)
-        row = ArchivedGame.query.filter_by(game_date=game_date).first()
-        if row:
-            row.secret_word = p.get("secret_word") or row.secret_word
-            row.ranking_json = p.get("ranking_json") or row.ranking_json
-            row.created_at = created_at or row.created_at
-        else:
-            db.session.add(
-                ArchivedGame(
-                    id=p.get("id"),  # збережемо оригінальний id зі SQLite, якщо є
-                    game_date=game_date,
-                    secret_word=p.get("secret_word") or "",
-                    ranking_json=p.get("ranking_json") or "[]",
-                    created_at=created_at,
-                )
-            )
-        db.session.commit()
-        return "ok", 200
-    except Exception as e:
-        db.session.rollback()
-        return f"error: {e}", 500
-
-# Локальний запуск (python app.py) — не потрібен, якщо використовуєш `flask run`,
-# але не завадить для прямого запуску скрипта.
+# ── Локальний запуск (для dev) ────────────────────────────────────────────────
 if __name__ == "__main__":
     with app.app_context():
-        db.create_all()
-        if os.path.isdir(PRECOMPUTED_DIR) and ArchivedGame.query.count() == 0:
-            import_all_precomputed()
+        db.create_all()  # створить таблицю локально на SQLite, на MySQL вона вже є
     app.run(debug=True)
