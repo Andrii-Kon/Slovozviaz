@@ -4,3 +4,4 @@ flask_sqlalchemy
 numpy
 gunicorn
 python-dotenv
+pymysql

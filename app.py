@@ -1,26 +1,45 @@
+# app.py
 from flask import Flask, render_template, jsonify, request, Response
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime, date, timedelta
+from dotenv import load_dotenv
+from sqlalchemy.dialects.mysql import LONGTEXT
 import os
 import json
+
+# ── ENV / конфіг БД ─────────────────────────────────────────────────────────────
+load_dotenv()
 
 app = Flask(__name__)
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 instance_path = os.path.join(basedir, "instance")
 os.makedirs(instance_path, exist_ok=True)
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///" + os.path.join(instance_path, "games.db")
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Якщо є DATABASE_URL (наприклад, на PythonAnywhere) — використовуємо його.
+# Інакше — локальний SQLite у папці instance/
+db_uri = os.getenv("DATABASE_URL")
+if not db_uri:
+    db_uri = "sqlite:///" + os.path.join(instance_path, "games.db")
+
+app.config["SQLALCHEMY_DATABASE_URI"] = db_uri
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db = SQLAlchemy(app)
 
+# ── Модель ─────────────────────────────────────────────────────────────────────
 class ArchivedGame(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     game_date = db.Column(db.Date, unique=True, nullable=False)
     secret_word = db.Column(db.String(100), nullable=False)
-    ranking_json = db.Column(db.Text, nullable=False)
+    # Для MySQL використовуємо LONGTEXT (а для SQLite лишається Text)
+    ranking_json = db.Column(
+        db.Text().with_variant(LONGTEXT, "mysql"),
+        nullable=False
+    )
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+# ── Завантаження словників ─────────────────────────────────────────────────────
 def load_daily_words():
     """Завантажує список секретних слів для щоденних ігор."""
     try:
@@ -41,8 +60,9 @@ def load_wordlist():
 
 DAILY_WORDS = load_daily_words()
 VALID_WORDS = load_wordlist()
-BASE_DATE = date(2025, 6, 2) # Перевірте, чи ця дата відповідає першому дню ваших даних
+BASE_DATE = date(2025, 6, 2)  # Перевір, що це перший день твоїх даних
 
+# ── Автододавання ігор у БД з precomputed/ *.json ─────────────────────────────
 @app.before_request
 def ensure_games_archived():
     """Перевіряє та архівує ігри від базової дати до сьогодні, якщо їх немає в БД."""
@@ -54,7 +74,9 @@ def ensure_games_archived():
             games_added = False
 
             while current_date <= today:
-                exists = db.session.query(ArchivedGame.query.filter_by(game_date=current_date).exists()).scalar()
+                exists = db.session.query(
+                    ArchivedGame.query.filter_by(game_date=current_date).exists()
+                ).scalar()
                 if not exists:
                     delta_days = (current_date - BASE_DATE).days
                     if not DAILY_WORDS:
@@ -101,6 +123,7 @@ def ensure_games_archived():
             db.session.rollback()
         print(f"Відбулася помилка в ensure_games_archived, виконано rollback. Помилка: {e}")
 
+# ── Маршрути ───────────────────────────────────────────────────────────────────
 @app.route("/")
 def index():
     """Головна сторінка гри."""
@@ -133,7 +156,7 @@ def get_ranked():
             return jsonify({"error": "Помилка даних на сервері."}), 500
     else:
         print(f"Помилка: Дані рейтингу для {target_date} не знайдено в базі.")
-        ensure_games_archived() # Спробуємо заархівувати, якщо раптом не було зроблено
+        ensure_games_archived()  # разова спроба дозаповнити
         game_retry = ArchivedGame.query.filter_by(game_date=target_date).first()
         if game_retry:
             try:
@@ -229,10 +252,11 @@ def sitemap_xml():
 </urlset>"""
     return Response(content, mimetype='application/xml')
 
+# ── Локальний запуск ───────────────────────────────────────────────────────────
 if __name__ == "__main__":
     if not os.path.exists(instance_path):
         os.makedirs(instance_path)
     with app.app_context():
         db.create_all()
         ensure_games_archived()
-    app.run(debug=True) # debug=True тільки для розробки!
+    app.run(debug=True)  # debug=True тільки для розробки!
