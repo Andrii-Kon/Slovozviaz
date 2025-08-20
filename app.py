@@ -24,7 +24,7 @@ db_uri = os.getenv("DATABASE_URL")
 if not db_uri and os.environ.get("PYTHONANYWHERE_DOMAIN"):
     db_uri = (
         "mysql+pymysql://AndriiKon:Matimatichka1@"
-        "AndriiKon.mysql.pythonanywhere-services.com/AndriiKon$default?charset=utf8mb4"
+        "AndriiKon.mysql.pythonanywhere-services.com/AndriiKon$default"
     )
 if not db_uri:
     db_uri = "sqlite:///" + os.path.join(instance_path, "games.db")
