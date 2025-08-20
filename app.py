@@ -16,17 +16,16 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 instance_path = os.path.join(basedir, "instance")
 os.makedirs(instance_path, exist_ok=True)
 
-# Якщо є DATABASE_URL (наприклад, на сервері) — використовуємо його
+# Порядок вибору БД:
+# 1) DATABASE_URL з оточення (рекомендовано для продакшну)
+# 2) Якщо ми на PythonAnywhere — MySQL із фіксованим URI
+# 3) Інакше локальний SQLite
 db_uri = os.getenv("DATABASE_URL")
-
-# Якщо немає DATABASE_URL, підключаємося напряму до MySQL (PythonAnywhere)
-if not db_uri and "PYTHONANYWHERE_DOMAIN" in os.environ:
+if not db_uri and os.environ.get("PYTHONANYWHERE_DOMAIN"):
     db_uri = (
-        "mysql+pymysql://AndriiKon:Matimatichka1@@"
-        "AndriiKon.mysql.pythonanywhere-services.com/AndriiKon$default"
+        "mysql+pymysql://AndriiKon:Matimatichka1@"
+        "AndriiKon.mysql.pythonanywhere-services.com/AndriiKon$default?charset=utf8mb4"
     )
-
-# Якщо немає — fallback на SQLite (локально)
 if not db_uri:
     db_uri = "sqlite:///" + os.path.join(instance_path, "games.db")
 
@@ -70,7 +69,7 @@ DAILY_WORDS = load_daily_words()
 VALID_WORDS = load_wordlist()
 BASE_DATE = date(2025, 6, 2)  # Перевір, що це перший день твоїх даних
 
-# ── Автододавання ігор у БД з precomputed/ *.json ─────────────────────────────
+# ── Автододавання ігор у БД з precomputed/*.json ──────────────────────────────
 @app.before_request
 def ensure_games_archived():
     """Перевіряє та архівує ігри від базової дати до сьогодні, якщо їх немає в БД."""
@@ -88,7 +87,7 @@ def ensure_games_archived():
                 if not exists:
                     delta_days = (current_date - BASE_DATE).days
                     if not DAILY_WORDS:
-                        print(f"Помилка: DAILY_WORDS порожній для {current_date}.")
+                        print(f"Помилка: Неможливо визначити секретне слово для {current_date}, DAILY_WORDS порожній.")
                         current_date += timedelta(days=1)
                         continue
 
@@ -116,11 +115,12 @@ def ensure_games_archived():
                             games_added = True
                             print(f"Гра для {current_date} додана до архіву.")
                         except json.JSONDecodeError:
-                            print(f"Помилка JSON для {current_date}.")
+                            print(f"Помилка: JSON для {current_date} з файлу {archive_path}.")
                         except Exception as e:
-                            print(f"Помилка архіву {current_date}: {e}")
+                            print(f"Помилка при обробці архіву для {current_date}: {e}")
                     else:
-                        print(f"Файл {archive_path} не знайдено.")
+                        # На сервері precomputed може бути відсутній — це норм
+                        pass
                 current_date += timedelta(days=1)
 
             if games_added:
@@ -128,22 +128,24 @@ def ensure_games_archived():
     except Exception as e:
         if db.session.is_active:
             db.session.rollback()
-        print(f"Rollback в ensure_games_archived. Помилка: {e}")
+        print(f"Відбулася помилка в ensure_games_archived, виконано rollback. Помилка: {e}")
 
 # ── Маршрути ───────────────────────────────────────────────────────────────────
 @app.route("/")
 def index():
+    """Головна сторінка гри."""
     return render_template("index.html")
 
 @app.route("/ranked")
 @app.route("/api/ranked")
 def get_ranked():
+    """Повертає рейтинг слів для сьогоднішньої гри або заданої дати."""
     target_date_str = request.args.get('date')
     if target_date_str:
         try:
             target_date = datetime.strptime(target_date_str, "%Y-%m-%d").date()
         except ValueError:
-            return jsonify({"error": "Невірний формат дати."}), 400
+            return jsonify({"error": "Невірний формат дати. Використовуйте YYYY-MM-DD."}), 400
     else:
         target_date = date.today()
 
@@ -154,11 +156,11 @@ def get_ranked():
             if isinstance(ranking_data, list):
                 return jsonify(ranking_data)
             else:
-                return jsonify({"error": "Невірний формат даних рейтингу."}), 500
+                return jsonify({"error": "Невірний формат даних рейтингу на сервері."}), 500
         except json.JSONDecodeError:
-            return jsonify({"error": "Помилка JSON рейтингу."}), 500
+            return jsonify({"error": "Помилка даних на сервері."}), 500
     else:
-        ensure_games_archived()
+        ensure_games_archived()  # разова спроба дозаповнити
         game_retry = ArchivedGame.query.filter_by(game_date=target_date).first()
         if game_retry:
             try:
@@ -171,10 +173,12 @@ def get_ranked():
 
 @app.route("/api/wordlist")
 def wordlist_api():
+    """Повертає відсортований список дозволених слів."""
     return jsonify(sorted(list(VALID_WORDS)))
 
 @app.route("/api/daily-index")
 def daily_index():
+    """Повертає номер сьогоднішньої гри."""
     if not DAILY_WORDS:
         return jsonify({"error": "Список щоденних слів не завантажено."}), 500
     delta_days = (date.today() - BASE_DATE).days
@@ -183,16 +187,18 @@ def daily_index():
 
 @app.route("/archive")
 def archive_list():
+    """Повертає список дат доступних архівних ігор."""
     games = ArchivedGame.query.order_by(ArchivedGame.game_date.desc()).all()
     valid_games = [g.game_date.isoformat() for g in games if g.game_date <= date.today()]
     return jsonify(valid_games)
 
 @app.route("/archive/<string:game_date_str>")
 def archive_by_date(game_date_str):
+    """Повертає дані конкретної архівної гри за датою."""
     try:
         target_date = datetime.strptime(game_date_str, "%Y-%m-%d").date()
     except ValueError:
-        return jsonify({"error": "Невірний формат дати."}), 400
+        return jsonify({"error": "Невірний формат дати. Використовуйте YYYY-MM-DD."}), 400
 
     game = ArchivedGame.query.filter_by(game_date=target_date).first()
     if not game:
@@ -208,14 +214,19 @@ def archive_by_date(game_date_str):
             "created_at": game.created_at.isoformat() if game.created_at else None
         })
     except (json.JSONDecodeError, ValueError) as e:
+        print(f"Помилка даних для гри {game_date_str}: {e}")
         return jsonify({"error": "Помилка даних для цієї гри."}), 500
 
+# === МАРШРУТ ДЛЯ СТОРІНКИ ПОЛІТИКИ КОНФІДЕНЦІЙНОСТІ ===
 @app.route("/privacy.html")
 def privacy_policy():
+    """Відображає сторінку Політики Конфіденційності."""
     return render_template("privacy.html")
 
+# === МАРШРУТИ ДЛЯ SEO ===
 @app.route('/robots.txt')
 def robots_txt():
+    """Генерує вміст файлу robots.txt."""
     sitemap_url = request.url_root.rstrip('/') + '/sitemap.xml'
     content = f"""User-agent: *
 Allow: /
@@ -225,6 +236,7 @@ Sitemap: {sitemap_url}"""
 
 @app.route('/sitemap.xml')
 def sitemap_xml():
+    """Генерує вміст файлу sitemap.xml."""
     base_url = request.url_root.rstrip('/')
     last_mod_date = date.today().isoformat()
     content = f"""<?xml version="1.0" encoding="UTF-8"?>
