@@ -1,6 +1,9 @@
 import { fetchRankedWords } from "./api.js";
 import { renderGuesses, createGuessItem } from "./ui.js";
 
+const weekdayFmt = new Intl.DateTimeFormat('uk-UA', { weekday: 'short' });
+const monthFmt = new Intl.DateTimeFormat('uk-UA', { month: 'short' });
+
 let isGoingUp = false;
 let allowedWords = new Set();
 // Замість одного масиву guesses
@@ -589,17 +592,20 @@ document.addEventListener("DOMContentLoaded", async () => {
                     if (filtered.length === 0) {
                         previousGamesList.innerHTML = "<p>Архівних ігор не знайдено.</p>";
                     } else {
-                        const html = filtered.map(dateStr => {
+                        const parts = new Array(filtered.length);
+                        for (let i = 0; i < filtered.length; i++) {
+                            const dateStr = filtered[i];
                             const gameNumber = computeGameNumber(dateStr);
-                            const dateObj = new Date(`${dateStr}T00:00:00`);
-                            const weekday = dateObj.toLocaleDateString('uk-UA', { weekday: 'short' });
+                            // конструюємо Date один раз
+                            const dateObj = new Date(dateStr + "T00:00:00");
+                            const weekday = weekdayFmt.format(dateObj);
+                            const month = monthFmt.format(dateObj).replace('.', '');
                             const day = dateObj.getDate();
-                            const month = dateObj.toLocaleDateString('uk-UA', { month: 'short' }).replace('.', '');
-                            return `<button class="archive-button" data-date="${dateStr}">#${gameNumber}&nbsp;&nbsp;${weekday}, ${day} ${month}</button>`;
-                        }).join("");
-                        previousGamesList.innerHTML = html;
+                            parts[i] = `<button class="archive-button" data-date="${dateStr}">#${gameNumber}&nbsp;&nbsp;${weekday}, ${day} ${month}</button>`;
+                        }
+                        previousGamesList.innerHTML = parts.join("");
 
-                        // Делегування кліка: один слухач на контейнер
+                        // делегування кліків (залишаємо як було)
                         previousGamesList.onclick = (e) => {
                             const btn = e.target.closest('button.archive-button');
                             if (!btn) return;

@@ -4,6 +4,7 @@ from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime, date
 from dotenv import load_dotenv
 from sqlalchemy.dialects.mysql import LONGTEXT
+from sqlalchemy.orm import load_only  # ⬅ додано
 import os
 import json
 
@@ -34,7 +35,6 @@ class ArchivedGame(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     game_date = db.Column(db.Date, unique=True, nullable=False, index=True)
     secret_word = db.Column(db.String(100), nullable=False)
-    # для MySQL LONGTEXT, для інших — Text
     ranking_json = db.Column(db.Text().with_variant(LONGTEXT, "mysql"), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -56,7 +56,6 @@ def load_wordlist():
 DAILY_WORDS = load_daily_words()
 VALID_WORDS = load_wordlist()
 
-# Базова дата циклу ігор (як і раніше)
 BASE_DATE = date(2025, 6, 2)
 
 # ── Маршрути ───────────────────────────────────────────────────────────────────
@@ -67,7 +66,6 @@ def index():
 @app.route("/ranked")
 @app.route("/api/ranked")
 def get_ranked():
-    """Рейтинг слів для конкретної дати (або сьогодні). Дані беруться з MySQL."""
     d = request.args.get("date")
     if d:
         try:
@@ -91,24 +89,29 @@ def get_ranked():
 
 @app.route("/api/wordlist")
 def wordlist_api():
-    """Список дозволених слів (якщо файл присутній у проєкті)."""
     return jsonify(sorted(list(VALID_WORDS)))
 
 @app.route("/api/daily-index")
 def daily_index():
-    """Номер сьогоднішньої гри відносно BASE_DATE (без залежності від файлів)."""
     delta = (date.today() - BASE_DATE).days
     return jsonify({"game_number": delta + 1})
 
 @app.route("/archive")
 def archive_list():
-    """Список усіх дат, що є в архіві (MySQL)."""
-    games = ArchivedGame.query.order_by(ArchivedGame.game_date.desc()).all()
+    """
+    Повертає ТІЛЬКИ список дат.
+    ВАЖЛИВО: не вантажимо LONGTEXT ranking_json із MySQL.
+    """
+    games = (
+        ArchivedGame.query
+        .options(load_only(ArchivedGame.game_date))  # ⬅ ключ до швидкості
+        .order_by(ArchivedGame.game_date.desc())
+        .all()
+    )
     return jsonify([g.game_date.isoformat() for g in games])
 
 @app.route("/archive/<string:game_date_str>")
 def archive_by_date(game_date_str):
-    """Дані конкретної архівної гри за датою (MySQL)."""
     try:
         d = datetime.strptime(game_date_str, "%Y-%m-%d").date()
     except ValueError:
@@ -128,11 +131,9 @@ def archive_by_date(game_date_str):
             "created_at": row.created_at.isoformat() if row.created_at else None
         })
     except Exception as e:
-        # логнемо в серверний лог
         print(f"Помилка даних для гри {game_date_str}: {e}")
         return jsonify({"error": "Помилка даних для цієї гри."}), 500
 
-# ── SEO / Політика ─────────────────────────────────────────────────────────────
 @app.route("/privacy.html")
 def privacy_policy():
     return render_template("privacy.html")
@@ -153,8 +154,7 @@ def sitemap_xml():
 </urlset>"""
     return Response(xml, mimetype="application/xml")
 
-# ── Локальний запуск (для dev) ────────────────────────────────────────────────
 if __name__ == "__main__":
     with app.app_context():
-        db.create_all()  # створить таблицю локально на SQLite, на MySQL вона вже є
+        db.create_all()
     app.run(debug=True)
