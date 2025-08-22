@@ -1,4 +1,3 @@
-
 import { fetchRankedWords } from "./api.js";
 import { renderGuesses, createGuessItem } from "./ui.js";
 
@@ -568,6 +567,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     if (giveUpModal) giveUpModal.addEventListener('click', e => e.target === giveUpModal && giveUpModal.classList.add('hidden'));
 
+    // ─────────────────────────────────────────────────────────────────────
+    // ОНОВЛЕНО: Рендер списку архівів одним innerHTML + делегування кліків
+    // ─────────────────────────────────────────────────────────────────────
     if (previousGamesBtn) {
         previousGamesBtn.addEventListener("click", async () => {
             if (previousGamesModal) previousGamesModal.classList.remove("hidden");
@@ -578,24 +580,33 @@ document.addEventListener("DOMContentLoaded", async () => {
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 const dates = await response.json();
                 if (!Array.isArray(dates)) throw new Error("Archive list format incorrect");
-                if (previousGamesList) previousGamesList.innerHTML = "";
-                const today = new Date().toLocaleDateString('en-CA');
+
+                const today = new Date().toISOString().split("T")[0];
                 dates.sort((a, b) => b.localeCompare(a));
-                dates.forEach(dateStr => {
-                    if (dateStr > today) return;
-                    const gameNumber = computeGameNumber(dateStr);
-                    const dateObj = new Date(dateStr + "T00:00:00");
-                    const weekday = dateObj.toLocaleDateString('uk-UA', { weekday: 'short' });
-                    const day = dateObj.getDate();
-                    const month = dateObj.toLocaleDateString('uk-UA', { month: 'short' });
-                    const btn = document.createElement("button");
-                    btn.className = "archive-button";
-                    btn.textContent = `#${gameNumber}⠀${weekday}, ${day} ${month.replace('.', '')}`;
-                    btn.dataset.date = dateStr;
-                    btn.addEventListener("click", () => loadArchive(dateStr));
-                    if (previousGamesList) previousGamesList.appendChild(btn);
-                });
-                if (dates.length === 0 && previousGamesList) previousGamesList.innerHTML = "<p>Архівних ігор не знайдено.</p>";
+                const filtered = dates.filter(d => d <= today);
+
+                if (previousGamesList) {
+                    if (filtered.length === 0) {
+                        previousGamesList.innerHTML = "<p>Архівних ігор не знайдено.</p>";
+                    } else {
+                        const html = filtered.map(dateStr => {
+                            const gameNumber = computeGameNumber(dateStr);
+                            const dateObj = new Date(`${dateStr}T00:00:00`);
+                            const weekday = dateObj.toLocaleDateString('uk-UA', { weekday: 'short' });
+                            const day = dateObj.getDate();
+                            const month = dateObj.toLocaleDateString('uk-UA', { month: 'short' }).replace('.', '');
+                            return `<button class="archive-button" data-date="${dateStr}">#${gameNumber}&nbsp;&nbsp;${weekday}, ${day} ${month}</button>`;
+                        }).join("");
+                        previousGamesList.innerHTML = html;
+
+                        // Делегування кліка: один слухач на контейнер
+                        previousGamesList.onclick = (e) => {
+                            const btn = e.target.closest('button.archive-button');
+                            if (!btn) return;
+                            loadArchive(btn.dataset.date);
+                        };
+                    }
+                }
             } catch (err) {
                 console.error("[Error] Failed to fetch archive list:", err);
                 if (previousGamesList) previousGamesList.innerHTML = "<p>Помилка завантаження архіву.</p>";
