@@ -1,50 +1,40 @@
 // static/js/ui.js
-// REMOVED: import { getFillPercent, getBarColor } from "./utils.js";
-// We will replace this logic with the new function below.
-
-// --- New Style Calculation Function (incorporating color and width logic) ---
 
 /**
- * Розраховує CSS-клас для кольору та відсоток ширини для прогрес-бару
- * на основі рангу слова, використовуючи логарифмічну шкалу для плавності.
- * @param {number} rank - Ранг слова (або Infinity для помилки).
- * @param {number} maxRank - Максимальний ранг у грі.
- * @returns {{cssClass: string, width: number}} Об'єкт з CSS-класом та шириною у відсотках.
+ * Обчислює CSS-клас і відсоток ширини для прогрес-бара
+ * на основі рангу слова з використанням логарифмічної шкали.
+ *
+ * @param {number} rank    Ранг слова (або Infinity для помилок)
+ * @param {number} maxRank Максимальний ранг у поточній грі
+ * @returns {{cssClass: string, width: number}} Клас для стилю та ширина прогрес-бара (%)
  */
 function calculateProgressBarStyle(rank, maxRank) {
-    // Пороги для визначення кольору (можна налаштувати)
-    // Оновлено кольори з CSS
     const thresholds = {
-        veryClose: 50,  // rank-very-close (Насичений зелений)
-        close: 150,     // rank-close (Світліший зелений)
-        medium: 500,    // rank-medium (Жовтий/Помаранчевий)
-        far: 1000,      // rank-far (Помаранчевий)
-                        // rank-very-far (Червоний) за замовчуванням
+        veryClose: 50,   // rank-very-close
+        close: 150,      // rank-close
+        medium: 500,     // rank-medium
+        far: 1000        // rank-far, все більше — rank-very-far
     };
 
-    let cssClass = 'rank-very-far'; // Клас за замовчуванням
-    let widthPercent = 5; // Мінімальна ширина (наприклад, для помилок)
+    let cssClass = 'rank-very-far';
+    let widthPercent = 5; // мінімальна ширина
 
-    // Перевірка некоректних рангів
+    // Некоректний ранг → спеціальний клас помилки
     if (rank === Infinity || rank > maxRank || rank <= 0 || isNaN(rank)) {
-        cssClass = 'rank-error'; // Спеціальний стиль для помилок (можна додати в CSS)
+        cssClass = 'rank-error';
         widthPercent = 5;
     } else if (rank === 1) {
-        // Точне співпадіння
-        cssClass = 'rank-exact'; // Спеціальний стиль для рангу 1 (можна додати в CSS)
+        cssClass = 'rank-exact'; // секретне слово
         widthPercent = 100;
     } else {
-        // Визначення класу кольору на основі порогів
         if (rank <= thresholds.veryClose) cssClass = 'rank-very-close';
         else if (rank <= thresholds.close) cssClass = 'rank-close';
         else if (rank <= thresholds.medium) cssClass = 'rank-medium';
         else if (rank <= thresholds.far) cssClass = 'rank-far';
-        // Інакше залишається 'rank-very-far'
 
-        // --- Плавний розрахунок ширини (Логарифмічна шкала) ---
-        const minWidth = 10; // Мінімальна ширина для найгіршого рангу
-        const maxWidth = 98; // Максимальна ширина для рангу 2
-
+        // Логарифмічна шкала для плавної зміни ширини
+        const minWidth = 10;
+        const maxWidth = 98;
         const logMax = Math.log(maxRank > 1 ? maxRank : 2);
         const logRank = Math.log(rank);
 
@@ -60,70 +50,62 @@ function calculateProgressBarStyle(rank, maxRank) {
     return { cssClass: cssClass, width: widthPercent };
 }
 
-
-// --- UI Element Creation and Rendering ---
-
 /**
- * Створює DOM-елемент для одного слова (здогадки).
+ * Створює DOM-елемент для одного слова (спроби або підказки).
+ *
+ * @param {Object} guessObj  Об’єкт із даними про спробу {word, rank, error, errorMessage?}
+ * @param {number} maxRank   Максимальний ранг у грі
+ * @returns {HTMLElement}    Елемент списку спроб
  */
 export function createGuessItem(guessObj, maxRank) {
     const guessItem = document.createElement("div");
-    guessItem.classList.add("guessItem"); // Базовий клас залишається
+    guessItem.classList.add("guessItem");
 
-    // --- ОНОВЛЕНО: Використовуємо нову функцію для стилів ---
     const styleInfo = calculateProgressBarStyle(guessObj.rank, maxRank);
-
-    // Додаємо клас для кольору до батьківського елемента guessItem
     guessItem.classList.add(styleInfo.cssClass);
 
+    // Виведення помилкової спроби
     if (guessObj.error) {
-        // Замість простого тексту, створюємо структуру для помилки теж,
-        // щоб зберегти вигляд, але без прогрес-бару
         const guessText = document.createElement("div");
-        guessText.classList.add("guessText"); // Використовуємо той же клас для відступів
-        guessText.style.color = '#ff8a80'; // Червонуватий колір для помилки
+        guessText.classList.add("guessText");
+        guessText.style.color = '#ff8a80';
 
         const wordSpan = document.createElement("span");
         wordSpan.textContent = guessObj.word;
         wordSpan.style.fontStyle = 'italic';
 
         const errorSpan = document.createElement("span");
-        errorSpan.textContent = guessObj.errorMessage || "не знайдено"; // Показуємо повідомлення про помилку або стандартне
+        errorSpan.textContent = guessObj.errorMessage || "не знайдено";
         errorSpan.style.fontSize = '0.85em';
         errorSpan.style.opacity = '0.8';
 
         guessText.appendChild(wordSpan);
         guessText.appendChild(errorSpan);
         guessItem.appendChild(guessText);
-        // Не додаємо fillBar для помилок
 
-        return guessItem; // Повертаємо елемент помилки
+        return guessItem;
     }
 
-    // --- Створення fillBar (для коректних спроб) ---
+    // Прогрес-бар для валідних спроб
     const fillBar = document.createElement("div");
     fillBar.classList.add("fillBar");
-    // Ширина встановлюється за допомогою нової функції
     fillBar.style.width = styleInfo.width + "%";
-    // Колір тепер визначається через CSS-клас на guessItem
-    // fillBar.style.backgroundColor = getBarColor(guessObj.rank); // ЦЕ БІЛЬШЕ НЕ ПОТРІБНО
 
-    // --- Створення guessText (як і раніше) ---
+    // Текстовий блок (слово + ранг)
     const guessText = document.createElement("div");
     guessText.classList.add("guessText");
 
     const wordSpan = document.createElement("span");
-    wordSpan.classList.add("word"); // Додаємо клас, якщо він є в CSS
+    wordSpan.classList.add("word");
     wordSpan.textContent = guessObj.word;
 
     const rankSpan = document.createElement("span");
-    rankSpan.classList.add("rank"); // Додаємо клас, якщо він є в CSS
+    rankSpan.classList.add("rank");
     rankSpan.textContent = guessObj.rank;
 
     guessText.appendChild(wordSpan);
     guessText.appendChild(rankSpan);
 
-    // Додаємо елементи в правильному порядку для z-index
     guessItem.appendChild(fillBar);
     guessItem.appendChild(guessText);
 
@@ -131,39 +113,43 @@ export function createGuessItem(guessObj, maxRank) {
 }
 
 /**
- * Відтворює всі спроби у списку та показує останню спробу зверху.
- * (Логіка сортування та рендеру залишається без змін)
+ * Рендерить усі спроби у контейнері та відображає останню правильну спробу окремо.
+ *
+ * @param {Array} guesses             Масив спроб і підказок
+ * @param {string|null} lastWord      Останнє введене слово
+ * @param {number} maxRank            Максимальний ранг у грі
+ * @param {HTMLElement} container     Контейнер для списку спроб
+ * @param {HTMLElement} lastGuessWrapper  Обгортка для останньої спроби
+ * @param {HTMLElement} lastGuessDisplay  Контейнер для останньої правильної спроби
  */
 export function renderGuesses(guesses, lastWord, maxRank, container, lastGuessWrapper, lastGuessDisplay) {
-    container.innerHTML = ""; // Очищуємо контейнер
+    container.innerHTML = "";
 
-    // Сортуємо: помилки першими (якщо є), потім за рангом
+    // Помилки вгорі, далі — за зростанням рангу
     guesses.sort((a, b) => {
         if (a.error && !b.error) return -1;
         if (!a.error && b.error) return 1;
-        if (a.error && b.error) return 0; // Можна додати сортування за порядком введення для помилок
-        return a.rank - b.rank; // Сортування за рангом
+        if (a.error && b.error) return 0;
+        return a.rank - b.rank;
     });
 
-    // Відтворюємо кожен елемент
     guesses.forEach(guessObj => {
-        const guessItem = createGuessItem(guessObj, maxRank); // Використовуємо оновлену функцію
-        // Підсвічуємо останню введену *коректну* спробу
+        const guessItem = createGuessItem(guessObj, maxRank);
         if (!guessObj.error && guessObj.word === lastWord) {
             guessItem.classList.add("highlightGuess");
         }
         container.appendChild(guessItem);
     });
 
-    // Відображаємо останню *коректну* спробу окремо
+    // Окремий блок для останньої правильної спроби
     const lastCorrectGuessObj = guesses.find(g => g.word === lastWord && !g.error);
     if (lastCorrectGuessObj) {
-        const cloned = createGuessItem(lastCorrectGuessObj, maxRank); // Використовуємо оновлену функцію
-        cloned.classList.add("highlightGuess"); // Підсвічуємо
-        lastGuessDisplay.innerHTML = ""; // Очищуємо попередній
-        lastGuessDisplay.appendChild(cloned); // Додаємо новий
-        lastGuessWrapper.classList.remove("hidden"); // Показуємо блок
+        const cloned = createGuessItem(lastCorrectGuessObj, maxRank);
+        cloned.classList.add("highlightGuess");
+        lastGuessDisplay.innerHTML = "";
+        lastGuessDisplay.appendChild(cloned);
+        lastGuessWrapper.classList.remove("hidden");
     } else {
-        lastGuessWrapper.classList.add("hidden"); // Ховаємо, якщо остання спроба була помилкою
+        lastGuessWrapper.classList.add("hidden");
     }
 }

@@ -1,5 +1,6 @@
-/* static/css/privacy_style.css */
-
+/* ====================
+   Базові стилі сторінки
+   ==================== */
 html, body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     line-height: 1.6;
@@ -11,21 +12,22 @@ html, body {
 }
 
 body {
-    padding: 20px 15px; /* Загальні відступи для сторінки */
+    padding: 20px 15px; /* Загальні відступи вмісту від країв */
 }
 
-/* Ось тут зміни: */
-.privacy-content-wrapper { /* Або .privacy-container-unique, якщо ви використовували цю назву */
+/* ====================
+   Контейнер для політики конфіденційності
+   ==================== */
+.privacy-content-wrapper {
     max-width: 850px;
     margin: 0 auto;
-    /* Змінюємо padding, щоб додати більше зліва (та справа для симетрії) */
-    padding: 25px 50px 25px 50px;  /* Верх Право Низ Ліво - тут Ліво та Право по 50px */
-    /* Або можете зробити padding: 25px 30px 25px 60px; якщо хочете зліва більше, ніж справа */
+    padding: 25px 50px; /* симетричні внутрішні відступи */
     background-color: #ffffff;
     border: 1px solid #e0e0e0;
     box-shadow: 0 1px 3px rgba(0,0,0,0.08);
 }
 
+/* Заголовки всередині документа */
 .privacy-content-wrapper h1,
 .privacy-content-wrapper h2,
 .privacy-content-wrapper h3 {
@@ -64,6 +66,7 @@ body {
     color: #222222;
 }
 
+/* Текст та списки */
 .privacy-content-wrapper p,
 .privacy-content-wrapper li {
     margin-bottom: 12px;
@@ -74,31 +77,28 @@ body {
 .privacy-content-wrapper ul {
     margin-top: 0;
     margin-bottom: 1rem;
-    padding-left: 2rem; /* Залишаємо стандартний відступ для маркерів */
+    padding-left: 2rem; /* відступ для маркерів списку */
     list-style-type: disc;
 }
 
-/* Якщо ви хочете відступ для тексту всередині li, а не для маркера: */
 .privacy-content-wrapper li {
     margin-bottom: 0.5rem;
-    /* padding-left: 0; Якщо маркер має бути біля краю, а текст з відступом */
 }
 
-
+/* Посилання */
 .privacy-content-wrapper a {
     color: #007bff;
     text-decoration: none;
 }
-
 .privacy-content-wrapper a:hover {
     text-decoration: underline;
     color: #0056b3;
 }
 
+/* Акценти в тексті */
 .privacy-content-wrapper strong {
     font-weight: 600;
 }
-
 .privacy-content-wrapper code {
     font-size: 0.875em;
     color: #d63384;
@@ -108,13 +108,15 @@ body {
     border-radius: 0.2rem;
 }
 
-.privacy-footer-link { /* Або .footer-link-container-unique */
+/* ====================
+   Нижній блок з посиланням
+   ==================== */
+.privacy-footer-link {
     text-align: center;
     margin-top: 2.5rem;
     padding-top: 1.5rem;
     border-top: 1px solid #e9ecef;
 }
-
-.privacy-footer-link a { /* Або .footer-link-container-unique a */
+.privacy-footer-link a {
     font-size: 1rem;
 }

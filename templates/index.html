@@ -4,13 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
+    <!-- Мета-опис для SEO -->
     <meta name="description" content="Вгадайте секретне слово українською! Кожна спроба покаже, наскільки близьке ваше слово до цілі. Спробуйте знайти відповідь!">
 
+    <!-- Верифікація Google -->
     <meta name="google-site-verification" content="t-CIOPI5tot8PUUYCAnys5wFhm9Bjb0oX1ezi741H0g" />
+
     <title>Словозв'яз</title>
 
+    <!-- Тема та PWA-налаштування -->
     <meta name="theme-color" content="#1f1f1f">
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+
+    <!-- Основні стилі -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/favicon.png') }}">
 </head>
@@ -19,6 +25,7 @@
 <div class="container">
     <h1>Словозв'яз</h1>
 
+    <!-- Блок фінального повідомлення (перемога або здача) -->
     <div id="congratsBlock" class="congratsBlock hidden">
         <h2 id="congratsTitle">Вітаємо!</h2>
         <p id="congratsMessage">
@@ -28,8 +35,10 @@
         <button id="shareButton">Поділитися</button>
     </div>
 
+    <!-- Кнопка для показу списку найближчих слів -->
     <button id="closestWordsBtn" class="hidden">Найближчі слова</button>
 
+    <!-- Інформація про гру: номер гри та лічильники -->
     <div class="game-info">
         <h3 id="gameDateLabel" class="game-date-label">Гра: #?</h3>
         <div class="gameStats">
@@ -38,6 +47,7 @@
         </div>
     </div>
 
+    <!-- Поле введення слова + кнопка відправки + меню -->
     <div class="input-section">
         <input type="text" id="guessInput" placeholder="Введіть слово" autocomplete="off">
         <button id="submitGuess" class="btn-wide">Відправити</button>
@@ -64,6 +74,7 @@
         </div>
     </div>
 
+    <!-- Інструкція «Як грати?» -->
     <div id="howToPlayBlock" class="howToPlayBlock">
         <h2>Як грати?</h2>
         <p>
@@ -77,16 +88,19 @@
         </details>
         <details>
             <summary>Як попросити підказку?</summary>
-            <p>Натисніть на три крапки, розташовані у верхньому правому куті екрана, і виберіть опцію «Підказка», і вона покаже одне слово.</p>
+            <p>Натисніть на три крапки у верхньому правому куті та виберіть «Підказка».</p>
         </details>
     </div>
 
+    <!-- Відображення останньої спроби -->
     <div id="lastGuessWrapper" class="lastGuessWrapper hidden">
         <div id="lastGuessDisplay"></div>
     </div>
 
+    <!-- Список усіх спроб -->
     <div id="guessesContainer"></div>
 
+    <!-- Посилання на політику конфіденційності -->
     <div id="privacyPolicyBlock" class="privacy-policy-block">
         <p>
             <a href="{{ url_for('privacy_policy') }}">Політика Конфіденційності</a>
@@ -94,6 +108,7 @@
     </div>
 </div>
 
+<!-- Модалка: найближчі слова -->
 <div id="closestWordsModal" class="modal hidden">
     <div class="modal-content">
         <span id="closeModalBtn" class="close">×</span>
@@ -102,6 +117,7 @@
     </div>
 </div>
 
+<!-- Модалка: попередні ігри -->
 <div id="previousGamesModal" class="modal hidden">
     <div class="modal-content">
         <span id="closePreviousGamesModal" class="close">×</span>
@@ -113,6 +129,7 @@
     </div>
 </div>
 
+<!-- Модалка: підтвердження здачі -->
 <div id="giveUpModal" class="modal hidden">
     <div class="modal-content" style="text-align: center;">
         <span id="closeGiveUpModal" class="close">×</span>
@@ -124,28 +141,43 @@
     </div>
 </div>
 
+<!-- Модалка: авторство -->
 <div id="authorshipModal" class="modal hidden">
     <div class="modal-content">
         <span id="closeAuthorshipModal" class="close">×</span>
         <h2>Авторство</h2>
         <div id="authorshipContent">
-            <p><strong>Розробник:</strong> <a href="https://github.com/Andrii-Kon" target="_blank" rel="noopener noreferrer" title="GitHub Профіль">https://github.com/Andrii-Kon</a></p>
+            <p><strong>Розробник:</strong>
+                <a href="https://github.com/Andrii-Kon" target="_blank" rel="noopener noreferrer" title="GitHub Профіль">
+                    https://github.com/Andrii-Kon
+                </a>
+            </p>
             <p style="margin-top: 20px;"><strong>Технології та джерела даних:</strong></p>
             <ul style="list-style: disc; margin-left: 20px; margin-bottom: 15px;">
                 <li style="margin-bottom: 8px;">
-                    Розрахунок векторів слів: <a href="https://platform.openai.com/docs/guides/embeddings" target="_blank" rel="noopener noreferrer">OpenAI API</a> (<code>text-embedding-3-large</code>)
+                    Розрахунок векторів слів:
+                    <a href="https://platform.openai.com/docs/guides/embeddings" target="_blank" rel="noopener noreferrer">
+                        OpenAI API
+                    </a> (<code>text-embedding-3-large</code>)
                 </li>
                 <li style="margin-bottom: 8px;">
-                    Базовий словник: <a href="https://lang.org.ua/en/ubertext/" target="_blank" rel="noopener noreferrer">UberText 2.0</a>
+                    Базовий словник:
+                    <a href="https://lang.org.ua/en/ubertext/" target="_blank" rel="noopener noreferrer">
+                        UberText 2.0
+                    </a>
                 </li>
                 <li style="margin-bottom: 8px;">
-                    Натхнення: <a href="https://contexto.me/" target="_blank" rel="noopener noreferrer">contexto.me</a>
+                    Натхнення:
+                    <a href="https://contexto.me/" target="_blank" rel="noopener noreferrer">
+                        contexto.me
+                    </a>
                 </li>
             </ul>
         </div>
     </div>
 </div>
 
+<!-- Основний скрипт -->
 <script type="module" src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
 </html>
