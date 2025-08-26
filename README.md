@@ -1,3 +1,9 @@
+![Python](https://img.shields.io/badge/Python-3.13-blue?logo=python&logoColor=white)
+![Flask](https://img.shields.io/badge/Flask-3.1-green?logo=flask&logoColor=white)
+![OpenAI](https://img.shields.io/badge/OpenAI-API-412991?logo=openai&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-yellow.svg)
+![SQLite](https://img.shields.io/badge/SQLite-3-blue?logo=sqlite&logoColor=white)
+![Status](https://img.shields.io/badge/Status-Active-success)
 
 
 # Slovozviaz
@@ -12,6 +18,8 @@
 
 ### ➡️ **[Play Slovozviaz](https://andriikon.pythonanywhere.com)** ⬅️
 
+## 🎮 Screenshots
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/cf57836e-53ad-472c-8dd9-a555c26fec90" />
 
 ## 📜 Description
 
