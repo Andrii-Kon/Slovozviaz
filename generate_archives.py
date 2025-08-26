@@ -7,10 +7,10 @@ from generate_rankings import generate_rankings
 # -----------------------------------------------------------------------------
 # Завантаження вхідних даних
 # -----------------------------------------------------------------------------
-with open("daily_words.txt", "r", encoding="utf-8") as f:
+with open("data/daily_words.txt", "r", encoding="utf-8") as f:
     daily_words = [line.strip() for line in f if line.strip()]
 
-with open("wordlist.txt", "r", encoding="utf-8") as f:
+with open("data/wordlist.txt", "r", encoding="utf-8") as f:
     wordlist = [line.strip() for line in f if line.strip()]
 
 with open("definitions.json", "r", encoding="utf-8") as f:

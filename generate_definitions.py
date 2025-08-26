@@ -26,7 +26,7 @@ except Exception as e:
     print(f"Помилка ініціалізації OpenAI клієнта: {e}")
     exit(1)
 
-INPUT_FILE = "wordlist.txt"
+INPUT_FILE = "data/wordlist.txt"
 # Стабільна модель за замовчуванням; за потреби можна змінити на "o4-mini"
 MODEL_NAME = "gpt-4.1-mini"
 OUTPUT_FILE = "definitions_4.1o.json"

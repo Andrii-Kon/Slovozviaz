@@ -95,10 +95,10 @@ def generate_rankings(target_word, target_date, definitions, words):
 
 if __name__ == "__main__":
     # Пакетна генерація для всіх днів від BASE_DATE на основі списку слів дня
-    with open("daily_words.txt", "r", encoding="utf-8") as f:
+    with open("data/daily_words.txt", "r", encoding="utf-8") as f:
         daily_words = [line.strip() for line in f if line.strip()]
 
-    with open("wordlist.txt", "r", encoding="utf-8") as f:
+    with open("data/wordlist.txt", "r", encoding="utf-8") as f:
         words = [line.strip() for line in f if line.strip()]
 
     with open("definitions.json", "r", encoding="utf-8") as f:

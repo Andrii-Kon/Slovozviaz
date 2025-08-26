@@ -45,14 +45,14 @@ class ArchivedGame(db.Model):
 # ── Дані / невеликі словники (опціонально) ─────────────────────────────────────
 def load_daily_words():
     try:
-        with open("daily_words.txt", "r", encoding="utf-8") as f:
+        with open("data/daily_words.txt", "r", encoding="utf-8") as f:
             return [line.strip() for line in f if line.strip()]
     except FileNotFoundError:
         return []
 
 def load_wordlist():
     try:
-        with open("wordlist.txt", "r", encoding="utf-8") as f:
+        with open("data/wordlist.txt", "r", encoding="utf-8") as f:
             return {line.strip().lower() for line in f if line.strip()}
     except FileNotFoundError:
         return set()
