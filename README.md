@@ -1,4 +1,7 @@
-
+![Python](https://img.shields.io/badge/Python-3.13-blue?logo=python&logoColor=white)
+![Flask](https://img.shields.io/badge/Flask-3.1-green?logo=flask&logoColor=white)
+![OpenAI](https://img.shields.io/badge/OpenAI-API-412991?logo=openai&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 
 # Slovozviaz
 
