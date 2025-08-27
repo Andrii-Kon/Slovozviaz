@@ -12,6 +12,17 @@
 
     <title>Словозв'яз</title>
 
+    <!-- Google Analytics (GA4) -->
+    <!-- Замініть ID, якщо у вас інший Measurement ID -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-P9SCTD149F"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        // debug_mode можна прибрати після тестування
+        gtag('config', 'G-P9SCTD149F', { debug_mode: true });
+    </script>
+
     <!-- Тема та PWA-налаштування -->
     <meta name="theme-color" content="#1f1f1f">
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
