@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from sqlalchemy.dialects.mysql import LONGTEXT
 from sqlalchemy.orm import load_only
 from sqlalchemy import inspect
+from sqlalchemy.exc import OperationalError, InterfaceError
 import os
 import json
 import glob
@@ -148,7 +149,7 @@ def import_json_into_sqlite_if_needed():
         # Перевірити, чи таблиця вже заповнена
         has_any = db.session.query(ArchivedGame.id).first()
         if has_any:
-            return  # вже є дані — нічого не робимо
+            return
 
         json_files = iter_json_files()
         if not json_files:
@@ -207,6 +208,18 @@ with app.app_context():
     # Якщо локальний SQLite і таблиця порожня — імпортуємо з JSON
     import_json_into_sqlite_if_needed()
 
+# ── Простий in-memory кеш для ранкінгу ─────────────────────────────────────────
+RANKING_CACHE: dict[date, list] = {}
+
+def _load_ranking_from_db(target_date: date) -> list | None:
+    row = ArchivedGame.query.filter_by(game_date=target_date).first()
+    if not row:
+        return None
+    data = json.loads(row.ranking_json)
+    if not isinstance(data, list):
+        raise ValueError("Ranking data is not a list")
+    return data
+
 # ── Маршрути ───────────────────────────────────────────────────────────────────
 @app.route("/")
 def index():
@@ -222,17 +235,43 @@ def get_ranked():
         except ValueError:
             return jsonify({"error": "Невірний формат дати. Використовуйте YYYY-MM-DD."}), 400
     else:
-        target = date.today()
+        # Використовуємо UTC-дату, щоб менше впливала таймзона хостингу
+        target = datetime.utcnow().date()
 
-    row = ArchivedGame.query.filter_by(game_date=target).first()
-    if not row:
-        return jsonify({"error": f"Рейтинг для {target.isoformat()} не знайдено."}), 404
+    # 1) Кеш у пам'яті
+    cached = RANKING_CACHE.get(target)
+    if cached is not None:
+        return jsonify(cached)
 
+    # 2) Перша спроба читання
     try:
-        data = json.loads(row.ranking_json)
-        if not isinstance(data, list):
-            return jsonify({"error": "Невірний формат даних рейтингу на сервері."}), 500
+        data = _load_ranking_from_db(target)
+        if data is None:
+            return jsonify({"error": f"Рейтинг для {target.isoformat()} не знайдено."}), 404
+        RANKING_CACHE[target] = data
         return jsonify(data)
+
+    # 3) Якщо це «холодний» конект MySQL — реконект і повторити
+    except (OperationalError, InterfaceError):
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        db.session.remove()
+        try:
+            db.engine.dispose()
+        except Exception:
+            pass
+
+        try:
+            data = _load_ranking_from_db(target)
+            if data is None:
+                return jsonify({"error": f"Рейтинг для {target.isoformat()} не знайдено."}), 404
+            RANKING_CACHE[target] = data
+            return jsonify(data)
+        except Exception:
+            return jsonify({"error": "Тимчасова помилка підключення до бази. Спробуйте ще раз."}), 503
+
     except Exception:
         return jsonify({"error": "Помилка даних на сервері."}), 500
 
@@ -303,7 +342,7 @@ def sitemap_xml():
 </urlset>"""
     return Response(xml, mimetype="application/xml")
 
-# ── Опційно: CLI для ручної ініціалізації ──────────────────────────────────────
+# ──  CLI для ручної ініціалізації ──────────────────────────────────────
 try:
     import click
 
@@ -315,11 +354,9 @@ try:
             import_json_into_sqlite_if_needed()
         click.echo("DB initialized (and imported from JSON if applicable).")
 except Exception:
-    # click може бути відсутній у середовищі — ігноруємо
     pass
 
 if __name__ == "__main__":
-    # Запуск напряму також гарантує створення/імпорт
     with app.app_context():
         db.create_all()
         import_json_into_sqlite_if_needed()
