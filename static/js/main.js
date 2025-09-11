@@ -596,16 +596,36 @@ document.addEventListener("DOMContentLoaded", async () => {
                         for (let i = 0; i < filtered.length; i++) {
                             const dateStr = filtered[i];
                             const gameNumber = computeGameNumber(dateStr);
-                            // конструюємо Date один раз
                             const dateObj = new Date(dateStr + "T00:00:00");
                             const weekday = weekdayFmt.format(dateObj);
                             const month = monthFmt.format(dateObj).replace('.', '');
                             const day = dateObj.getDate();
-                            parts[i] = `<button class="archive-button" data-date="${dateStr}">#${gameNumber}&nbsp;&nbsp;${weekday}, ${day} ${month}</button>`;
+
+                            // 👇 новий блок: дістаємо локальний стан
+                            let statusLabel = "";
+                            try {
+                                const saved = localStorage.getItem(`gameState_${dateStr}`);
+                                if (saved) {
+                                    const state = JSON.parse(saved);
+                                    if (state.didWin) {
+                                        statusLabel = "Відгадав";
+                                    } else if (state.didGiveUp) {
+                                        statusLabel = "Здався";
+                                    }
+                                }
+                            } catch (e) {
+                                console.warn("Cannot parse game state for", dateStr, e);
+                            }
+
+                            parts[i] =
+                                `<button class="archive-button" data-date="${dateStr}">
+      <span class="archive-left">#${gameNumber}&nbsp;&nbsp;${weekday}, ${day} ${month}</span>
+      <span class="archive-right">${statusLabel}</span>
+   </button>`;
                         }
                         previousGamesList.innerHTML = parts.join("");
 
-                        // делегування кліків (залишаємо як було)
+                        // делегування кліків
                         previousGamesList.onclick = (e) => {
                             const btn = e.target.closest('button.archive-button');
                             if (!btn) return;

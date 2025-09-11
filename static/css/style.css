@@ -522,15 +522,31 @@ h1 {
     border-radius: 8px;
     font-size: 1em;
     display: flex;
-    justify-content: space-between;
+    justify-content: space-between; /* ліва і права частина */
     align-items: center;
     transition: background-color 0.2s ease;
     min-height: 44px;
+    text-align: left; /* для лівого тексту */
 }
+
 #previousGamesList button:hover {
     background-color: #1976d2;
     cursor: pointer;
 }
+
+#previousGamesList .archive-left {
+    flex: 1;
+}
+
+#previousGamesList .archive-right {
+    font-style: italic;
+    font-weight: 600;          /* напівжирний */
+    font-size: 0.95em;         /* трохи менший */
+    opacity: 0.95;
+    margin-left: 10px;
+    font-family: "Inter", "Roboto", "Segoe UI", sans-serif; /* сучасний вигляд */
+}
+
 .game-status-label {
     font-weight: normal;
     font-size: 0.9em;
