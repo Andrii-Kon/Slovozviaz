@@ -1,49 +1,51 @@
-import os
 import json
-from datetime import date, timedelta
+from datetime import timedelta
+
 from app import app, db, ArchivedGame, BASE_DATE
-from generate_rankings import generate_rankings
+from generate_rankings import generate_rankings, load_embedding_resources
 
-# -----------------------------------------------------------------------------
-# Завантаження вхідних даних
-# -----------------------------------------------------------------------------
-with open("data/daily_words.txt", "r", encoding="utf-8") as f:
-    daily_words = [line.strip() for line in f if line.strip()]
 
-with open("data/wordlist.txt", "r", encoding="utf-8") as f:
-    wordlist = [line.strip() for line in f if line.strip()]
+def load_lines(path: str) -> list[str]:
+    with open(path, "r", encoding="utf-8") as f:
+        return [line.strip() for line in f if line.strip()]
 
-with open("definitions.json", "r", encoding="utf-8") as f:
-    definitions = json.load(f)
 
-# -----------------------------------------------------------------------------
-# Генерація архівних ігор у контексті Flask-додатку
-# -----------------------------------------------------------------------------
-with app.app_context():
-    # Створюємо таблиці (якщо відсутні)
-    db.create_all()
+def main() -> None:
+    daily_words = load_lines("data/daily_words.txt")
+    wordlist = load_lines("data/wordlist.txt")
+    resources = load_embedding_resources(words=wordlist, daily_words=daily_words)
 
-    # Проходимо усі слова з daily_words.txt і генеруємо архів на кожен день
-    for index, word in enumerate(daily_words):
-        archive_date = BASE_DATE + timedelta(days=index)
-        print(f"[ARCHIVE] Генеруємо для {archive_date} -> {word}")
+    with app.app_context():
+        db.create_all()
 
-        # Пропускаємо, якщо запис для цієї дати вже існує
-        exists = ArchivedGame.query.filter_by(game_date=archive_date).first()
-        if exists:
-            print(f"Пропуск: рейтинг для {word} (гра: {archive_date}) вже згенеровано.")
-            continue
+        for index, word in enumerate(daily_words):
+            archive_date = BASE_DATE + timedelta(days=index)
+            print(f"[ARCHIVE] Генеруємо для {archive_date} -> {word}")
 
-        # Генеруємо рейтинг для секретного слова на вказану дату
-        ranked = generate_rankings(word, archive_date, definitions, wordlist)
+            exists = ArchivedGame.query.filter_by(game_date=archive_date).first()
+            if exists:
+                print(f"Пропуск: рейтинг для {word} (гра: {archive_date}) вже згенеровано.")
+                continue
 
-        # Додаємо архівну гру до БД
-        db.session.add(ArchivedGame(
-            game_date=archive_date,
-            secret_word=word,
-            ranking_json=json.dumps(ranked, ensure_ascii=False)
-        ))
+            ranked = generate_rankings(
+                target_word=word,
+                target_date=archive_date,
+                definitions=None,
+                words=wordlist,
+                resources=resources,
+            )
 
-    # Фіксуємо всі зміни в БД
-    db.session.commit()
-    print("Архівні ігри згенеровано та збережено в базі для всіх слів із daily_words.txt.")
+            db.session.add(
+                ArchivedGame(
+                    game_date=archive_date,
+                    secret_word=word,
+                    ranking_json=json.dumps(ranked, ensure_ascii=False),
+                )
+            )
+
+        db.session.commit()
+        print("Архівні ігри згенеровано та збережено в базі для всіх слів із daily_words.txt.")
+
+
+if __name__ == "__main__":
+    main()

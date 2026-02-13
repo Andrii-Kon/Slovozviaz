@@ -1,113 +1,213 @@
-import openai
+import bz2
 import json
 import os
+from dataclasses import dataclass
+from datetime import date, timedelta
+from typing import Dict, Iterable, List, Optional
+
 import numpy as np
-import time
-from tqdm import tqdm
-from dotenv import load_dotenv
-from datetime import timedelta, date
 
-load_dotenv()
-
-# Перевірка наявності ключа API в змінних середовища
-api_key = os.environ.get("OPENAI_API_KEY")
-if not api_key:
-    raise RuntimeError("Не знайдено змінної оточення OPENAI_API_KEY!")
-
-client = openai.OpenAI(api_key=api_key)
-
-# Шлях до кешу ембедингів та параметри пакетної обробки
-CACHE_FILE = "embeddings_cache.json"
-BATCH_SIZE = 100
 BASE_DATE = date(2025, 6, 2)
+PRECOMPUTED_DIR = "precomputed"
+DEFAULT_MODEL_PATH = os.getenv(
+    "LOCAL_EMBEDDINGS_PATH",
+    os.path.join("models", "ubercorpus.cased.lemmatized.glove.300d"),
+)
 
-# Каталог для попередньо обчислених результатів
-if not os.path.exists("precomputed"):
-    os.makedirs("precomputed")
 
-# Завантаження кешу ембедингів або створення порожнього
-if os.path.exists(CACHE_FILE):
-    with open(CACHE_FILE, "r", encoding="utf-8") as f:
-        embedding_cache = json.load(f)
-else:
-    embedding_cache = {}
+@dataclass
+class EmbeddingResources:
+    model_path: str
+    vectors: Dict[str, np.ndarray]
+    words_available: List[str]
+    matrix: np.ndarray
+    matrix_norms: np.ndarray
+    missing_words: List[str]
 
-def get_embeddings_batch(phrases, model="text-embedding-3-large"):
+
+def ensure_precomputed_dir() -> None:
+    os.makedirs(PRECOMPUTED_DIR, exist_ok=True)
+
+
+def _normalize_path(path: str) -> str:
+    return os.path.normpath(path.replace("\\", os.sep))
+
+
+def resolve_model_path(model_path: Optional[str] = None) -> str:
+    raw_path = model_path or DEFAULT_MODEL_PATH
+    normalized = _normalize_path(raw_path)
+
+    if os.path.isfile(normalized):
+        return normalized
+
+    bz2_path = f"{normalized}.bz2"
+    if os.path.isfile(bz2_path):
+        return bz2_path
+
+    raise FileNotFoundError(
+        f"Не знайдено файл моделі: '{normalized}' або '{bz2_path}'."
+    )
+
+
+def _open_model_file(model_path: str):
+    if model_path.endswith(".bz2"):
+        return bz2.open(model_path, mode="rt", encoding="utf-8", errors="ignore")
+    return open(model_path, mode="r", encoding="utf-8", errors="ignore")
+
+
+def _load_required_vectors(model_path: str, required_words: Iterable[str]) -> Dict[str, np.ndarray]:
+    required_set = {w for w in required_words if w}
+    found: Dict[str, np.ndarray] = {}
+    vector_dim: Optional[int] = None
+
+    print(
+        f"[MODEL] Завантаження векторів із '{model_path}' "
+        f"(потрібно слів: {len(required_set)})"
+    )
+
+    with _open_model_file(model_path) as f:
+        for line in f:
+            parts = line.rstrip().split()
+            if len(parts) < 2:
+                continue
+
+            word = parts[0]
+            if word not in required_set or word in found:
+                continue
+
+            try:
+                vec = np.asarray(parts[1:], dtype=np.float32)
+            except ValueError:
+                continue
+
+            if vec.size == 0:
+                continue
+            if vector_dim is None:
+                vector_dim = vec.size
+            elif vec.size != vector_dim:
+                continue
+
+            found[word] = vec
+            if len(found) == len(required_set):
+                break
+
+    return found
+
+
+def load_embedding_resources(
+    words: List[str],
+    daily_words: Optional[List[str]] = None,
+    model_path: Optional[str] = None,
+) -> EmbeddingResources:
+    resolved_model_path = resolve_model_path(model_path)
+    required_words = set(words)
+    if daily_words:
+        required_words.update(daily_words)
+
+    vectors = _load_required_vectors(resolved_model_path, required_words)
+    missing_words = sorted(required_words - set(vectors))
+
+    words_available = [w for w in words if w in vectors]
+    if not words_available:
+        raise RuntimeError("Жодного слова зі словника не знайдено в моделі.")
+
+    matrix = np.vstack([vectors[w] for w in words_available]).astype(np.float32)
+    matrix_norms = np.linalg.norm(matrix, axis=1)
+    matrix_norms = np.where(matrix_norms == 0.0, 1e-12, matrix_norms)
+
+    print(
+        f"[MODEL] Доступно слів: {len(words_available)}/{len(words)}. "
+        f"Відсутніх: {len(missing_words)}"
+    )
+    if missing_words:
+        preview = ", ".join(missing_words[:10])
+        suffix = " ..." if len(missing_words) > 10 else ""
+        print(f"[MODEL] Приклади відсутніх: {preview}{suffix}")
+
+    return EmbeddingResources(
+        model_path=resolved_model_path,
+        vectors=vectors,
+        words_available=words_available,
+        matrix=matrix,
+        matrix_norms=matrix_norms,
+        missing_words=missing_words,
+    )
+
+
+def _rank_words(target_word: str, resources: EmbeddingResources) -> List[dict]:
+    target_vector = resources.vectors.get(target_word)
+    if target_vector is None:
+        raise ValueError(f"Слово '{target_word}' відсутнє у векторній моделі.")
+
+    target_norm = float(np.linalg.norm(target_vector))
+    if target_norm == 0.0:
+        raise ValueError(f"Нульова норма вектора для слова '{target_word}'.")
+
+    similarities = (resources.matrix @ target_vector) / (resources.matrix_norms * target_norm)
+    order = np.argsort(similarities)[::-1]
+
+    ranked_words = [
+        {
+            "word": resources.words_available[idx],
+            "similarity": float(similarities[idx]),
+            "rank": rank,
+        }
+        for rank, idx in enumerate(order, start=1)
+    ]
+    return ranked_words
+
+
+def generate_rankings(
+    target_word,
+    target_date,
+    definitions,
+    words,
+    resources: Optional[EmbeddingResources] = None,
+):
     """
-    Повертає ембединги для списку фраз, використовуючи локальний кеш.
-    Нові фрази відправляються в API пакетами розміром BATCH_SIZE.
-    """
-    uncached = [p for p in phrases if p not in embedding_cache]
+    Будує рейтинг схожості слів зі списку `words` до `target_word`
+    на основі локальної GloVe-моделі.
 
-    if uncached:
-        for i in range(0, len(uncached), BATCH_SIZE):
-            batch = uncached[i:i + BATCH_SIZE]
-            print(f"Надсилаємо batch {i + 1}–{i + len(batch)}")
-            response = client.embeddings.create(input=batch, model=model)
-            for phrase, obj in zip(batch, response.data):
-                embedding_cache[phrase] = obj.embedding
-
-        # Оновлюємо кеш на диску після отримання нових ембедингів
-        with open(CACHE_FILE, "w", encoding="utf-8") as f:
-            json.dump(embedding_cache, f, ensure_ascii=False)
-
-    return [embedding_cache[p] for p in phrases]
-
-def cosine_similarity(a, b):
+    Параметр `definitions` залишено для сумісності зі старими викликами,
+    але він більше не використовується.
     """
-    Косинусна подібність між двома векторами.
-    """
-    a = np.array(a)
-    b = np.array(b)
-    return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+    _ = definitions  # backward compatibility
+    ensure_precomputed_dir()
 
-def generate_rankings(target_word, target_date, definitions, words):
-    """
-    Будує рейтинг схожості всіх слів зі списку `words` до цільового `target_word`.
-    Використовує визначення зі словника `definitions` як текст для ембедингів,
-    якщо вони надані, інакше — саме слово.
-    Результат зберігається у файлі precomputed/{target_date}.json.
-    """
+    if resources is None:
+        resources = load_embedding_resources(words=words, daily_words=[target_word])
+
     print(f"[{target_date}] Обробка слова: {target_word}")
-    target_phrase = definitions.get(target_word, target_word)
-    target_emb = get_embeddings_batch([target_phrase])[0]
+    ranked_words = _rank_words(target_word, resources)
 
-    phrases = [definitions.get(w, w) for w in words]
-    print("📥 Отримуємо ембеддінги для всіх фраз...")
-    embeddings = get_embeddings_batch(phrases)
-
-    scored = []
-    for word, emb in tqdm(zip(words, embeddings), total=len(words), desc="Обчислюємо схожість"):
-        sim = cosine_similarity(emb, target_emb)
-        scored.append((word, sim))
-
-    # Сортування за спаданням схожості та присвоєння рангу
-    scored.sort(key=lambda x: x[1], reverse=True)
-    ranked_words = [{"word": w, "similarity": s, "rank": r} for r, (w, s) in enumerate(scored, start=1)]
-
-    # Збереження результатів для конкретної дати
-    filename = f"precomputed/{target_date}.json"
+    filename = os.path.join(PRECOMPUTED_DIR, f"{target_date}.json")
     with open(filename, "w", encoding="utf-8") as f:
         json.dump(ranked_words, f, ensure_ascii=False, indent=2)
 
     print(f"Збережено у {filename} ({len(ranked_words)} слів)")
     return ranked_words
 
+
 if __name__ == "__main__":
-    # Пакетна генерація для всіх днів від BASE_DATE на основі списку слів дня
+    ensure_precomputed_dir()
+
     with open("data/daily_words.txt", "r", encoding="utf-8") as f:
         daily_words = [line.strip() for line in f if line.strip()]
 
     with open("data/wordlist.txt", "r", encoding="utf-8") as f:
         words = [line.strip() for line in f if line.strip()]
 
-    with open("definitions.json", "r", encoding="utf-8") as f:
-        definitions = json.load(f)
+    resources = load_embedding_resources(words=words, daily_words=daily_words)
 
     for i, target_word in enumerate(daily_words):
         day = BASE_DATE + timedelta(days=i)
-        output_file = f"precomputed/{day}.json"
+        output_file = os.path.join(PRECOMPUTED_DIR, f"{day}.json")
+
         if os.path.exists(output_file):
             print(f"Пропущено {target_word} (вже існує)")
             continue
-        generate_rankings(target_word, day, definitions, words)
+
+        try:
+            generate_rankings(target_word, day, definitions=None, words=words, resources=resources)
+        except Exception as e:
+            print(f"[ERR ] Не вдалося згенерувати рейтинг для '{target_word}' ({day}): {e}")

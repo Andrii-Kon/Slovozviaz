@@ -1,6 +1,11 @@
-# .gitignore
-.envembeddings_cache.json
-.envembeddings_cache.json
+# Local secrets/cache
+.env
+embeddings_cache.json
+
+# Generated data
 precomputed/
 instance/
 *.db
+
+# Local embeddings model
+models/ubercorpus.cased.lemmatized.glove.300d
