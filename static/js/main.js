@@ -6,6 +6,8 @@ const monthFmt = new Intl.DateTimeFormat('uk-UA', { month: 'short' });
 
 let isGoingUp = false;
 let allowedWords = new Set();
+let allowedWordsLoaded = false;
+let allowedWordsLoadingPromise = null;
 // Замість одного масиву guesses
 const gameState = {
     guesses: [],      // Реальні спроби гравця
@@ -22,6 +24,11 @@ let currentGameDate = null;
 let didWin = false;
 let didGiveUp = false;
 let giveUpWord = null;
+let archiveDatesCache = null;
+let archiveDatesInFlight = null;
+
+const ARCHIVE_DATES_CACHE_KEY = "archiveDatesCache_v1";
+const ARCHIVE_DATES_CACHE_TTL_MS = 5 * 60 * 1000;
 
 // Функція для оновлення відображення лічильника підказок
 function updateHintCountDisplay() {
@@ -90,15 +97,110 @@ function updateGameDateLabel() {
 }
 
 async function fetchAllowedWords() {
+    if (allowedWordsLoaded) return true;
+    if (allowedWordsLoadingPromise) return allowedWordsLoadingPromise;
+
+    allowedWordsLoadingPromise = (async () => {
+        try {
+            const response = await fetch("/api/wordlist");
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            const data = await response.json();
+            allowedWords = new Set(data.map(word => word.toLowerCase()));
+            allowedWordsLoaded = true;
+            console.log(`Loaded ${allowedWords.size} allowed words.`);
+            return true;
+        } catch (err) {
+            console.error("[Error] Failed to fetch allowed words:", err);
+            return false;
+        } finally {
+            allowedWordsLoadingPromise = null;
+        }
+    })();
+
+    return allowedWordsLoadingPromise;
+}
+
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function readArchiveDatesFromSessionCache(allowExpired = false) {
     try {
-        const response = await fetch("/api/wordlist");
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        const data = await response.json();
-        allowedWords = new Set(data.map(word => word.toLowerCase()));
-        console.log(`Loaded ${allowedWords.size} allowed words.`);
+        const raw = sessionStorage.getItem(ARCHIVE_DATES_CACHE_KEY);
+        if (!raw) return null;
+
+        const parsed = JSON.parse(raw);
+        if (!parsed || !Array.isArray(parsed.dates) || typeof parsed.savedAt !== "number") {
+            return null;
+        }
+
+        const isFresh = (Date.now() - parsed.savedAt) <= ARCHIVE_DATES_CACHE_TTL_MS;
+        if (!allowExpired && !isFresh) return null;
+        return parsed.dates;
     } catch (err) {
-        console.error("[Error] Failed to fetch allowed words:", err);
+        console.warn("Cannot read archive dates cache:", err);
+        return null;
     }
+}
+
+function writeArchiveDatesToSessionCache(dates) {
+    try {
+        sessionStorage.setItem(ARCHIVE_DATES_CACHE_KEY, JSON.stringify({
+            dates: dates,
+            savedAt: Date.now()
+        }));
+    } catch (err) {
+        console.warn("Cannot write archive dates cache:", err);
+    }
+}
+
+async function fetchArchiveDates(forceRefresh = false) {
+    if (!forceRefresh && Array.isArray(archiveDatesCache)) return archiveDatesCache;
+
+    if (!forceRefresh) {
+        const cached = readArchiveDatesFromSessionCache(false);
+        if (cached) {
+            archiveDatesCache = cached;
+            return cached;
+        }
+        if (archiveDatesInFlight) return archiveDatesInFlight;
+    }
+
+    archiveDatesInFlight = (async () => {
+        let lastError = null;
+        for (let attempt = 0; attempt < 2; attempt++) {
+            try {
+                const response = await fetch("/archive", { cache: "no-store" });
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const dates = await response.json();
+                if (!Array.isArray(dates)) throw new Error("Archive list format incorrect");
+
+                const today = new Date().toISOString().split("T")[0];
+                dates.sort((a, b) => b.localeCompare(a));
+                const filtered = dates.filter(d => d <= today);
+
+                archiveDatesCache = filtered;
+                writeArchiveDatesToSessionCache(filtered);
+                return filtered;
+            } catch (err) {
+                lastError = err;
+                if (attempt === 0) await sleep(250);
+            }
+        }
+
+        const stale = readArchiveDatesFromSessionCache(true);
+        if (stale) {
+            console.warn("Using stale archive dates cache due fetch error.");
+            archiveDatesCache = stale;
+            return stale;
+        }
+
+        throw lastError || new Error("Failed to fetch archive dates");
+    })().finally(() => {
+        archiveDatesInFlight = null;
+    });
+
+    return archiveDatesInFlight;
 }
 
 function saveGameState() {
@@ -339,34 +441,28 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     if (randomGameBtn) randomGameBtn.textContent = "🔀 Випадкова";
 
-    await fetchAllowedWords();
-
-    try {
-        const response = await fetch("/api/daily-index");
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        const dailyIndexData = await response.json();
-        dayNumber = dailyIndexData.game_number;
-        if (!currentGameDate) {
-            currentGameDate = new Date().toISOString().split("T")[0];
-            gameState.guesses = [];
-            gameState.hints = [];
-            gameState.guessCount = 0;
-            gameState.hintCount = 0;
-            bestRank = Infinity;
-            isGoingUp = false;
-            lastWord = null;
-            didWin = false;
-            didGiveUp = false;
-            giveUpWord = null;
-        }
-    } catch (err) {
-        console.error("[Error] Failed to fetch daily index:", err);
-        if (document.getElementById("gameDateLabel")) document.getElementById("gameDateLabel").textContent = "Помилка завантаження гри";
-        return;
+    const todayStr = new Date().toISOString().split("T")[0];
+    if (!currentGameDate) {
+        currentGameDate = todayStr;
+        gameState.guesses = [];
+        gameState.hints = [];
+        gameState.guessCount = 0;
+        gameState.hintCount = 0;
+        bestRank = Infinity;
+        isGoingUp = false;
+        lastWord = null;
+        didWin = false;
+        didGiveUp = false;
+        giveUpWord = null;
     }
+    dayNumber = computeGameNumber(todayStr);
+    updateGameDateLabel(); // Показуємо номер гри одразу, без очікування API
+
+    // Великий словник вантажимо у фоні, щоб не блокувати перший рендер.
+    fetchAllowedWords();
 
     try {
-        const dateParam = currentGameDate === new Date().toISOString().split("T")[0] ? null : currentGameDate;
+        const dateParam = currentGameDate === todayStr ? null : currentGameDate;
         rankedWords = await fetchRankedWords(dateParam);
         if (!Array.isArray(rankedWords)) throw new Error("Ranked words data is not an array");
         MAX_RANK = rankedWords.length > 0 ? Math.max(...rankedWords.map(w => w.rank)) : 0;
@@ -379,7 +475,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         return;
     }
 
-    updateGameDateLabel();
     loadGameState(); // Це оновить видимість howToPlayBlock та privacyPolicyBlock
 
     async function handleSubmit() {
@@ -404,7 +499,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
 
-        if (!allowedWords.has(word)) {
+        if (allowedWordsLoaded && !allowedWords.has(word)) {
             if (lastGuessDisplay && lastGuessWrapper) {
                 const errorMsgElement = document.createElement("div");
                 errorMsgElement.textContent = "Вибачте, я не знаю цього слова";
@@ -416,6 +511,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             guessInput.focus();
             return;
         }
+        if (!allowedWordsLoaded) fetchAllowedWords();
 
         const match = rankedWords.find(item => item.word === word);
         let data = match ? { rank: match.rank } : { rank: Infinity, error: true, errorMessage: "Цього слова немає у рейтингу цього дня." };
@@ -456,13 +552,31 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (document.getElementById("gameDateLabel")) document.getElementById("gameDateLabel").textContent = 'Завантаження...';
 
         try {
-            const response = await fetch(`/archive/${game_date}`);
-            if (!response.ok) {
-                alert(response.status === 404 ? `Архів для дати ${game_date} не знайдено.` : `Помилка завантаження архіву: ${response.statusText}`);
+            let archiveData = null;
+            let responseError = null;
+
+            for (let attempt = 0; attempt < 2; attempt++) {
+                const response = await fetch(`/archive/${game_date}`, { cache: "no-store" });
+                if (response.ok) {
+                    archiveData = await response.json();
+                    break;
+                }
+
+                responseError = response;
+                if (response.status >= 500 && attempt === 0) {
+                    await sleep(300);
+                    continue;
+                }
+                break;
+            }
+
+            if (!archiveData) {
+                const status = responseError ? responseError.status : 0;
+                alert(status === 404 ? `Архів для дати ${game_date} не знайдено.` : "Помилка завантаження архіву.");
                 if (guessesContainer) guessesContainer.innerHTML = '<p style="text-align: center;">Помилка завантаження.</p>';
                 return;
             }
-            const archiveData = await response.json();
+
             if (!archiveData || !Array.isArray(archiveData.ranking)) throw new Error("Invalid archive data format");
 
             rankedWords = archiveData.ranking;
@@ -579,14 +693,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (dropdownMenu) dropdownMenu.classList.add("hidden");
             if (previousGamesList) previousGamesList.innerHTML = "<p>Завантаження архіву...</p>";
             try {
-                const response = await fetch("/archive");
-                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                const dates = await response.json();
-                if (!Array.isArray(dates)) throw new Error("Archive list format incorrect");
-
-                const today = new Date().toISOString().split("T")[0];
-                dates.sort((a, b) => b.localeCompare(a));
-                const filtered = dates.filter(d => d <= today);
+                const filtered = await fetchArchiveDates();
 
                 if (previousGamesList) {
                     if (filtered.length === 0) {
@@ -646,11 +753,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         randomGameBtn.addEventListener("click", async () => {
             if (dropdownMenu) dropdownMenu.classList.add("hidden");
             try {
-                const response = await fetch("/archive");
-                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                const dates = await response.json();
-                const today = new Date().toISOString().split("T")[0];
-                const validDates = dates.filter(date => date <= today);
+                const validDates = await fetchArchiveDates();
                 if (validDates.length === 0) {
                     alert("Не знайдено доступних архівних ігор.");
                     return;

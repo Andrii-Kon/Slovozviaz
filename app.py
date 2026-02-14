@@ -11,6 +11,7 @@ import os
 import json
 import glob
 import re
+import time
 from typing import List, Dict, Any, Optional
 
 # ── ENV / конфіг ───────────────────────────────────────────────────────────────
@@ -30,6 +31,11 @@ if not db_uri:
 
 app.config["SQLALCHEMY_DATABASE_URI"] = db_uri
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+if db_uri.startswith("mysql"):
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+        "pool_pre_ping": True,
+        "pool_recycle": int(os.getenv("DB_POOL_RECYCLE_SECONDS", "280"))
+    }
 
 db = SQLAlchemy(app)
 
@@ -60,6 +66,7 @@ def load_wordlist():
 
 DAILY_WORDS = load_daily_words()
 VALID_WORDS = load_wordlist()
+VALID_WORDS_SORTED = sorted(VALID_WORDS)
 
 BASE_DATE = date(2025, 6, 2)
 
@@ -210,6 +217,27 @@ with app.app_context():
 
 # ── Простий in-memory кеш для ранкінгу ─────────────────────────────────────────
 RANKING_CACHE: dict[date, list] = {}
+ARCHIVE_DATES_CACHE: Optional[List[str]] = None
+ARCHIVE_DATES_CACHE_EXPIRES_AT = 0.0
+ARCHIVE_DATES_CACHE_TTL_SECONDS = max(30, int(os.getenv("ARCHIVE_DATES_CACHE_TTL_SECONDS", "300")))
+
+def _reset_db_connection():
+    try:
+        db.session.rollback()
+    except Exception:
+        pass
+    db.session.remove()
+    try:
+        db.engine.dispose()
+    except Exception:
+        pass
+
+def _run_db_query_with_retry(loader):
+    try:
+        return loader()
+    except (OperationalError, InterfaceError):
+        _reset_db_connection()
+        return loader()
 
 def _load_ranking_from_db(target_date: date) -> list | None:
     row = ArchivedGame.query.filter_by(game_date=target_date).first()
@@ -219,6 +247,26 @@ def _load_ranking_from_db(target_date: date) -> list | None:
     if not isinstance(data, list):
         raise ValueError("Ranking data is not a list")
     return data
+
+def _load_archive_dates_from_db() -> List[str]:
+    games = (
+        ArchivedGame.query
+        .options(load_only(ArchivedGame.game_date))
+        .order_by(ArchivedGame.game_date.desc())
+        .all()
+    )
+    return [g.game_date.isoformat() for g in games]
+
+def _get_archive_dates_cached() -> List[str]:
+    global ARCHIVE_DATES_CACHE, ARCHIVE_DATES_CACHE_EXPIRES_AT
+    now = time.time()
+    if ARCHIVE_DATES_CACHE is not None and now < ARCHIVE_DATES_CACHE_EXPIRES_AT:
+        return ARCHIVE_DATES_CACHE
+
+    dates = _run_db_query_with_retry(_load_archive_dates_from_db)
+    ARCHIVE_DATES_CACHE = dates
+    ARCHIVE_DATES_CACHE_EXPIRES_AT = now + ARCHIVE_DATES_CACHE_TTL_SECONDS
+    return dates
 
 # ── Маршрути ───────────────────────────────────────────────────────────────────
 @app.route("/")
@@ -241,48 +289,37 @@ def get_ranked():
     # 1) Кеш у пам'яті
     cached = RANKING_CACHE.get(target)
     if cached is not None:
-        return jsonify(cached)
+        response = jsonify(cached)
+        response.headers["Cache-Control"] = "public, max-age=300"
+        return response
 
     # 2) Перша спроба читання
     try:
-        data = _load_ranking_from_db(target)
+        data = _run_db_query_with_retry(lambda: _load_ranking_from_db(target))
         if data is None:
             return jsonify({"error": f"Рейтинг для {target.isoformat()} не знайдено."}), 404
         RANKING_CACHE[target] = data
-        return jsonify(data)
-
-    # 3) Якщо це «холодний» конект MySQL — реконект і повторити
+        response = jsonify(data)
+        response.headers["Cache-Control"] = "public, max-age=300"
+        return response
     except (OperationalError, InterfaceError):
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
-        db.session.remove()
-        try:
-            db.engine.dispose()
-        except Exception:
-            pass
-
-        try:
-            data = _load_ranking_from_db(target)
-            if data is None:
-                return jsonify({"error": f"Рейтинг для {target.isoformat()} не знайдено."}), 404
-            RANKING_CACHE[target] = data
-            return jsonify(data)
-        except Exception:
-            return jsonify({"error": "Тимчасова помилка підключення до бази. Спробуйте ще раз."}), 503
+        return jsonify({"error": "Тимчасова помилка підключення до бази. Спробуйте ще раз."}), 503
 
     except Exception:
         return jsonify({"error": "Помилка даних на сервері."}), 500
 
 @app.route("/api/wordlist")
 def wordlist_api():
-    return jsonify(sorted(list(VALID_WORDS)))
+    response = jsonify(VALID_WORDS_SORTED)
+    response.headers["Cache-Control"] = "public, max-age=86400"
+    return response
 
 @app.route("/api/daily-index")
 def daily_index():
     delta = (date.today() - BASE_DATE).days
-    return jsonify({"game_number": delta + 1})
+    response = jsonify({"game_number": delta + 1})
+    response.headers["Cache-Control"] = "public, max-age=60"
+    return response
 
 @app.route("/archive")
 def archive_list():
@@ -290,13 +327,19 @@ def archive_list():
     Повертає ТІЛЬКИ список дат.
     ВАЖЛИВО: не вантажимо LONGTEXT ranking_json із MySQL.
     """
-    games = (
-        ArchivedGame.query
-        .options(load_only(ArchivedGame.game_date))
-        .order_by(ArchivedGame.game_date.desc())
-        .all()
-    )
-    return jsonify([g.game_date.isoformat() for g in games])
+    try:
+        dates = _get_archive_dates_cached()
+        response = jsonify(dates)
+        response.headers["Cache-Control"] = "public, max-age=120"
+        return response
+    except (OperationalError, InterfaceError):
+        if ARCHIVE_DATES_CACHE is not None:
+            response = jsonify(ARCHIVE_DATES_CACHE)
+            response.headers["Cache-Control"] = "public, max-age=30"
+            return response
+        return jsonify({"error": "Тимчасова помилка підключення до бази. Спробуйте ще раз."}), 503
+    except Exception:
+        return jsonify({"error": "Помилка завантаження архіву."}), 500
 
 @app.route("/archive/<string:game_date_str>")
 def archive_by_date(game_date_str):
@@ -305,19 +348,37 @@ def archive_by_date(game_date_str):
     except ValueError:
         return jsonify({"error": "Невірний формат дати. Використовуйте YYYY-MM-DD."}), 400
 
-    row = ArchivedGame.query.filter_by(game_date=d).first()
-    if not row:
-        return jsonify({"error": f"Гру для {game_date_str} не знайдено."}), 404
+    cached = RANKING_CACHE.get(d)
+    if cached is not None:
+        response = jsonify({
+            "game_date": d.isoformat(),
+            "ranking": cached
+        })
+        response.headers["Cache-Control"] = "public, max-age=300"
+        return response
+
+    try:
+        row = _run_db_query_with_retry(
+            lambda: ArchivedGame.query
+            .options(load_only(ArchivedGame.game_date, ArchivedGame.ranking_json))
+            .filter_by(game_date=d)
+            .first()
+        )
+        if not row:
+            return jsonify({"error": f"Гру для {game_date_str} не знайдено."}), 404
+    except (OperationalError, InterfaceError):
+        return jsonify({"error": "Тимчасова помилка підключення до бази. Спробуйте ще раз."}), 503
 
     try:
         ranking = json.loads(row.ranking_json)
         if not isinstance(ranking, list):
             raise ValueError("Ranking data is not a list")
-        return jsonify({
+        response = jsonify({
             "game_date": row.game_date.isoformat(),
-            "ranking": ranking,
-            "created_at": row.created_at.isoformat() if row.created_at else None
+            "ranking": ranking
         })
+        response.headers["Cache-Control"] = "public, max-age=300"
+        return response
     except Exception as e:
         print(f"Помилка даних для гри {game_date_str}: {e}")
         return jsonify({"error": "Помилка даних для цієї гри."}), 500

@@ -1,6 +1,7 @@
 // static/js/api.js
-export async function fetchRankedWords() {
-    const response = await fetch("/ranked");
+export async function fetchRankedWords(date = null) {
+    const url = date ? `/ranked?date=${encodeURIComponent(date)}` : "/ranked";
+    const response = await fetch(url);
     const data = await response.json();
     return data;
 }
