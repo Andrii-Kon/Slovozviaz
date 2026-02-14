@@ -9,3 +9,7 @@ instance/
 
 # Local embeddings model
 models/ubercorpus.cased.lemmatized.glove.300d
+
+# generated archives
+precomputed.tar.gz*
+batches/*.tar.gz
