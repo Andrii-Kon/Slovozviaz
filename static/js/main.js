@@ -458,8 +458,11 @@ function endGameAsGiveUp(secretWord) {
 document.addEventListener("DOMContentLoaded", async () => {
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-            navigator.serviceWorker.register('/static/sw.js')
-                .then(registration => console.log('Service Worker зареєстровано успішно:', registration))
+            navigator.serviceWorker.register('/static/sw.js', { updateViaCache: 'none' })
+                .then(registration => {
+                    registration.update().catch(() => {});
+                    console.log('Service Worker зареєстровано успішно:', registration);
+                })
                 .catch(error => console.log('Помилка реєстрації Service Worker:', error));
         });
     }

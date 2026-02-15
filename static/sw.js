@@ -1,8 +1,9 @@
-const CACHE_NAME = 'slovozviaz-cache-v1';
+const CACHE_NAME = 'slovozviaz-cache-v2';
 const urlsToCache = [
     '/',
     '/static/css/style.css',
     '/static/js/main.js',
+    '/static/js/create_game.js',
     '/static/js/ui.js',
     '/static/js/api.js',
     '/static/manifest.json',
@@ -26,12 +27,18 @@ self.addEventListener('fetch', event => {
 
     if (isCachable) {
         event.respondWith(
-            caches.match(event.request)
-                .then(cachedResponse => {
-                    if (cachedResponse) {
-                        return cachedResponse;
-                    }
-                    return fetch(event.request);
+            fetch(event.request)
+                .then(networkResponse => {
+                    const clone = networkResponse.clone();
+                    caches.open(CACHE_NAME)
+                        .then(cache => cache.put(event.request, clone))
+                        .catch(err => console.warn('[SW] Cache put error:', err));
+                    return networkResponse;
+                })
+                .catch(() => {
+                    return caches.match(event.request).then(cachedResponse => {
+                        return cachedResponse || Response.error();
+                    });
                 })
         );
     } else {
