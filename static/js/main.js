@@ -1,5 +1,5 @@
-import { fetchRankedWords, fetchRankedWordsByWord, fetchRankedWordsByGameId } from "./api.js";
-import { renderGuesses, createGuessItem } from "./ui.js";
+import { fetchRankedWords, fetchRankedWordsByWord, fetchRankedWordsByGameId } from "./api.js?v=20260215-3";
+import { renderGuesses, createGuessItem } from "./ui.js?v=20260215-3";
 
 const weekdayFmt = new Intl.DateTimeFormat('uk-UA', { weekday: 'short' });
 const monthFmt = new Intl.DateTimeFormat('uk-UA', { month: 'short' });
