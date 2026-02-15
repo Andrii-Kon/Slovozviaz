@@ -265,6 +265,7 @@ h1 {
 .dropdown-menu button#hintButton,
 .dropdown-menu button#previousGamesBtn,
 .dropdown-menu button#giveUpBtn,
+.dropdown-menu button#createGameBtn,
 .dropdown-menu button#authorshipBtn {
     justify-content: flex-start;
     box-shadow: none;
@@ -504,6 +505,176 @@ h1 {
     font-size: 1.2em;
 }
 
+/* ====================
+   Сторінка "Створити гру"
+   ==================== */
+.create-game-shell {
+    width: 100%;
+    max-width: 760px;
+    margin: 28px auto;
+    background-color: #111;
+    border: 2px solid #e6e6e6;
+    border-radius: 12px;
+    padding: 28px;
+}
+
+.create-game-back {
+    color: #5ea5ff;
+    text-decoration: none;
+    font-weight: 600;
+    display: inline-block;
+    margin-bottom: 18px;
+}
+
+.create-game-back:hover {
+    text-decoration: underline;
+}
+
+.create-game-title {
+    margin: 0 0 10px 0;
+    text-align: left;
+}
+
+.create-game-subtitle {
+    margin: 0 0 20px 0;
+    color: #e1e1e1;
+    font-size: 1.05em;
+}
+
+.create-game-form-page {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.create-game-label {
+    font-weight: 700;
+    color: #fff;
+}
+
+.create-game-input {
+    min-height: 46px;
+    border: 2px solid #d7d7d7;
+    border-radius: 7px;
+    background-color: #5f5f5f;
+    color: #fff;
+    font-size: 1.05em;
+    padding: 10px 12px;
+}
+
+.create-game-input::placeholder {
+    color: #d0d0d0;
+}
+
+.create-game-submit {
+    width: fit-content;
+    min-width: 170px;
+}
+
+.create-game-error {
+    color: #ffb4b4;
+    font-style: italic;
+}
+
+.create-game-result {
+    margin-top: 26px;
+    padding-top: 20px;
+    border-top: 1px solid #2a2a2a;
+    text-align: left;
+}
+
+.create-game-result-title {
+    margin: 0 0 8px 0;
+    font-size: 1.5em;
+}
+
+.create-game-result-subtitle {
+    margin: 0 0 12px 0;
+    color: #d9d9d9;
+}
+
+.create-game-link-row {
+    display: flex;
+    gap: 10px;
+    align-items: stretch;
+}
+
+.create-game-link-input {
+    flex: 1;
+    min-height: 44px;
+    border-radius: 6px;
+    border: 1px solid #4d4d4d;
+    background-color: #222;
+    color: #f5f5f5;
+    padding: 10px 12px;
+    font-size: 0.95em;
+}
+
+.create-game-copy-btn {
+    white-space: nowrap;
+}
+
+.create-game-copy-status {
+    margin-top: 8px;
+    color: #a7f3c0;
+}
+
+.create-game-copy-status-error {
+    color: #ffb4b4;
+}
+
+.create-game-open-link {
+    display: inline-block;
+    margin-top: 8px;
+    color: #5ea5ff;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.create-game-open-link:hover {
+    text-decoration: underline;
+}
+
+.create-game-table-title {
+    margin: 18px 0 10px 0;
+}
+
+.create-game-table-wrap {
+    max-height: 520px;
+    overflow: auto;
+    border: 1px solid #2f2f2f;
+    border-radius: 8px;
+}
+
+.create-game-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.create-game-table thead th {
+    position: sticky;
+    top: 0;
+    background-color: #1b1b1b;
+    color: #dcdcdc;
+    text-align: left;
+    font-weight: 700;
+    padding: 10px 12px;
+    border-bottom: 1px solid #303030;
+}
+
+.create-game-table tbody td {
+    padding: 8px 12px;
+    border-bottom: 1px solid #242424;
+}
+
+.create-game-table tbody tr:nth-child(even) {
+    background-color: #141414;
+}
+
+.create-game-table tbody tr:nth-child(odd) {
+    background-color: #101010;
+}
+
 /* Уніфікуємо зовнішній вигляд елементів у модалці "Найближчі слова" */
 /* (спеціальних перевизначень не потрібно) */
 
@@ -638,6 +809,19 @@ h1 {
 
     .modal-content { padding: 15px; }
     .modal-content h2 { font-size: 1.1em; }
+    .create-game-shell {
+        margin: 10px;
+        padding: 16px;
+    }
+    .create-game-link-row {
+        flex-direction: column;
+    }
+    .create-game-submit {
+        width: 100%;
+    }
+    .create-game-copy-btn {
+        width: 100%;
+    }
     #authorshipContent {
         font-size: 0.95em;
         line-height: 1.6;

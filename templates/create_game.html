@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Створити гру — Словозв'яз</title>
+    <meta name="theme-color" content="#1f1f1f">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/favicon.png') }}">
+</head>
+<body>
+<div class="create-game-shell">
+    <a href="{{ url_for('index') }}" class="create-game-back">← Назад</a>
+
+    <h1 class="create-game-title">Створити гру</h1>
+    <p class="create-game-subtitle">
+        Введіть секретне слово і створіть персональну гру, якою можна поділитися з друзями.
+    </p>
+
+    <form id="createGameForm" class="create-game-form-page">
+        <label for="createGameWordInput" class="create-game-label">Секретне слово</label>
+        <input
+            type="text"
+            id="createGameWordInput"
+            class="create-game-input"
+            placeholder="Введіть секретне слово..."
+            autocomplete="off"
+            required
+        >
+        <button type="submit" id="createGameSubmitBtn" class="btn-wide create-game-submit">Створити гру</button>
+        <p id="createGameError" class="create-game-error hidden"></p>
+    </form>
+
+    <section id="createGameResult" class="create-game-result hidden">
+        <h2 class="create-game-result-title">Гру створено!</h2>
+        <p class="create-game-result-subtitle">Скопіюйте лінк і надішліть друзям:</p>
+
+        <div class="create-game-link-row">
+            <input type="text" id="createGameLinkInput" class="create-game-link-input" readonly>
+            <button type="button" id="copyGameLinkBtn" class="btn-wide create-game-copy-btn">Скопіювати лінк</button>
+        </div>
+        <p id="copyGameLinkStatus" class="create-game-copy-status hidden"></p>
+        <a id="openCreatedGameLink" class="create-game-open-link" href="#" target="_blank" rel="noopener noreferrer">Відкрити створену гру</a>
+
+        <h3 class="create-game-table-title">Перші 500 слів рейтингу</h3>
+        <div class="create-game-table-wrap">
+            <table class="create-game-table">
+                <thead>
+                    <tr>
+                        <th>Прокс.</th>
+                        <th>Слово</th>
+                        <th>Similarity</th>
+                    </tr>
+                </thead>
+                <tbody id="createGameTopWordsBody"></tbody>
+            </table>
+        </div>
+    </section>
+</div>
+
+<script type="module" src="{{ url_for('static', filename='js/create_game.js') }}"></script>
+</body>
+</html>

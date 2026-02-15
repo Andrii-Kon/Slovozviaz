@@ -1,4 +1,4 @@
-import { fetchRankedWords } from "./api.js";
+import { fetchRankedWords, fetchRankedWordsByWord, fetchRankedWordsByGameId } from "./api.js";
 import { renderGuesses, createGuessItem } from "./ui.js";
 
 const weekdayFmt = new Intl.DateTimeFormat('uk-UA', { weekday: 'short' });
@@ -21,6 +21,7 @@ let lastWord = null;
 let MAX_RANK = 0;
 let dayNumber = null;
 let currentGameDate = null;
+let currentCustomGameId = null;
 let didWin = false;
 let didGiveUp = false;
 let giveUpWord = null;
@@ -79,6 +80,9 @@ function getNextHintRank(currentBestRank, currentGuesses, currentRankedWords, cu
 }
 
 function computeGameNumber(dateStr) {
+    if (typeof dateStr !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+        return null;
+    }
     const baseDate = new Date(2025, 5, 2); // Травень - 4-й місяць (0-індексація)
     const [year, month, day] = dateStr.split("-").map(Number);
     const currentDate = new Date(year, month - 1, day);
@@ -89,11 +93,56 @@ function computeGameNumber(dateStr) {
     return diffDays + 1;
 }
 
+function normalizeWord(value) {
+    return (value || "").trim().toLowerCase();
+}
+
+function normalizeGameId(value) {
+    return (value || "").trim().toLowerCase();
+}
+
+function getCurrentGameStateKey() {
+    if (currentCustomGameId) return `gameState_custom_${currentCustomGameId}`;
+    if (!currentGameDate) return null;
+    return `gameState_${currentGameDate}`;
+}
+
+function resetRuntimeGameState() {
+    gameState.guesses = [];
+    gameState.hints = [];
+    gameState.guessCount = 0;
+    gameState.hintCount = 0;
+    bestRank = Infinity;
+    isGoingUp = false;
+    lastWord = null;
+    didWin = false;
+    didGiveUp = false;
+    giveUpWord = null;
+}
+
+function updateUrlForCurrentGame() {
+    const url = new URL(window.location.href);
+    if (currentCustomGameId) {
+        url.searchParams.set("game", currentCustomGameId);
+        url.searchParams.delete("custom");
+    } else {
+        url.searchParams.delete("game");
+        url.searchParams.delete("custom");
+    }
+    history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+}
+
 function updateGameDateLabel() {
     const label = document.getElementById("gameDateLabel");
     if (!label) return;
+
+    if (currentCustomGameId) {
+        label.textContent = "Кастом гра";
+        return;
+    }
+
     const gameNum = currentGameDate ? computeGameNumber(currentGameDate) : dayNumber;
-    label.textContent = `Гра: #${gameNum}`;
+    label.textContent = gameNum ? `Гра: #${gameNum}` : "Гра: #?";
 }
 
 async function fetchAllowedWords() {
@@ -204,7 +253,9 @@ async function fetchArchiveDates(forceRefresh = false) {
 }
 
 function saveGameState() {
-    if (!currentGameDate) return;
+    const storageKey = getCurrentGameStateKey();
+    if (!storageKey) return;
+
     const state = {
         guesses: gameState.guesses,
         hints: gameState.hints,
@@ -218,7 +269,7 @@ function saveGameState() {
         giveUpWord
     };
     try {
-        localStorage.setItem(`gameState_${currentGameDate}`, JSON.stringify(state));
+        localStorage.setItem(storageKey, JSON.stringify(state));
     } catch (e) {
         console.error("Failed to save game state to localStorage:", e);
     }
@@ -249,9 +300,10 @@ function showInitialInfoBlocks() {
 }
 
 function loadGameState() {
-    if (!currentGameDate) return;
+    const storageKey = getCurrentGameStateKey();
+    if (!storageKey) return;
 
-    const savedState = localStorage.getItem(`gameState_${currentGameDate}`);
+    const savedState = localStorage.getItem(storageKey);
     const guessCountElem = document.getElementById("guessCount");
     const guessesContainer = document.getElementById("guessesContainer");
     const lastGuessWrapper = document.getElementById("lastGuessWrapper");
@@ -300,7 +352,7 @@ function loadGameState() {
         }
     } catch (e) {
         console.error("Failed to parse or apply saved game state:", e);
-        localStorage.removeItem(`gameState_${currentGameDate}`);
+        localStorage.removeItem(storageKey);
         resetUIForActiveGame();
         if (howToPlayBlock) howToPlayBlock.style.display = "";
         if (privacyPolicyBlock) privacyPolicyBlock.style.display = "";
@@ -323,10 +375,12 @@ function showWinMessageUI() {
         const guessesUsedElem = document.getElementById("guessesUsed");
         const gameNumberElem = document.getElementById("gameNumber");
         if (congratsMessageElem && guessesUsedElem && gameNumberElem) {
-            const gameNum = currentGameDate ? computeGameNumber(currentGameDate) : dayNumber;
+            const gameNum = currentGameDate ? computeGameNumber(currentGameDate) : null;
             guessesUsedElem.textContent = gameState.guessCount;
-            gameNumberElem.textContent = gameNum;
-            congratsMessageElem.textContent = `Ви знайшли секретне слово #${gameNum} за ${gameState.guessCount} спроб(и)!`;
+            gameNumberElem.textContent = gameNum ?? "—";
+            congratsMessageElem.textContent = gameNum
+                ? `Ви знайшли секретне слово #${gameNum} за ${gameState.guessCount} спроб(и)!`
+                : `Ви знайшли кастомне слово за ${gameState.guessCount} спроб(и)!`;
         }
         congratsBlock.classList.remove("hidden");
     }
@@ -351,8 +405,10 @@ function showLoseMessageUI(secretWord) {
 
     const congratsMessageElem = document.getElementById("congratsMessage");
     if (congratsMessageElem) {
-        const gameNum = currentGameDate ? computeGameNumber(currentGameDate) : dayNumber;
-        congratsMessageElem.textContent = `Ви здалися на слові #${gameNum} за ${gameState.guessCount} спроб(и).\nСлово було: "${secretWord}".`;
+        const gameNum = currentGameDate ? computeGameNumber(currentGameDate) : null;
+        congratsMessageElem.textContent = gameNum
+            ? `Ви здалися на слові #${gameNum} за ${gameState.guessCount} спроб(и).\nСлово було: "${secretWord}".`
+            : `Ви здалися в кастомній грі за ${gameState.guessCount} спроб(и).\nСлово було: "${secretWord}".`;
     }
     congratsBlock.classList.remove("hidden");
 
@@ -433,27 +489,126 @@ document.addEventListener("DOMContentLoaded", async () => {
     const menuButton = document.getElementById("menuButton");
     const dropdownMenu = document.getElementById("dropdownMenu");
     const shareButton = document.getElementById("shareButton");
+    const createGameBtn = document.getElementById("createGameBtn");
     // const readMoreBtn = document.getElementById("readMoreBtn"); // Закоментовано, якщо не використовується
 
     const authorshipBtn = document.getElementById('authorshipBtn');
     const authorshipModal = document.getElementById('authorshipModal');
     const closeAuthorshipModalBtn = document.getElementById('closeAuthorshipModal');
+    const urlParams = new URLSearchParams(window.location.search);
+    const customGameIdFromUrl = normalizeGameId(urlParams.get("game"));
+    const legacyCustomWordFromUrl = normalizeWord(urlParams.get("custom"));
 
     if (randomGameBtn) randomGameBtn.textContent = "🔀 Випадкова";
 
+    function applyLoadedRanking(newRanking) {
+        rankedWords = newRanking;
+        MAX_RANK = rankedWords.length > 0 ? Math.max(...rankedWords.map(w => w.rank)) : 0;
+    }
+
+    async function startCustomGameByWord(rawWord) {
+        const word = normalizeWord(rawWord);
+        if (!word) return false;
+
+        saveGameState();
+        if (guessesContainer) guessesContainer.innerHTML = '<p style="text-align: center;">Генеруємо live-гру...</p>';
+        if (lastGuessWrapper) lastGuessWrapper.classList.add("hidden");
+        if (guessCountElem) guessCountElem.textContent = "...";
+        const labelElem = document.getElementById("gameDateLabel");
+        if (labelElem) labelElem.textContent = "Генеруємо...";
+
+        try {
+            const payload = await fetchRankedWordsByWord(word);
+            if (!payload.ok) {
+                const errMsg = payload?.data?.error || "Не вдалося згенерувати live-гру.";
+                alert(errMsg);
+                if (guessesContainer) guessesContainer.innerHTML = '<p style="text-align: center;">Помилка генерації.</p>';
+                return false;
+            }
+
+            if (!payload.data || !Array.isArray(payload.data.ranking)) {
+                throw new Error("Invalid custom ranking payload");
+            }
+
+            const gameId = normalizeGameId(payload.data.game_id);
+            if (!/^[0-9a-f]{64}$/.test(gameId)) {
+                throw new Error("Invalid custom game id");
+            }
+
+            applyLoadedRanking(payload.data.ranking);
+            currentCustomGameId = gameId;
+            currentGameDate = null;
+            resetRuntimeGameState();
+            updateGameDateLabel();
+            updateUrlForCurrentGame();
+
+            if (guessCountElem) guessCountElem.textContent = "0";
+            updateHintCountDisplay();
+            if (guessesContainer) guessesContainer.innerHTML = "";
+            if (lastGuessWrapper) lastGuessWrapper.classList.add("hidden");
+            showInitialInfoBlocks();
+            loadGameState();
+            if (guessInput) guessInput.focus();
+            return true;
+        } catch (err) {
+            console.error("[Error] startCustomGame failed:", err);
+            alert("Помилка генерації live-гри. Див. консоль для деталей.");
+            if (guessesContainer) guessesContainer.innerHTML = '<p style="text-align: center;">Помилка генерації.</p>';
+            return false;
+        }
+    }
+
+    async function startCustomGameByGameId(rawGameId) {
+        const gameId = normalizeGameId(rawGameId);
+        if (!/^[0-9a-f]{64}$/.test(gameId)) return false;
+
+        saveGameState();
+        if (guessesContainer) guessesContainer.innerHTML = '<p style="text-align: center;">Генеруємо live-гру...</p>';
+        if (lastGuessWrapper) lastGuessWrapper.classList.add("hidden");
+        if (guessCountElem) guessCountElem.textContent = "...";
+        const labelElem = document.getElementById("gameDateLabel");
+        if (labelElem) labelElem.textContent = "Генеруємо...";
+
+        try {
+            const payload = await fetchRankedWordsByGameId(gameId);
+            if (!payload.ok) {
+                const errMsg = payload?.data?.error || "Не вдалося завантажити гру.";
+                alert(errMsg);
+                if (guessesContainer) guessesContainer.innerHTML = '<p style="text-align: center;">Помилка генерації.</p>';
+                return false;
+            }
+
+            if (!payload.data || !Array.isArray(payload.data.ranking)) {
+                throw new Error("Invalid custom ranking payload");
+            }
+
+            applyLoadedRanking(payload.data.ranking);
+            currentCustomGameId = gameId;
+            currentGameDate = null;
+            resetRuntimeGameState();
+            updateGameDateLabel();
+            updateUrlForCurrentGame();
+
+            if (guessCountElem) guessCountElem.textContent = "0";
+            updateHintCountDisplay();
+            if (guessesContainer) guessesContainer.innerHTML = "";
+            if (lastGuessWrapper) lastGuessWrapper.classList.add("hidden");
+            showInitialInfoBlocks();
+            loadGameState();
+            if (guessInput) guessInput.focus();
+            return true;
+        } catch (err) {
+            console.error("[Error] startCustomGameByGameId failed:", err);
+            alert("Помилка генерації live-гри. Див. консоль для деталей.");
+            if (guessesContainer) guessesContainer.innerHTML = '<p style="text-align: center;">Помилка генерації.</p>';
+            return false;
+        }
+    }
+
     const todayStr = new Date().toISOString().split("T")[0];
-    if (!currentGameDate) {
+    if (!currentGameDate && !currentCustomGameId) {
         currentGameDate = todayStr;
-        gameState.guesses = [];
-        gameState.hints = [];
-        gameState.guessCount = 0;
-        gameState.hintCount = 0;
-        bestRank = Infinity;
-        isGoingUp = false;
-        lastWord = null;
-        didWin = false;
-        didGiveUp = false;
-        giveUpWord = null;
+        resetRuntimeGameState();
     }
     dayNumber = computeGameNumber(todayStr);
     updateGameDateLabel(); // Показуємо номер гри одразу, без очікування API
@@ -461,18 +616,29 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Великий словник вантажимо у фоні, щоб не блокувати перший рендер.
     fetchAllowedWords();
 
-    try {
-        const dateParam = currentGameDate === todayStr ? null : currentGameDate;
-        rankedWords = await fetchRankedWords(dateParam);
-        if (!Array.isArray(rankedWords)) throw new Error("Ranked words data is not an array");
-        MAX_RANK = rankedWords.length > 0 ? Math.max(...rankedWords.map(w => w.rank)) : 0;
-        console.log(`Loaded ${rankedWords.length} ranked words for ${currentGameDate}. Max rank: ${MAX_RANK}`);
-    } catch (err) {
-        console.error(`[Error] fetchRankedWords failed for ${currentGameDate}:`, err);
-        if (guessInput) guessInput.disabled = true;
-        if (submitGuessBtn) submitGuessBtn.disabled = true;
-        if (document.getElementById("gameDateLabel")) document.getElementById("gameDateLabel").textContent = "Помилка слів";
-        return;
+    let loadedInitialGame = false;
+    if (customGameIdFromUrl) {
+        loadedInitialGame = await startCustomGameByGameId(customGameIdFromUrl);
+    } else if (legacyCustomWordFromUrl) {
+        loadedInitialGame = await startCustomGameByWord(legacyCustomWordFromUrl);
+    }
+
+    if (!loadedInitialGame) {
+        try {
+            currentCustomGameId = null;
+            const dateParam = currentGameDate === todayStr ? null : currentGameDate;
+            const response = await fetchRankedWords(dateParam);
+            if (!Array.isArray(response)) throw new Error("Ranked words data is not an array");
+            applyLoadedRanking(response);
+            updateUrlForCurrentGame();
+            console.log(`Loaded ${rankedWords.length} ranked words for ${currentGameDate}. Max rank: ${MAX_RANK}`);
+        } catch (err) {
+            console.error(`[Error] fetchRankedWords failed for ${currentGameDate}:`, err);
+            if (guessInput) guessInput.disabled = true;
+            if (submitGuessBtn) submitGuessBtn.disabled = true;
+            if (document.getElementById("gameDateLabel")) document.getElementById("gameDateLabel").textContent = "Помилка слів";
+            return;
+        }
     }
 
     loadGameState(); // Це оновить видимість howToPlayBlock та privacyPolicyBlock
@@ -543,7 +709,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     async function loadArchive(game_date) {
-        if (currentGameDate) saveGameState();
+        saveGameState();
         console.log(`Loading archive for date: ${game_date}`);
 
         if (guessesContainer) guessesContainer.innerHTML = '<p style="text-align: center;">Завантаження гри...</p>';
@@ -579,19 +745,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             if (!archiveData || !Array.isArray(archiveData.ranking)) throw new Error("Invalid archive data format");
 
-            rankedWords = archiveData.ranking;
-            MAX_RANK = rankedWords.length > 0 ? Math.max(...rankedWords.map(w => w.rank)) : 0;
+            applyLoadedRanking(archiveData.ranking);
             currentGameDate = game_date;
-            gameState.guesses = [];
-            gameState.hints = [];
-            gameState.guessCount = 0;
-            gameState.hintCount = 0;
-            bestRank = Infinity;
-            isGoingUp = false;
-            lastWord = null;
-            didWin = false;
-            didGiveUp = false;
-            giveUpWord = null;
+            currentCustomGameId = null;
+            resetRuntimeGameState();
+            updateUrlForCurrentGame();
 
             console.log(`Loaded ${rankedWords.length} words for ${game_date}. Max rank: ${MAX_RANK}`);
             updateGameDateLabel();
@@ -616,6 +774,13 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     if (guessInput) guessInput.addEventListener("keypress", e => e.key === "Enter" && handleSubmit());
     if (submitGuessBtn) submitGuessBtn.addEventListener("click", handleSubmit);
+
+    if (createGameBtn) {
+        createGameBtn.addEventListener("click", () => {
+            if (dropdownMenu) dropdownMenu.classList.add("hidden");
+            window.location.href = "/create-game";
+        });
+    }
 
     if (hintButton) {
         hintButton.addEventListener("click", () => {
@@ -798,14 +963,15 @@ document.addEventListener("DOMContentLoaded", async () => {
                 alert("Ви ще не завершили гру, щоб поділитися результатом!");
                 return;
             }
-            const gameNum = currentGameDate ? computeGameNumber(currentGameDate) : dayNumber;
-            let shareText = `Словозв'яз #${gameNum}\nСпроб: ${gameState.guessCount}\nПідказок: ${gameState.hintCount}\n`;
+            const gameNum = currentGameDate ? computeGameNumber(currentGameDate) : null;
+            const shareTitle = gameNum ? `Словозв'яз #${gameNum}` : "Словозв'яз (кастом)";
+            let shareText = `${shareTitle}\nСпроб: ${gameState.guessCount}\nПідказок: ${gameState.hintCount}\n`;
             const closestGuessRank = gameState.guesses.filter(g => !g.error && g.rank !== 1 && g.rank !== Infinity).reduce((minRank, g) => Math.min(minRank, g.rank), Infinity);
             if (didWin) shareText += "✅ Знайдено!\n";
             else if (didGiveUp) shareText += `🏳️ Здався. Найближче слово: ${closestGuessRank !== Infinity ? `(ранг ${closestGuessRank})` : '(немає)'}\n`;
             shareText += `\n${window.location.href}`;
             try {
-                if (navigator.share) await navigator.share({ title: `Словозв'яз #${gameNum}`, text: shareText });
+                if (navigator.share) await navigator.share({ title: shareTitle, text: shareText });
                 else {
                     await navigator.clipboard.writeText(shareText);
                     alert('Результат скопійовано до буферу обміну!');

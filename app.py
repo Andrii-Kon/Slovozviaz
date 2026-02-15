@@ -7,12 +7,17 @@ from sqlalchemy.dialects.mysql import LONGTEXT
 from sqlalchemy.orm import load_only
 from sqlalchemy import inspect
 from sqlalchemy.exc import OperationalError, InterfaceError
+from collections import OrderedDict
 import os
 import json
 import glob
 import re
 import time
-from typing import List, Dict, Any, Optional
+import hashlib
+import hmac
+from typing import List, Dict, Any, Optional, Tuple
+
+import numpy as np
 
 # ── ENV / конфіг ───────────────────────────────────────────────────────────────
 load_dotenv()
@@ -69,6 +74,17 @@ VALID_WORDS = load_wordlist()
 VALID_WORDS_SORTED = sorted(VALID_WORDS)
 
 BASE_DATE = date(2025, 6, 2)
+LIVE_VECTORS_PATH = os.getenv(
+    "LIVE_VECTORS_PATH",
+    os.path.join("data", "word_vectors_ubercorpus_wordlist_fp16.npz"),
+)
+CUSTOM_RANKING_CACHE_SIZE = max(1, int(os.getenv("CUSTOM_RANKING_CACHE_SIZE", "2")))
+CUSTOM_GAME_TOKEN_SECRET = (
+    os.getenv("CUSTOM_GAME_TOKEN_SECRET")
+    or os.getenv("FLASK_SECRET_KEY")
+    or os.getenv("SECRET_KEY")
+    or "slovozviaz-custom-game-v1"
+).encode("utf-8")
 
 # ── Допоміжні для імпорту JSON → SQLite (локально) ────────────────────────────
 CANDIDATE_DIRS = ["precomputed", "archive", "data", "rankings", "json"]
@@ -220,6 +236,12 @@ RANKING_CACHE: dict[date, list] = {}
 ARCHIVE_DATES_CACHE: Optional[List[str]] = None
 ARCHIVE_DATES_CACHE_EXPIRES_AT = 0.0
 ARCHIVE_DATES_CACHE_TTL_SECONDS = max(30, int(os.getenv("ARCHIVE_DATES_CACHE_TTL_SECONDS", "300")))
+CUSTOM_RANKING_CACHE: "OrderedDict[str, List[Dict[str, Any]]]" = OrderedDict()
+LIVE_WORDS: Optional[List[str]] = None
+LIVE_WORD_TO_INDEX: Optional[Dict[str, int]] = None
+LIVE_MATRIX: Optional[np.ndarray] = None
+LIVE_NORMS: Optional[np.ndarray] = None
+CUSTOM_GAME_ID_TO_WORD: Optional[Dict[str, str]] = None
 
 def _reset_db_connection():
     try:
@@ -268,10 +290,146 @@ def _get_archive_dates_cached() -> List[str]:
     ARCHIVE_DATES_CACHE_EXPIRES_AT = now + ARCHIVE_DATES_CACHE_TTL_SECONDS
     return dates
 
+
+def _normalize_word(raw_word: Optional[str]) -> str:
+    return (raw_word or "").strip().lower()
+
+
+def _normalize_game_id(raw_game_id: Optional[str]) -> str:
+    return (raw_game_id or "").strip().lower()
+
+
+def _custom_game_id_for_word(word: str) -> str:
+    return hmac.new(
+        CUSTOM_GAME_TOKEN_SECRET,
+        word.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def _get_custom_game_id_map() -> Dict[str, str]:
+    global CUSTOM_GAME_ID_TO_WORD
+
+    if CUSTOM_GAME_ID_TO_WORD is not None:
+        return CUSTOM_GAME_ID_TO_WORD
+
+    game_id_to_word: Dict[str, str] = {}
+    for word in VALID_WORDS_SORTED:
+        game_id = _custom_game_id_for_word(word)
+        existing = game_id_to_word.get(game_id)
+        if existing is not None and existing != word:
+            raise RuntimeError("Виявлено колізію ідентифікатора кастомної гри.")
+        game_id_to_word[game_id] = word
+
+    CUSTOM_GAME_ID_TO_WORD = game_id_to_word
+    return CUSTOM_GAME_ID_TO_WORD
+
+
+def _resolve_live_vectors_path() -> str:
+    return os.path.normpath(LIVE_VECTORS_PATH.replace("\\", os.sep))
+
+
+def _load_live_vectors_if_needed() -> Tuple[List[str], Dict[str, int], np.ndarray, np.ndarray]:
+    global LIVE_WORDS, LIVE_WORD_TO_INDEX, LIVE_MATRIX, LIVE_NORMS
+
+    if (
+        LIVE_WORDS is not None
+        and LIVE_WORD_TO_INDEX is not None
+        and LIVE_MATRIX is not None
+        and LIVE_NORMS is not None
+    ):
+        return LIVE_WORDS, LIVE_WORD_TO_INDEX, LIVE_MATRIX, LIVE_NORMS
+
+    vectors_path = _resolve_live_vectors_path()
+    if not os.path.isfile(vectors_path):
+        raise FileNotFoundError(
+            "Файл live-векторів не знайдено. "
+            f"Очікував: '{vectors_path}'."
+        )
+
+    with np.load(vectors_path, allow_pickle=False) as payload:
+        if "words" not in payload or "vectors" not in payload:
+            raise ValueError("Файл live-векторів має містити масиви 'words' і 'vectors'.")
+
+        words_arr = payload["words"]
+        vectors_arr = payload["vectors"]
+        norms_arr = payload["norms"] if "norms" in payload else None
+
+    if vectors_arr.ndim != 2:
+        raise ValueError("Масив 'vectors' має бути двовимірним.")
+
+    words = [str(w) for w in words_arr.tolist()]
+    matrix = vectors_arr.astype(np.float32, copy=False)
+
+    if matrix.shape[0] != len(words):
+        raise ValueError("Кількість слів у 'words' не збігається з кількістю рядків 'vectors'.")
+
+    if norms_arr is None:
+        norms = np.linalg.norm(matrix, axis=1).astype(np.float32)
+    else:
+        norms = norms_arr.astype(np.float32, copy=False)
+        if norms.ndim != 1 or norms.shape[0] != len(words):
+            raise ValueError("Масив 'norms' має бути одновимірним і відповідати довжині 'words'.")
+
+    norms = np.where(norms == 0.0, 1e-12, norms)
+    word_to_index = {word: idx for idx, word in enumerate(words)}
+
+    LIVE_WORDS = words
+    LIVE_WORD_TO_INDEX = word_to_index
+    LIVE_MATRIX = matrix
+    LIVE_NORMS = norms
+
+    print(
+        f"[LIVE] Завантажено live-вектори: {len(words)} слів, "
+        f"розмірність={matrix.shape[1]}, файл='{vectors_path}'"
+    )
+    return LIVE_WORDS, LIVE_WORD_TO_INDEX, LIVE_MATRIX, LIVE_NORMS
+
+
+def _build_live_ranking(target_word: str) -> List[Dict[str, Any]]:
+    words, word_to_index, matrix, norms = _load_live_vectors_if_needed()
+    target_idx = word_to_index.get(target_word)
+    if target_idx is None:
+        raise ValueError(f"Слово '{target_word}' відсутнє у live-векторах.")
+
+    target_vector = matrix[target_idx]
+    target_norm = float(norms[target_idx])
+    if target_norm == 0.0:
+        target_norm = 1e-12
+    similarities = (matrix @ target_vector) / (norms * target_norm)
+    order = np.argsort(similarities)[::-1]
+
+    return [
+        {
+            "word": words[idx],
+            "similarity": float(similarities[idx]),
+            "rank": rank,
+        }
+        for rank, idx in enumerate(order, start=1)
+    ]
+
+
+def _get_live_ranking_cached(target_word: str) -> List[Dict[str, Any]]:
+    cached = CUSTOM_RANKING_CACHE.get(target_word)
+    if cached is not None:
+        CUSTOM_RANKING_CACHE.move_to_end(target_word)
+        return cached
+
+    ranking = _build_live_ranking(target_word)
+    CUSTOM_RANKING_CACHE[target_word] = ranking
+    if len(CUSTOM_RANKING_CACHE) > CUSTOM_RANKING_CACHE_SIZE:
+        CUSTOM_RANKING_CACHE.popitem(last=False)
+    return ranking
+
 # ── Маршрути ───────────────────────────────────────────────────────────────────
 @app.route("/")
 def index():
     return render_template("index.html")
+
+
+@app.route("/create-game")
+def create_game_page():
+    return render_template("create_game.html")
 
 @app.route("/ranked")
 @app.route("/api/ranked")
@@ -312,6 +470,71 @@ def get_ranked():
 def wordlist_api():
     response = jsonify(VALID_WORDS_SORTED)
     response.headers["Cache-Control"] = "public, max-age=86400"
+    return response
+
+
+@app.route("/api/ranked-by-word")
+def ranked_by_word():
+    target_word = _normalize_word(request.args.get("word"))
+    if not target_word:
+        return jsonify({"error": "Передайте слово в query-параметрі 'word'."}), 400
+
+    if target_word not in VALID_WORDS:
+        return jsonify({"error": "Цього слова немає у словнику гри."}), 400
+
+    try:
+        ranking = _get_live_ranking_cached(target_word)
+    except FileNotFoundError as e:
+        return jsonify({"error": str(e)}), 503
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        print(f"[LIVE] Помилка генерації рейтингу для '{target_word}': {e}")
+        return jsonify({"error": "Не вдалося згенерувати live-рейтинг."}), 500
+
+    game_id = _custom_game_id_for_word(target_word)
+    response = jsonify({
+        "mode": "custom",
+        "game_id": game_id,
+        "ranking": ranking,
+    })
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
+
+
+@app.route("/api/ranked-by-game")
+def ranked_by_game():
+    game_id = _normalize_game_id(request.args.get("game"))
+    if not game_id:
+        return jsonify({"error": "Передайте id гри в query-параметрі 'game'."}), 400
+
+    if not re.fullmatch(r"[0-9a-f]{64}", game_id):
+        return jsonify({"error": "Невірний формат id гри."}), 400
+
+    try:
+        target_word = _get_custom_game_id_map().get(game_id)
+    except RuntimeError:
+        return jsonify({"error": "Помилка побудови id кастомних ігор."}), 500
+
+    if not target_word:
+        return jsonify({"error": "Гру за цим посиланням не знайдено."}), 404
+
+    try:
+        ranking = _get_live_ranking_cached(target_word)
+    except FileNotFoundError as e:
+        return jsonify({"error": str(e)}), 503
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        print(f"[LIVE] Помилка генерації рейтингу для game_id '{game_id}': {e}")
+        return jsonify({"error": "Не вдалося згенерувати live-рейтинг."}), 500
+
+    response = jsonify({
+        "mode": "custom",
+        "game_id": game_id,
+        "ranking": ranking,
+    })
+    response.headers["Cache-Control"] = "private, no-store"
     return response
 
 @app.route("/api/daily-index")
