@@ -5,3 +5,5 @@ numpy
 gunicorn
 python-dotenv
 pymysql
+pymorphy3
+pymorphy3-dicts-uk

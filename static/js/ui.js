@@ -50,16 +50,25 @@ function calculateProgressBarStyle(rank, maxRank) {
     return { cssClass: cssClass, width: widthPercent };
 }
 
+function formatSimilarity(value) {
+    if (!Number.isFinite(value)) return null;
+    return value.toFixed(2);
+}
+
 /**
  * Створює DOM-елемент для одного слова (спроби або підказки).
  *
- * @param {Object} guessObj  Об’єкт із даними про спробу {word, rank, error, errorMessage?}
+ * @param {Object} guessObj  Об’єкт із даними про спробу {word, rank, similarity?, error, errorMessage?}
  * @param {number} maxRank   Максимальний ранг у грі
  * @returns {HTMLElement}    Елемент списку спроб
  */
 export function createGuessItem(guessObj, maxRank) {
     const guessItem = document.createElement("div");
     guessItem.classList.add("guessItem");
+
+    if (guessObj.isHint) {
+        guessItem.classList.add("guessItemHint");
+    }
 
     const styleInfo = calculateProgressBarStyle(guessObj.rank, maxRank);
     guessItem.classList.add(styleInfo.cssClass);
@@ -99,12 +108,24 @@ export function createGuessItem(guessObj, maxRank) {
     wordSpan.classList.add("word");
     wordSpan.textContent = guessObj.word;
 
+    const metaWrap = document.createElement("div");
+    metaWrap.classList.add("guessMeta");
+
     const rankSpan = document.createElement("span");
     rankSpan.classList.add("rank");
     rankSpan.textContent = guessObj.rank;
+    metaWrap.appendChild(rankSpan);
+
+    const formattedSimilarity = formatSimilarity(guessObj.similarity);
+    if (formattedSimilarity !== null) {
+        const similaritySpan = document.createElement("span");
+        similaritySpan.classList.add("similarity");
+        similaritySpan.textContent = formattedSimilarity;
+        metaWrap.appendChild(similaritySpan);
+    }
 
     guessText.appendChild(wordSpan);
-    guessText.appendChild(rankSpan);
+    guessText.appendChild(metaWrap);
 
     guessItem.appendChild(fillBar);
     guessItem.appendChild(guessText);
@@ -121,19 +142,26 @@ export function createGuessItem(guessObj, maxRank) {
  * @param {HTMLElement} container     Контейнер для списку спроб
  * @param {HTMLElement} lastGuessWrapper  Обгортка для останньої спроби
  * @param {HTMLElement} lastGuessDisplay  Контейнер для останньої правильної спроби
+ * @param {string} sortMode           Режим сортування: similarity | guess-order
  */
-export function renderGuesses(guesses, lastWord, maxRank, container, lastGuessWrapper, lastGuessDisplay) {
+export function renderGuesses(guesses, lastWord, maxRank, container, lastGuessWrapper, lastGuessDisplay, sortMode = "similarity") {
     container.innerHTML = "";
 
-    // Помилки вгорі, далі — за зростанням рангу
-    guesses.sort((a, b) => {
+    const sortedGuesses = [...guesses].sort((a, b) => {
+        if (sortMode === "guess-order") {
+            const seqA = Number.isFinite(a.sequence) ? a.sequence : Number.MAX_SAFE_INTEGER;
+            const seqB = Number.isFinite(b.sequence) ? b.sequence : Number.MAX_SAFE_INTEGER;
+            return seqA - seqB;
+        }
+
+        // Помилки вгорі, далі — за зростанням рангу
         if (a.error && !b.error) return -1;
         if (!a.error && b.error) return 1;
         if (a.error && b.error) return 0;
         return a.rank - b.rank;
     });
 
-    guesses.forEach(guessObj => {
+    sortedGuesses.forEach(guessObj => {
         const guessItem = createGuessItem(guessObj, maxRank);
         if (!guessObj.error && guessObj.word === lastWord) {
             guessItem.classList.add("highlightGuess");

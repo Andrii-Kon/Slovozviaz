@@ -20,6 +20,13 @@ export async function fetchRankedWordsByGameId(gameId) {
     return { ok: response.ok, status: response.status, data };
 }
 
+export async function normalizeWordToKnownLemma(word) {
+    const url = `/api/normalize-word?word=${encodeURIComponent(word)}`;
+    const response = await fetch(url, { cache: "no-store" });
+    const data = await response.json();
+    return { ok: response.ok, status: response.status, data };
+}
+
 export async function submitGuess(word) {
     const response = await fetch("/guess", {
         method: "POST",

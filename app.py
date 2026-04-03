@@ -8,6 +8,7 @@ from sqlalchemy.orm import load_only
 from sqlalchemy import inspect
 from sqlalchemy.exc import OperationalError, InterfaceError
 from collections import OrderedDict
+from functools import lru_cache
 import os
 import json
 import glob
@@ -242,6 +243,8 @@ LIVE_WORD_TO_INDEX: Optional[Dict[str, int]] = None
 LIVE_MATRIX: Optional[np.ndarray] = None
 LIVE_NORMS: Optional[np.ndarray] = None
 CUSTOM_GAME_ID_TO_WORD: Optional[Dict[str, str]] = None
+UK_MORPH_ANALYZER: Any | None = None
+UK_MORPH_ANALYZER_INIT_ATTEMPTED = False
 
 def _reset_db_connection():
     try:
@@ -297,6 +300,57 @@ def _normalize_word(raw_word: Optional[str]) -> str:
 
 def _normalize_game_id(raw_game_id: Optional[str]) -> str:
     return (raw_game_id or "").strip().lower()
+
+
+def _get_uk_morph_analyzer() -> Any | None:
+    global UK_MORPH_ANALYZER, UK_MORPH_ANALYZER_INIT_ATTEMPTED
+
+    if UK_MORPH_ANALYZER_INIT_ATTEMPTED:
+        return UK_MORPH_ANALYZER
+
+    UK_MORPH_ANALYZER_INIT_ATTEMPTED = True
+    try:
+        import pymorphy3  # type: ignore
+        UK_MORPH_ANALYZER = pymorphy3.MorphAnalyzer(lang="uk")
+        print("[MORPH] Ukrainian pymorphy3 analyzer enabled.")
+    except Exception as e:
+        UK_MORPH_ANALYZER = None
+        print(f"[MORPH] pymorphy3 unavailable; normalization disabled: {e!r}")
+
+    return UK_MORPH_ANALYZER
+
+
+@lru_cache(maxsize=8192)
+def _resolve_word_to_valid_lemma(raw_word: str) -> Optional[str]:
+    word = _normalize_word(raw_word)
+    if not word:
+        return None
+
+    if word in VALID_WORDS:
+        return word
+
+    morph = _get_uk_morph_analyzer()
+    if morph is None:
+        return None
+
+    seen_candidates: set[str] = set()
+
+    for parse in morph.parse(word):
+        if not getattr(parse, "is_known", False):
+            continue
+
+        if getattr(parse.tag, "POS", None) != "NOUN":
+            continue
+
+        candidate = _normalize_word(getattr(parse, "normal_form", ""))
+        if not candidate or candidate in seen_candidates:
+            continue
+
+        seen_candidates.add(candidate)
+        if candidate in VALID_WORDS:
+            return candidate
+
+    return None
 
 
 def _custom_game_id_for_word(word: str) -> str:
@@ -470,6 +524,22 @@ def get_ranked():
 def wordlist_api():
     response = jsonify(VALID_WORDS_SORTED)
     response.headers["Cache-Control"] = "public, max-age=86400"
+    return response
+
+
+@app.route("/api/normalize-word")
+def normalize_word_api():
+    word = _normalize_word(request.args.get("word"))
+    if not word:
+        return jsonify({"error": "Передайте слово в query-параметрі 'word'."}), 400
+
+    resolved_word = _resolve_word_to_valid_lemma(word)
+    response = jsonify({
+        "original_word": word,
+        "resolved_word": resolved_word,
+        "was_changed": bool(resolved_word and resolved_word != word),
+    })
+    response.headers["Cache-Control"] = "private, no-store"
     return response
 
 

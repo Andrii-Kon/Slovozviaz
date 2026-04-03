@@ -1,5 +1,5 @@
-import { fetchRankedWords, fetchRankedWordsByWord, fetchRankedWordsByGameId } from "./api.js?v=20260215-3";
-import { renderGuesses, createGuessItem } from "./ui.js?v=20260215-3";
+import { fetchRankedWords, fetchRankedWordsByWord, fetchRankedWordsByGameId, normalizeWordToKnownLemma } from "./api.js?v=20260402-3";
+import { renderGuesses, createGuessItem } from "./ui.js?v=20260403-2";
 
 const weekdayFmt = new Intl.DateTimeFormat('uk-UA', { weekday: 'short' });
 const monthFmt = new Intl.DateTimeFormat('uk-UA', { month: 'short' });
@@ -17,6 +17,7 @@ const gameState = {
 };
 let bestRank = Infinity;
 let rankedWords = [];
+let rankedWordLookup = new Map();
 let lastWord = null;
 let MAX_RANK = 0;
 let dayNumber = null;
@@ -27,9 +28,45 @@ let didGiveUp = false;
 let giveUpWord = null;
 let archiveDatesCache = null;
 let archiveDatesInFlight = null;
+let nextEntrySequence = 0;
 
 const ARCHIVE_DATES_CACHE_KEY = "archiveDatesCache_v1";
 const ARCHIVE_DATES_CACHE_TTL_MS = 5 * 60 * 1000;
+const SETTINGS_STORAGE_KEY = "slovozviazSettings_v1";
+const DEFAULT_SETTINGS = {
+    hintMode: "easy",
+    sortMode: "similarity"
+};
+const settings = { ...DEFAULT_SETTINGS };
+
+function normalizeHintMode(value) {
+    return ["easy", "medium", "hard"].includes(value) ? value : DEFAULT_SETTINGS.hintMode;
+}
+
+function normalizeSortMode(value) {
+    return ["similarity", "guess-order"].includes(value) ? value : DEFAULT_SETTINGS.sortMode;
+}
+
+function loadSettings() {
+    try {
+        const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
+        if (!raw) return;
+
+        const parsed = JSON.parse(raw);
+        settings.hintMode = normalizeHintMode(parsed?.hintMode);
+        settings.sortMode = normalizeSortMode(parsed?.sortMode);
+    } catch (err) {
+        console.warn("Cannot load settings from localStorage:", err);
+    }
+}
+
+function saveSettings() {
+    try {
+        localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+    } catch (err) {
+        console.warn("Cannot save settings to localStorage:", err);
+    }
+}
 
 // Функція для оновлення відображення лічильника підказок
 function updateHintCountDisplay() {
@@ -41,42 +78,64 @@ function updateHintCountDisplay() {
 
 // const gameStates = {}; // Закоментовано, оскільки не використовується активно
 
-function getNextHintRank(currentBestRank, currentGuesses, currentRankedWords, currentMaxRank) {
-    let localIsGoingUp = isGoingUp;
+function getUsedRanks(entries) {
+    return new Set(entries.filter(entry => !entry.error && Number.isFinite(entry.rank)).map(entry => entry.rank));
+}
+
+function findNearestAvailableRank(targetRank, usedRanks, minRank, maxRank) {
+    if (!Number.isFinite(targetRank) || minRank > maxRank) return null;
+
+    const clampedTarget = Math.min(maxRank, Math.max(minRank, Math.round(targetRank)));
+    for (let offset = 0; offset <= maxRank - minRank; offset++) {
+        const lower = clampedTarget - offset;
+        if (lower >= minRank && !usedRanks.has(lower)) return lower;
+
+        const upper = clampedTarget + offset;
+        if (offset > 0 && upper <= maxRank && !usedRanks.has(upper)) return upper;
+    }
+
+    return null;
+}
+
+function getRandomAvailableRank(usedRanks, minRank, maxRank) {
+    if (minRank > maxRank) return null;
+
+    const available = [];
+    for (let rank = minRank; rank <= maxRank; rank++) {
+        if (!usedRanks.has(rank)) {
+            available.push(rank);
+        }
+    }
+
+    if (available.length === 0) return null;
+    return available[Math.floor(Math.random() * available.length)];
+}
+
+function getNextHintRank(currentBestRank, currentGuesses, currentRankedWords, currentMaxRank, hintMode) {
+    const usedRanks = getUsedRanks(currentGuesses);
+    const defaultHintRank = findNearestAvailableRank(500, usedRanks, 2, currentMaxRank);
 
     if (currentBestRank === Infinity) {
-        const wordObj = currentRankedWords.find(x => x.rank === 500);
-        return wordObj ? 500 : null;
+        return defaultHintRank;
     }
     if (currentBestRank === 1) return null;
 
-    const isGuessed = r => currentGuesses.some(g => g.rank === r);
+    const betterMinRank = 2;
+    const betterMaxRank = currentBestRank - 1;
 
-    if (!localIsGoingUp) {
-        if (currentBestRank > 2) {
-            let candidate = Math.floor(currentBestRank / 2);
-            while (candidate >= 2) {
-                if (!isGuessed(candidate)) return candidate;
-                candidate = Math.floor(candidate / 2);
-            }
-            if (!isGuessed(2)) return 2;
-            isGoingUp = true;
-            localIsGoingUp = true;
-        }
-        if (currentBestRank === 2) {
-            isGoingUp = true;
-            localIsGoingUp = true;
-        }
+    if (hintMode === "hard") {
+        return getRandomAvailableRank(usedRanks, betterMinRank, betterMaxRank)
+            ?? getRandomAvailableRank(usedRanks, currentBestRank + 1, currentMaxRank);
     }
 
-    if (localIsGoingUp) {
-        let bigger = currentBestRank + 1;
-        while (bigger <= currentMaxRank) {
-            if (!isGuessed(bigger)) return bigger;
-            bigger++;
-        }
-    }
-    return null;
+    const targetRank = hintMode === "medium"
+        ? currentBestRank - 1
+        : Math.floor(currentBestRank / 2);
+
+    return findNearestAvailableRank(targetRank, usedRanks, betterMinRank, betterMaxRank)
+        ?? findNearestAvailableRank(currentBestRank + 1, usedRanks, currentBestRank + 1, currentMaxRank)
+        ?? defaultHintRank
+        ?? (currentRankedWords.find(wordObj => !usedRanks.has(wordObj.rank) && wordObj.rank > 1)?.rank ?? null);
 }
 
 function computeGameNumber(dateStr) {
@@ -101,10 +160,107 @@ function normalizeGameId(value) {
     return (value || "").trim().toLowerCase();
 }
 
+function getCurrentGameNumber() {
+    if (currentCustomGameId || !currentGameDate) return null;
+    return computeGameNumber(currentGameDate);
+}
+
+function setCongratsMessage(message) {
+    const congratsMessageElem = document.getElementById("congratsMessage");
+    if (congratsMessageElem) {
+        congratsMessageElem.textContent = message;
+    }
+}
+
 function getCurrentGameStateKey() {
     if (currentCustomGameId) return `gameState_custom_${currentCustomGameId}`;
     if (!currentGameDate) return null;
     return `gameState_${currentGameDate}`;
+}
+
+function hydrateStoredEntries(entries) {
+    if (!Array.isArray(entries)) return [];
+
+    let localNextSequence = nextEntrySequence;
+    const hydratedEntries = entries
+        .filter(entry => entry && typeof entry.word === "string")
+        .map(entry => {
+            const savedSequence = Number.isInteger(entry.sequence) && entry.sequence >= 0
+                ? entry.sequence
+                : null;
+
+            if (savedSequence !== null) {
+                if (savedSequence >= localNextSequence) {
+                    localNextSequence = savedSequence + 1;
+                }
+                return { ...entry, sequence: savedSequence };
+            }
+
+            const sequence = localNextSequence++;
+            return { ...entry, sequence };
+        });
+
+    nextEntrySequence = localNextSequence;
+    return hydratedEntries;
+}
+
+function getRankedWordEntry(word) {
+    if (typeof word !== "string" || !word) return null;
+    return rankedWordLookup.get(word) || null;
+}
+
+function enrichEntriesWithRankingData(entries) {
+    if (!Array.isArray(entries) || rankedWordLookup.size === 0) return entries;
+
+    return entries.map(entry => {
+        if (!entry || entry.error || typeof entry.word !== "string") return entry;
+
+        const rankedWord = getRankedWordEntry(entry.word);
+        if (!rankedWord) return entry;
+
+        const nextEntry = { ...entry };
+        if (!Number.isFinite(nextEntry.rank)) {
+            nextEntry.rank = rankedWord.rank;
+        }
+        if (!Number.isFinite(nextEntry.similarity) && Number.isFinite(rankedWord.similarity)) {
+            nextEntry.similarity = rankedWord.similarity;
+        }
+        return nextEntry;
+    });
+}
+
+function createGameEntry(entry) {
+    const sequence = nextEntrySequence++;
+    return { ...entry, sequence };
+}
+
+function getCombinedEntries() {
+    return [...gameState.guesses, ...gameState.hints];
+}
+
+function renderCurrentGuesses() {
+    const guessesContainer = document.getElementById("guessesContainer");
+    const lastGuessWrapper = document.getElementById("lastGuessWrapper");
+    const lastGuessDisplay = document.getElementById("lastGuessDisplay");
+
+    if (!guessesContainer || !lastGuessWrapper || !lastGuessDisplay) return;
+    renderGuesses(
+        getCombinedEntries(),
+        lastWord,
+        MAX_RANK,
+        guessesContainer,
+        lastGuessWrapper,
+        lastGuessDisplay,
+        settings.sortMode
+    );
+}
+
+function applySettingsToForm() {
+    const hintRadio = document.querySelector(`input[name="hintMode"][value="${settings.hintMode}"]`);
+    const sortRadio = document.querySelector(`input[name="sortMode"][value="${settings.sortMode}"]`);
+
+    if (hintRadio) hintRadio.checked = true;
+    if (sortRadio) sortRadio.checked = true;
 }
 
 function resetRuntimeGameState() {
@@ -118,6 +274,7 @@ function resetRuntimeGameState() {
     didWin = false;
     didGiveUp = false;
     giveUpWord = null;
+    nextEntrySequence = 0;
 }
 
 function updateUrlForCurrentGame() {
@@ -167,6 +324,50 @@ async function fetchAllowedWords() {
     })();
 
     return allowedWordsLoadingPromise;
+}
+
+async function resolveGuessWord(rawWord) {
+    const originalWord = normalizeWord(rawWord);
+    if (!originalWord) {
+        return {
+            originalWord,
+            resolvedWord: originalWord,
+            wasChanged: false,
+        };
+    }
+
+    if (allowedWordsLoaded && allowedWords.has(originalWord)) {
+        return {
+            originalWord,
+            resolvedWord: originalWord,
+            wasChanged: false,
+        };
+    }
+
+    try {
+        const response = await normalizeWordToKnownLemma(originalWord);
+        if (!response.ok) {
+            return {
+                originalWord,
+                resolvedWord: originalWord,
+                wasChanged: false,
+            };
+        }
+
+        const resolvedWord = normalizeWord(response?.data?.resolved_word) || originalWord;
+        return {
+            originalWord,
+            resolvedWord,
+            wasChanged: resolvedWord !== originalWord,
+        };
+    } catch (err) {
+        console.warn("Cannot normalize guess word:", err);
+        return {
+            originalWord,
+            resolvedWord: originalWord,
+            wasChanged: false,
+        };
+    }
 }
 
 function sleep(ms) {
@@ -305,9 +506,6 @@ function loadGameState() {
 
     const savedState = localStorage.getItem(storageKey);
     const guessCountElem = document.getElementById("guessCount");
-    const guessesContainer = document.getElementById("guessesContainer");
-    const lastGuessWrapper = document.getElementById("lastGuessWrapper");
-    const lastGuessDisplay = document.getElementById("lastGuessDisplay");
     const howToPlayBlock = document.getElementById("howToPlayBlock");
     const privacyPolicyBlock = document.getElementById("privacyPolicyBlock");
 
@@ -320,8 +518,8 @@ function loadGameState() {
 
     try {
         const state = JSON.parse(savedState);
-        gameState.guesses = state.guesses || [];
-        gameState.hints = state.hints || [];
+        gameState.guesses = enrichEntriesWithRankingData(hydrateStoredEntries(state.guesses));
+        gameState.hints = enrichEntriesWithRankingData(hydrateStoredEntries(state.hints));
         gameState.guessCount = state.guessCount || 0;
         gameState.hintCount = state.hintCount || 0;
         bestRank = state.bestRank !== undefined ? state.bestRank : Infinity;
@@ -333,7 +531,7 @@ function loadGameState() {
 
         if (guessCountElem) guessCountElem.textContent = gameState.guessCount;
         updateHintCountDisplay(); // Оновлюємо лічільник підказок
-        renderGuesses([...gameState.guesses, ...gameState.hints], lastWord, MAX_RANK, guessesContainer, lastGuessWrapper, lastGuessDisplay);
+        renderCurrentGuesses();
 
         if (gameState.guesses.length > 0 || gameState.hints.length > 0 || didWin || didGiveUp) {
             if (howToPlayBlock) howToPlayBlock.style.display = "none";
@@ -362,7 +560,6 @@ function loadGameState() {
 function showWinMessageUI() {
     const congratsBlock = document.getElementById("congratsBlock");
     const guessInput = document.getElementById("guessInput");
-    const submitGuessBtn = document.getElementById("submitGuess");
     const hintButton = document.getElementById("hintButton");
     const closestWordsBtn = document.getElementById("closestWordsBtn");
     const giveUpBtn = document.getElementById("giveUpBtn");
@@ -371,21 +568,15 @@ function showWinMessageUI() {
         const congratsTitle = document.getElementById("congratsTitle");
         if (congratsTitle) congratsTitle.textContent = "Вітаємо!";
 
-        const congratsMessageElem = document.getElementById("congratsMessage");
-        const guessesUsedElem = document.getElementById("guessesUsed");
-        const gameNumberElem = document.getElementById("gameNumber");
-        if (congratsMessageElem && guessesUsedElem && gameNumberElem) {
-            const gameNum = currentGameDate ? computeGameNumber(currentGameDate) : null;
-            guessesUsedElem.textContent = gameState.guessCount;
-            gameNumberElem.textContent = gameNum ?? "—";
-            congratsMessageElem.textContent = gameNum
+        const gameNum = getCurrentGameNumber();
+        setCongratsMessage(
+            gameNum
                 ? `Ви знайшли секретне слово #${gameNum} за ${gameState.guessCount} спроб(и)!`
-                : `Ви знайшли кастомне слово за ${gameState.guessCount} спроб(и)!`;
-        }
+                : `Ви знайшли кастомне слово за ${gameState.guessCount} спроб(и)!`
+        );
         congratsBlock.classList.remove("hidden");
     }
     if (guessInput) guessInput.disabled = true;
-    if (submitGuessBtn) submitGuessBtn.disabled = true;
     if (hintButton) hintButton.disabled = true;
     if (giveUpBtn) giveUpBtn.disabled = true;
     if (closestWordsBtn) closestWordsBtn.classList.remove("hidden");
@@ -394,7 +585,6 @@ function showWinMessageUI() {
 function showLoseMessageUI(secretWord) {
     const congratsBlock = document.getElementById("congratsBlock");
     const guessInput = document.getElementById("guessInput");
-    const submitGuessBtn = document.getElementById("submitGuess");
     const hintButton = document.getElementById("hintButton");
     const closestWordsBtn = document.getElementById("closestWordsBtn");
     const giveUpBtn = document.getElementById("giveUpBtn");
@@ -403,17 +593,15 @@ function showLoseMessageUI(secretWord) {
     const congratsTitle = document.getElementById("congratsTitle");
     if (congratsTitle) congratsTitle.textContent = "Нехай щастить наступного разу!";
 
-    const congratsMessageElem = document.getElementById("congratsMessage");
-    if (congratsMessageElem) {
-        const gameNum = currentGameDate ? computeGameNumber(currentGameDate) : null;
-        congratsMessageElem.textContent = gameNum
+    const gameNum = getCurrentGameNumber();
+    setCongratsMessage(
+        gameNum
             ? `Ви здалися на слові #${gameNum} за ${gameState.guessCount} спроб(и).\nСлово було: "${secretWord}".`
-            : `Ви здалися в кастомній грі за ${gameState.guessCount} спроб(и).\nСлово було: "${secretWord}".`;
-    }
+            : `Ви здалися в кастомній грі за ${gameState.guessCount} спроб(и).\nСлово було: "${secretWord}".`
+    );
     congratsBlock.classList.remove("hidden");
 
     if (guessInput) guessInput.disabled = true;
-    if (submitGuessBtn) submitGuessBtn.disabled = true;
     if (hintButton) hintButton.disabled = true;
     if (giveUpBtn) giveUpBtn.disabled = true;
     if (closestWordsBtn) closestWordsBtn.classList.remove("hidden");
@@ -422,7 +610,6 @@ function showLoseMessageUI(secretWord) {
 function resetUIForActiveGame() {
     const congratsBlock = document.getElementById("congratsBlock");
     const guessInput = document.getElementById("guessInput");
-    const submitGuessBtn = document.getElementById("submitGuess");
     const hintButton = document.getElementById("hintButton");
     const closestWordsBtn = document.getElementById("closestWordsBtn");
     const giveUpBtn = document.getElementById("giveUpBtn");
@@ -432,7 +619,6 @@ function resetUIForActiveGame() {
     if (closestWordsBtn) closestWordsBtn.classList.add("hidden");
 
     if (guessInput) guessInput.disabled = false;
-    if (submitGuessBtn) submitGuessBtn.disabled = false;
     if (hintButton) hintButton.disabled = false;
     if (giveUpBtn) giveUpBtn.disabled = false;
     // if (authorshipBtn) authorshipBtn.disabled = false;
@@ -468,7 +654,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     const guessInput = document.getElementById("guessInput");
-    const submitGuessBtn = document.getElementById("submitGuess");
     const guessesContainer = document.getElementById("guessesContainer");
     const guessCountElem = document.getElementById("guessCount");
     const lastGuessWrapper = document.getElementById("lastGuessWrapper");
@@ -491,8 +676,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     const closeModalBtn = document.getElementById("closeModalBtn");
     const menuButton = document.getElementById("menuButton");
     const dropdownMenu = document.getElementById("dropdownMenu");
+    const pageContainer = document.querySelector(".container");
     const shareButton = document.getElementById("shareButton");
     const createGameBtn = document.getElementById("createGameBtn");
+    const settingsBtn = document.getElementById("settingsBtn");
+    const settingsModal = document.getElementById("settingsModal");
+    const closeSettingsModal = document.getElementById("closeSettingsModal");
     // const readMoreBtn = document.getElementById("readMoreBtn"); // Закоментовано, якщо не використовується
 
     const authorshipBtn = document.getElementById('authorshipBtn');
@@ -503,9 +692,61 @@ document.addEventListener("DOMContentLoaded", async () => {
     const legacyCustomWordFromUrl = normalizeWord(urlParams.get("custom"));
 
     if (randomGameBtn) randomGameBtn.textContent = "🔀 Випадкова";
+    loadSettings();
+    applySettingsToForm();
+
+    function syncDropdownPageSpace() {
+        if (!pageContainer) return;
+
+        if (!pageContainer.dataset.basePaddingBottom) {
+            pageContainer.dataset.basePaddingBottom = window.getComputedStyle(pageContainer).paddingBottom;
+        }
+
+        const basePaddingBottom = parseFloat(pageContainer.dataset.basePaddingBottom) || 0;
+        pageContainer.style.paddingBottom = `${basePaddingBottom}px`;
+        if (!dropdownMenu || dropdownMenu.classList.contains("hidden")) return;
+
+        const containerBottom = pageContainer.getBoundingClientRect().bottom + window.scrollY;
+        const dropdownBottom = dropdownMenu.getBoundingClientRect().bottom + window.scrollY;
+        const extraSpace = Math.max(0, Math.ceil(dropdownBottom - containerBottom + 16));
+
+        if (extraSpace > 0) {
+            pageContainer.style.paddingBottom = `${basePaddingBottom + extraSpace}px`;
+        }
+    }
+
+    function closeDropdownMenu() {
+        if (!dropdownMenu) return;
+        dropdownMenu.classList.add("hidden");
+        syncDropdownPageSpace();
+        if (menuButton) menuButton.setAttribute("aria-expanded", "false");
+    }
+
+    function positionDropdownMenu() {
+        if (!menuButton || !dropdownMenu || dropdownMenu.classList.contains("hidden")) return;
+        if (menuButton) menuButton.setAttribute("aria-expanded", "true");
+        syncDropdownPageSpace();
+    }
+
+    function toggleDropdownMenu() {
+        if (!dropdownMenu) return;
+
+        if (dropdownMenu.classList.contains("hidden")) {
+            dropdownMenu.classList.remove("hidden");
+            positionDropdownMenu();
+            return;
+        }
+
+        closeDropdownMenu();
+    }
 
     function applyLoadedRanking(newRanking) {
         rankedWords = newRanking;
+        rankedWordLookup = new Map(
+            rankedWords
+                .filter(item => item && typeof item.word === "string")
+                .map(item => [item.word, item])
+        );
         MAX_RANK = rankedWords.length > 0 ? Math.max(...rankedWords.map(w => w.rank)) : 0;
     }
 
@@ -638,7 +879,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         } catch (err) {
             console.error(`[Error] fetchRankedWords failed for ${currentGameDate}:`, err);
             if (guessInput) guessInput.disabled = true;
-            if (submitGuessBtn) submitGuessBtn.disabled = true;
             if (document.getElementById("gameDateLabel")) document.getElementById("gameDateLabel").textContent = "Помилка слів";
             return;
         }
@@ -649,12 +889,20 @@ document.addEventListener("DOMContentLoaded", async () => {
     async function handleSubmit() {
         if (didWin || didGiveUp) return;
 
-        const word = guessInput.value.trim().toLowerCase();
+        let word = guessInput.value.trim().toLowerCase();
         if (!word) return;
 
         hideInitialInfoBlocks(); // Ховаємо блоки при першій спробі
 
-        if (gameState.guesses.some(g => g.word === word)) {
+        await fetchAllowedWords();
+
+        const resolvedGuess = await resolveGuessWord(word);
+        word = resolvedGuess.resolvedWord;
+        if (resolvedGuess.wasChanged && guessInput) {
+            guessInput.value = word;
+        }
+
+        if (getCombinedEntries().some(entry => entry.word === word)) {
             if (lastGuessDisplay && lastGuessWrapper) {
                 const errorMsgElement = document.createElement("div");
                 errorMsgElement.textContent = `Слово "${word}" вже вгадано`;
@@ -680,32 +928,32 @@ document.addEventListener("DOMContentLoaded", async () => {
             guessInput.focus();
             return;
         }
-        if (!allowedWordsLoaded) fetchAllowedWords();
 
-        const match = rankedWords.find(item => item.word === word);
-        let data = match ? { rank: match.rank } : { rank: Infinity, error: true, errorMessage: "Цього слова немає у рейтингу цього дня." };
+        const match = getRankedWordEntry(word);
+        let data = match
+            ? { rank: match.rank, similarity: match.similarity }
+            : { rank: Infinity, error: true, errorMessage: "Цього слова немає у рейтингу цього дня." };
 
         gameState.guessCount++;
         if (guessCountElem) guessCountElem.textContent = gameState.guessCount;
         lastWord = word;
-        gameState.guesses.push({ word, rank: data.rank, error: data.error || false, errorMessage: data.errorMessage });
-
-        gameState.guesses.sort((a, b) => {
-            if (a.error && !b.error) return -1;
-            if (!a.error && b.error) return 1;
-            if (a.error && b.error) return 0;
-            return a.rank - b.rank;
-        });
+        gameState.guesses.push(createGameEntry({
+            word,
+            rank: data.rank,
+            similarity: data.similarity,
+            error: data.error || false,
+            errorMessage: data.errorMessage
+        }));
 
         if (!data.error) {
             if (data.rank < bestRank) bestRank = data.rank;
             if (data.rank === 1) {
-                renderGuesses([...gameState.guesses, ...gameState.hints], lastWord, MAX_RANK, guessesContainer, lastGuessWrapper, lastGuessDisplay);
+                renderCurrentGuesses();
                 endGameAsWin();
                 return;
             }
         }
-        renderGuesses([...gameState.guesses, ...gameState.hints], lastWord, MAX_RANK, guessesContainer, lastGuessWrapper, lastGuessDisplay);
+        renderCurrentGuesses();
         guessInput.value = "";
         guessInput.focus();
         saveGameState();
@@ -770,20 +1018,55 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (guessesContainer) guessesContainer.innerHTML = '<p style="text-align: center;">Помилка завантаження.</p>';
         } finally {
             if (previousGamesModal) previousGamesModal.classList.add("hidden");
-            if (dropdownMenu) dropdownMenu.classList.add("hidden");
+            closeDropdownMenu();
             if (guessInput) guessInput.focus();
         }
     }
 
     if (guessInput) guessInput.addEventListener("keypress", e => e.key === "Enter" && handleSubmit());
-    if (submitGuessBtn) submitGuessBtn.addEventListener("click", handleSubmit);
 
     if (createGameBtn) {
         createGameBtn.addEventListener("click", () => {
-            if (dropdownMenu) dropdownMenu.classList.add("hidden");
+            closeDropdownMenu();
             window.location.href = "/create-game";
         });
     }
+
+    if (settingsBtn) {
+        settingsBtn.addEventListener("click", () => {
+            if (settingsModal) settingsModal.classList.remove("hidden");
+            closeDropdownMenu();
+        });
+    }
+
+    if (closeSettingsModal) {
+        closeSettingsModal.addEventListener("click", () => {
+            if (settingsModal) settingsModal.classList.add("hidden");
+        });
+    }
+
+    if (settingsModal) {
+        settingsModal.addEventListener("click", e => {
+            if (e.target === settingsModal) settingsModal.classList.add("hidden");
+        });
+    }
+
+    document.querySelectorAll('input[name="hintMode"]').forEach(input => {
+        input.addEventListener("change", event => {
+            settings.hintMode = normalizeHintMode(event.target.value);
+            saveSettings();
+            applySettingsToForm();
+        });
+    });
+
+    document.querySelectorAll('input[name="sortMode"]').forEach(input => {
+        input.addEventListener("change", event => {
+            settings.sortMode = normalizeSortMode(event.target.value);
+            saveSettings();
+            applySettingsToForm();
+            renderCurrentGuesses();
+        });
+    });
 
     if (hintButton) {
         hintButton.addEventListener("click", () => {
@@ -793,7 +1076,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 alert("Список слів ще не завантажено!");
                 return;
             }
-            const nextHintRank = getNextHintRank(bestRank, [...gameState.guesses, ...gameState.hints], rankedWords, MAX_RANK);
+            const nextHintRank = getNextHintRank(bestRank, getCombinedEntries(), rankedWords, MAX_RANK, settings.hintMode);
             if (nextHintRank === null) {
                 alert("Не вдалося знайти підходящу підказку.");
                 return;
@@ -809,20 +1092,25 @@ document.addEventListener("DOMContentLoaded", async () => {
             updateHintCountDisplay(); // Оновлюємо відображення підказок
 
             lastWord = hintWordObj.word;
-            gameState.hints.push({ word: hintWordObj.word, rank: hintWordObj.rank, error: false, isHint: true });
-            gameState.hints.sort((a, b) => (a.error && !b.error) ? -1 : (!a.error && b.error) ? 1 : (a.error && b.error) ? 0 : a.rank - b.rank);
+            gameState.hints.push(createGameEntry({
+                word: hintWordObj.word,
+                rank: hintWordObj.rank,
+                similarity: hintWordObj.similarity,
+                error: false,
+                isHint: true
+            }));
             if (hintWordObj.rank < bestRank) bestRank = hintWordObj.rank;
-            renderGuesses([...gameState.guesses, ...gameState.hints], lastWord, MAX_RANK, guessesContainer, lastGuessWrapper, lastGuessDisplay);
+            renderCurrentGuesses();
             if (hintWordObj.rank === 1) endGameAsWin();
             else saveGameState();
-            if (dropdownMenu) dropdownMenu.classList.add("hidden");
+            closeDropdownMenu();
         });
     }
 
     if (giveUpBtn) giveUpBtn.addEventListener("click", () => {
         if (didWin || didGiveUp) return;
         if (giveUpModal) giveUpModal.classList.remove("hidden");
-        if (dropdownMenu) dropdownMenu.classList.add("hidden");
+        closeDropdownMenu();
     });
     if (closeGiveUpModal) closeGiveUpModal.addEventListener("click", () => giveUpModal && giveUpModal.classList.add("hidden"));
     if (giveUpNoBtn) giveUpNoBtn.addEventListener("click", () => giveUpModal && giveUpModal.classList.add("hidden"));
@@ -841,11 +1129,16 @@ document.addEventListener("DOMContentLoaded", async () => {
             // gameState.guessCount++; // Закоментовано - здача не є спробою
             // if (guessCountElem) guessCountElem.textContent = gameState.guessCount; // Закоментовано
 
-            gameState.guesses.push({ word: secretWord, rank: 1, error: false, gaveUp: true });
+            gameState.guesses.push(createGameEntry({
+                word: secretWord,
+                rank: 1,
+                similarity: secretWordObj?.similarity,
+                error: false,
+                gaveUp: true
+            }));
             lastWord = secretWord;
             bestRank = 1;
-            gameState.guesses.sort((a, b) => (a.error && !b.error) ? -1 : (!a.error && b.error) ? 1 : (a.error && b.error) ? 0 : a.rank - b.rank);
-            renderGuesses([...gameState.guesses, ...gameState.hints], lastWord, MAX_RANK, guessesContainer, lastGuessWrapper, lastGuessDisplay);
+            renderCurrentGuesses();
             endGameAsGiveUp(secretWord);
             if (giveUpModal) giveUpModal.classList.add("hidden");
         });
@@ -858,7 +1151,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (previousGamesBtn) {
         previousGamesBtn.addEventListener("click", async () => {
             if (previousGamesModal) previousGamesModal.classList.remove("hidden");
-            if (dropdownMenu) dropdownMenu.classList.add("hidden");
+            closeDropdownMenu();
             if (previousGamesList) previousGamesList.innerHTML = "<p>Завантаження архіву...</p>";
             try {
                 const filtered = await fetchArchiveDates();
@@ -919,7 +1212,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     if (randomGameBtn) {
         randomGameBtn.addEventListener("click", async () => {
-            if (dropdownMenu) dropdownMenu.classList.add("hidden");
+            closeDropdownMenu();
             try {
                 const validDates = await fetchArchiveDates();
                 if (validDates.length === 0) {
@@ -943,22 +1236,32 @@ document.addEventListener("DOMContentLoaded", async () => {
         const closestWordsTitle = document.getElementById("closestWordsTitle");
         if (closestWordsTitle) closestWordsTitle.textContent = `Це були ${topN.length} найближчих слів:`;
         if (topN.length === 0) closestWordsList.innerHTML = "<p>Список слів порожній.</p>";
-        else topN.forEach(item => closestWordsList.appendChild(createGuessItem({ word: item.word, rank: item.rank, error: false }, MAX_RANK)));
+        else topN.forEach(item => closestWordsList.appendChild(createGuessItem({
+            word: item.word,
+            rank: item.rank,
+            similarity: item.similarity,
+            error: false
+        }, MAX_RANK)));
         if (closestWordsModal) closestWordsModal.classList.remove("hidden");
     }
     if (closestWordsBtn) closestWordsBtn.addEventListener("click", showClosestWords);
     if (closeModalBtn) closeModalBtn.addEventListener("click", () => closestWordsModal && closestWordsModal.classList.add("hidden"));
     if (closestWordsModal) closestWordsModal.addEventListener('click', e => e.target === closestWordsModal && closestWordsModal.classList.add('hidden'));
 
-    if (menuButton && dropdownMenu) menuButton.addEventListener("click", e => {
-        e.stopPropagation();
-        dropdownMenu.classList.toggle("hidden");
-    });
+    if (menuButton && dropdownMenu) {
+        menuButton.setAttribute("aria-haspopup", "menu");
+        menuButton.setAttribute("aria-expanded", "false");
+        menuButton.addEventListener("click", e => {
+            e.stopPropagation();
+            toggleDropdownMenu();
+        });
+    }
     document.addEventListener("click", e => {
         if (menuButton && dropdownMenu && !menuButton.contains(e.target) && !dropdownMenu.contains(e.target)) {
-            dropdownMenu.classList.add("hidden");
+            closeDropdownMenu();
         }
     });
+    window.addEventListener("resize", positionDropdownMenu);
 
     if (shareButton) {
         shareButton.addEventListener('click', async () => {
@@ -992,11 +1295,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (authorshipBtn && authorshipModal && closeAuthorshipModalBtn && dropdownMenu) {
         authorshipBtn.addEventListener('click', () => {
             authorshipModal.classList.remove('hidden');
-            dropdownMenu.classList.add('hidden');
+            closeDropdownMenu();
         });
         closeAuthorshipModalBtn.addEventListener('click', () => authorshipModal.classList.add('hidden'));
         authorshipModal.addEventListener('click', e => e.target === authorshipModal && authorshipModal.classList.add('hidden'));
-    } else {
-        console.error('Error: Could not find all elements for the Authorship modal.');
     }
 });
