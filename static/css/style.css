@@ -7,12 +7,18 @@
     padding: 0;
 }
 
+html,
+body {
+    max-width: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
 body {
     background-color: #1e1e1e;
     color: #fff;
     font-family: "Open Sans", sans-serif;
     line-height: 1.5;
-    overscroll-behavior-y: contain;
 }
 
 /* ====================
@@ -35,38 +41,21 @@ body {
    Основний контейнер
    ==================== */
 .container {
-    max-width: 500px;
+    max-width: 530px;
     width: 100%;
     margin: 0 auto;
     padding: 15px;
     text-align: center;
-    min-height: calc(100vh - 40px);
+    position: relative;
     flex-direction: column;
-}
-
-/* Блок посилання на політику конфіденційності внизу екрану */
-.privacy-policy-block {
-    width: 100%;
-    text-align: center;
-    padding: 10px 0;
-    font-size: 0.9em;
-    margin-top: auto;
-}
-.privacy-policy-block p {
-    margin: 0;
-}
-.privacy-policy-block a {
-    color: #bbb;
-    text-decoration: none;
-}
-.privacy-policy-block a:hover {
-    text-decoration: underline;
 }
 
 h1 {
     margin-bottom: 10px;
     font-size: 1.4em;
     margin-top: 25px;
+    letter-spacing: -0.02em;
+    text-shadow: 0 2px 18px rgba(33, 150, 243, 0.12);
 }
 
 /* ====================
@@ -79,40 +68,69 @@ h1 {
     font-variant-numeric: tabular-nums;
     display: flex;
     align-items: center;
-    gap: 1px;
-    margin-bottom: 0px;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 12px;
+    margin-bottom: 10px;
     margin-top: 10px;
+    padding: 2px 0 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     text-align: left;
-    font-size: 0.9em;
+    font-size: 0.88em;
 }
 
 #gameDateLabel {
     margin: 0;
-    padding: 6px 9px;
-    border-radius: 5px;
-    color: #fff;
+    padding: 0;
+    border-radius: 0;
+    background-color: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.95);
     font-size: 1em;
+    font-weight: 680;
+    letter-spacing: -0.01em;
     flex-shrink: 0;
 }
 
 .gameStats {
     display: flex;
-    gap: 1px;
+    flex-wrap: wrap;
+    gap: 12px;
     font-size: 1em;
-    color: #fff;
+    color: rgba(255, 255, 255, 0.72);
 }
 
 .guess-counter, .hint-counter {
-    padding: 6px 9px;
-    font-weight: bold;
-    border-radius: 1px;
-    color: #fff;
+    padding: 0;
+    font-weight: 560;
+    border-radius: 0;
+    background-color: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.7);
     font-size: 1em;
     white-space: nowrap;
 }
 
-.hint-counter {
-    color: #fff;
+.gameStats > span + span {
+    position: relative;
+    padding-left: 12px;
+}
+
+.gameStats > span + span::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 1px;
+    height: 0.95em;
+    background-color: rgba(255, 255, 255, 0.18);
+    transform: translateY(-50%);
+}
+
+#guessCount,
+#hintCount {
+    color: rgba(255, 255, 255, 0.96);
+    font-weight: 700;
 }
 
 /* ====================
@@ -121,26 +139,34 @@ h1 {
 .input-section {
     display: flex;
     align-items: stretch;
-    gap: 8px;
+    gap: 10px;
     margin-bottom: 20px;
     width: 100%;
 }
 
 #guessInput {
-    flex-grow: 3;
+    flex-grow: 1;
     flex-basis: 0;
     flex-shrink: 1;
     min-width: 100px;
     padding: 10px;
     border-radius: 5px;
-    border: none;
+    border: 1px solid rgba(255, 255, 255, 0.12);
     background-color: #2a2a2a;
     color: #fff;
     font-size: 1em;
     min-height: 44px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
 }
 #guessInput::placeholder {
     color: #bbb;
+}
+#guessInput:focus {
+    outline: none;
+    border-color: rgba(33, 150, 243, 0.85);
+    background-color: #303030;
+    box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.18);
 }
 
 /* Кнопка-меню біля інпуту */
@@ -148,32 +174,43 @@ h1 {
     position: relative;
     flex-shrink: 0;
     display: flex;
+    align-self: stretch;
 }
 .menu-button {
-    background: none;
-    border: none;
-    color: #fff;
-    font-size: 1.6em;
+    background-color: #262626;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.76);
+    font-size: 1.38em;
+    font-weight: 700;
     cursor: pointer;
-    padding: 0 10px;
+    padding: 0;
     line-height: 1;
-    height: 100%;
-    min-width: 25px;
+    width: 44px;
+    min-width: 44px;
+    min-height: 44px;
     display: flex;
     align-items: center;
     justify-content: center;
     border-radius: 5px;
-    transition: background-color 0.2s;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 .menu-button:hover {
-    background-color: #333;
+    background-color: #2e2e2e;
+    border-color: rgba(255, 255, 255, 0.16);
+    color: rgba(255, 255, 255, 0.92);
+}
+.menu-button:focus-visible {
+    outline: none;
+    background-color: #2e2e2e;
+    border-color: rgba(33, 150, 243, 0.85);
+    box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.2);
 }
 
 /* ====================
    Кнопки (загальні)
    ==================== */
 .btn-wide,
-#submitGuess,
 #shareButton,
 #closestWordsBtn,
 #giveUpYesBtn,
@@ -188,31 +225,44 @@ h1 {
     color: #fff;
     font-weight: bold;
     font-size: 0.95em;
-    transition: background-color 0.2s ease-in-out;
+    transition: background-color 0.2s ease-in-out, transform 0.15s ease, box-shadow 0.2s ease-in-out;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     text-align: center;
     line-height: 1.2;
-}
-
-/* Флекс-розтяг для Submit */
-#submitGuess {
-    flex-grow: 1;
-    flex-basis: 0;
-    flex-shrink: 1;
-    min-width: 70px;
+    box-shadow: 0 8px 22px rgba(33, 150, 243, 0.18);
 }
 
 /* Hover-стани основних кнопок */
 .btn-wide:hover,
-#submitGuess:hover,
 #shareButton:hover,
 #closestWordsBtn:hover,
 #giveUpYesBtn:hover,
 #giveUpNoBtn:hover,
 #randomGameBtn:hover {
     background-color: #1976d2;
+    transform: translateY(-1px);
+    box-shadow: 0 10px 24px rgba(33, 150, 243, 0.24);
+}
+
+.btn-wide:active,
+#shareButton:active,
+#closestWordsBtn:active,
+#giveUpYesBtn:active,
+#giveUpNoBtn:active,
+#randomGameBtn:active {
+    transform: translateY(0);
+}
+
+.btn-wide:focus-visible,
+#shareButton:focus-visible,
+#closestWordsBtn:focus-visible,
+#giveUpYesBtn:focus-visible,
+#giveUpNoBtn:focus-visible,
+#randomGameBtn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.22), 0 8px 22px rgba(33, 150, 243, 0.18);
 }
 
 /* ====================
@@ -220,13 +270,15 @@ h1 {
    ==================== */
 .dropdown-menu {
     position: absolute;
-    top: 110%;
+    top: calc(100% + 8px);
     right: 0;
     background-color: #3a3a3a;
     border-radius: 8px;
     padding: 8px;
     min-width: 200px;
+    max-width: min(280px, calc(100vw - 24px));
     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     z-index: 1000;
     display: flex;
     flex-direction: column;
@@ -263,6 +315,7 @@ h1 {
 
 /* Скидання зайвих стилів для елементів меню */
 .dropdown-menu button#hintButton,
+.dropdown-menu button#settingsBtn,
 .dropdown-menu button#previousGamesBtn,
 .dropdown-menu button#giveUpBtn,
 .dropdown-menu button#createGameBtn,
@@ -282,12 +335,8 @@ h1 {
    ==================== */
 #guessesContainer,
 #closestWordsList {
-    margin-top: 20px;
+    margin-top: 16px;
     text-align: left;
-}
-
-.privacy-policy-block.hidden {
-    display: none !important;
 }
 
 /* Елемент спроби з вбудованою смугою прогресу */
@@ -300,6 +349,12 @@ h1 {
     background-color: #2a2a2a;
     overflow: hidden;         /* обрізання смуги прогресу по краях */
     color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.16);
+}
+
+.guessItemHint {
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14), 0 6px 16px rgba(0, 0, 0, 0.16);
 }
 
 /* Смуга прогресу; ширина та колір задаються класами рангу */
@@ -336,17 +391,39 @@ h1 {
     flex-grow: 1;
 }
 
-.guessText .rank {
+.guessMeta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: center;
     flex-shrink: 0;
+    min-width: 4.9em;
+    gap: 1px;
+    font-variant-numeric: tabular-nums;
+}
+
+.guessText .rank {
     font-size: 0.9em;
-    color: #eee;
-    padding: 2px 5px;
-    border-radius: 3px;
+    color: rgba(255, 255, 255, 0.98);
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    text-align: right;
+    line-height: 1.05;
+    text-shadow: 0 1px 8px rgba(0, 0, 0, 0.3);
+}
+
+.guessText .similarity {
+    font-size: 0.69em;
+    line-height: 1.05;
+    color: rgba(255, 255, 255, 0.76);
+    font-weight: 650;
+    letter-spacing: 0.01em;
 }
 
 /* Підсвітка останньої спроби */
 .highlightGuess {
-    box-shadow: 0 0 0 2px #fff;
+    border-color: rgba(255, 255, 255, 0.46);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.72), 0 8px 18px rgba(0, 0, 0, 0.18);
 }
 
 /* ================================================================
@@ -361,7 +438,7 @@ h1 {
 
 /* Текст/помилки */
 .guessText { color: #fff; }
-.guessText .rank { color: #eee; }
+.guessText .rank { color: rgba(255, 255, 255, 0.95); }
 .rank-error .guessText { color: #EF9A9A; }
 .rank-error .fillBar { display: none; }
 
@@ -380,42 +457,45 @@ h1 {
    Блок "Як грати?"
    ==================== */
 .howToPlayBlock {
-    background-color: #2a2a2a;
-    border: 1px solid #444;
-    border-radius: 8px;
-    padding: 15px;
+    background-color: #272727;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 14px 16px;
     margin-bottom: 20px;
     text-align: left;
+    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.12);
 }
 .howToPlayBlock h2 {
     margin-top: 0;
-    margin-bottom: 10px;
-    font-size: 1.15em;
+    margin-bottom: 8px;
+    font-size: 1.08em;
     color: #2196f3;
 }
 .howToPlayBlock p {
-    margin-bottom: 15px;
-    font-size: 0.95em;
+    margin-bottom: 12px;
+    font-size: 0.93em;
+    line-height: 1.58;
+    color: rgba(255, 255, 255, 0.92);
 }
 .howToPlayBlock details {
-    margin-bottom: 8px;
-    padding: 8px 12px;
+    margin-bottom: 10px;
+    padding: 9px 12px;
     background-color: #1f1f1f;
-    border-radius: 5px;
+    border-radius: 6px;
     border: 1px solid #333;
 }
 .howToPlayBlock details summary {
     cursor: pointer;
-    font-weight: bold;
-    color: #fff;
-    margin-bottom: 5px;
-    font-size: 0.95em;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.96);
+    margin-bottom: 4px;
+    font-size: 0.94em;
 }
 .howToPlayBlock details p {
-    margin: 5px 0 0 0;
-    font-size: 0.85em;
-    color: #ddd;
-    line-height: 1.4;
+    margin: 6px 0 0 0;
+    font-size: 0.84em;
+    color: rgba(255, 255, 255, 0.8);
+    line-height: 1.48;
 }
 
 /* ====================
@@ -428,6 +508,7 @@ h1 {
     padding: 20px;
     margin-bottom: 20px;
     text-align: center;
+    box-shadow: 0 14px 32px rgba(33, 150, 243, 0.12);
 }
 .congratsBlock h2 {
     font-size: 1.3em;
@@ -510,60 +591,88 @@ h1 {
    ==================== */
 .create-game-shell {
     width: 100%;
-    max-width: 760px;
-    margin: 28px auto;
-    background-color: #111;
-    border: 2px solid #e6e6e6;
+    max-width: 660px;
+    margin: 0 auto;
+    padding: 18px 15px 42px;
+    text-align: left;
+}
+
+.create-game-panel {
+    background-color: #272727;
+    border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 12px;
-    padding: 28px;
+    padding: 16px;
+    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.12);
 }
 
 .create-game-back {
-    color: #5ea5ff;
+    color: #2196f3;
     text-decoration: none;
     font-weight: 600;
-    display: inline-block;
-    margin-bottom: 18px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 14px;
+    transition: color 0.2s ease, transform 0.2s ease;
 }
 
 .create-game-back:hover {
     text-decoration: underline;
+    color: #64b5f6;
+    transform: translateX(-1px);
 }
 
 .create-game-title {
     margin: 0 0 10px 0;
-    text-align: left;
+    text-align: center;
+    font-size: 1.4em;
+    letter-spacing: -0.02em;
+    text-shadow: 0 2px 18px rgba(33, 150, 243, 0.12);
 }
 
 .create-game-subtitle {
-    margin: 0 0 20px 0;
-    color: #e1e1e1;
-    font-size: 1.05em;
+    margin: 0 0 18px 0;
+    color: rgba(255, 255, 255, 0.76);
+    font-size: 0.97em;
+    line-height: 1.58;
+    text-align: center;
 }
 
 .create-game-form-page {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
 }
 
 .create-game-label {
-    font-weight: 700;
-    color: #fff;
+    font-family: "Inter", "Roboto", "Segoe UI", sans-serif;
+    font-size: 0.9em;
+    font-weight: 680;
+    letter-spacing: 0.2px;
+    color: rgba(255, 255, 255, 0.94);
 }
 
 .create-game-input {
-    min-height: 46px;
-    border: 2px solid #d7d7d7;
-    border-radius: 7px;
-    background-color: #5f5f5f;
+    min-height: 44px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 5px;
+    background-color: #2a2a2a;
     color: #fff;
-    font-size: 1.05em;
+    font-size: 1em;
     padding: 10px 12px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
 }
 
 .create-game-input::placeholder {
-    color: #d0d0d0;
+    color: #bbb;
+}
+
+.create-game-input:focus {
+    outline: none;
+    border-color: rgba(33, 150, 243, 0.85);
+    background-color: #303030;
+    box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.18);
 }
 
 .create-game-submit {
@@ -574,23 +683,29 @@ h1 {
 .create-game-error {
     color: #ffb4b4;
     font-style: italic;
+    margin-top: 2px;
 }
 
 .create-game-result {
-    margin-top: 26px;
-    padding-top: 20px;
-    border-top: 1px solid #2a2a2a;
+    margin-top: 24px;
+    padding: 16px;
+    background-color: #272727;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.12);
     text-align: left;
 }
 
 .create-game-result-title {
-    margin: 0 0 8px 0;
-    font-size: 1.5em;
+    margin: 0 0 6px 0;
+    font-size: 1.2em;
+    color: #2196f3;
 }
 
 .create-game-result-subtitle {
     margin: 0 0 12px 0;
-    color: #d9d9d9;
+    color: rgba(255, 255, 255, 0.84);
+    font-size: 0.94em;
 }
 
 .create-game-link-row {
@@ -602,12 +717,13 @@ h1 {
 .create-game-link-input {
     flex: 1;
     min-height: 44px;
-    border-radius: 6px;
-    border: 1px solid #4d4d4d;
-    background-color: #222;
+    border-radius: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background-color: #2a2a2a;
     color: #f5f5f5;
     padding: 10px 12px;
     font-size: 0.95em;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .create-game-copy-btn {
@@ -617,6 +733,7 @@ h1 {
 .create-game-copy-status {
     margin-top: 8px;
     color: #a7f3c0;
+    font-size: 0.92em;
 }
 
 .create-game-copy-status-error {
@@ -626,24 +743,30 @@ h1 {
 .create-game-open-link {
     display: inline-block;
     margin-top: 8px;
-    color: #5ea5ff;
+    color: #64b5f6;
     text-decoration: none;
     font-weight: 600;
+    transition: color 0.2s ease, text-decoration 0.2s ease;
 }
 
 .create-game-open-link:hover {
+    color: #90caf9;
     text-decoration: underline;
 }
 
 .create-game-table-title {
     margin: 18px 0 10px 0;
+    font-size: 1.02em;
+    color: rgba(255, 255, 255, 0.96);
 }
 
 .create-game-table-wrap {
     max-height: 520px;
     overflow: auto;
-    border: 1px solid #2f2f2f;
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 8px;
+    background-color: #232323;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
 }
 
 .create-game-table {
@@ -654,25 +777,41 @@ h1 {
 .create-game-table thead th {
     position: sticky;
     top: 0;
-    background-color: #1b1b1b;
-    color: #dcdcdc;
+    background-color: #1f1f1f;
+    color: rgba(255, 255, 255, 0.9);
     text-align: left;
     font-weight: 700;
+    font-size: 0.86em;
+    letter-spacing: 0.02em;
     padding: 10px 12px;
-    border-bottom: 1px solid #303030;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .create-game-table tbody td {
     padding: 8px 12px;
-    border-bottom: 1px solid #242424;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.92);
+    font-variant-numeric: tabular-nums;
+}
+
+.create-game-table tbody td:first-child,
+.create-game-table tbody td:last-child {
+    color: rgba(255, 255, 255, 0.76);
+    font-weight: 650;
+    white-space: nowrap;
+}
+
+.create-game-table tbody td:nth-child(2) {
+    color: rgba(255, 255, 255, 0.97);
+    font-weight: 600;
 }
 
 .create-game-table tbody tr:nth-child(even) {
-    background-color: #141414;
+    background-color: #262626;
 }
 
 .create-game-table tbody tr:nth-child(odd) {
-    background-color: #101010;
+    background-color: #222222;
 }
 
 /* Уніфікуємо зовнішній вигляд елементів у модалці "Найближчі слова" */
@@ -736,6 +875,66 @@ h1 {
     margin: 0 5px;
 }
 
+/* Модалка "Налаштування" */
+#settingsModal .modal-content {
+    max-width: 680px;
+    padding: clamp(22px, 2vw, 30px);
+}
+
+.settings-section {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    gap: 14px 18px;
+    align-items: start;
+    margin-bottom: 26px;
+}
+
+.settings-section:last-child {
+    margin-bottom: 4px;
+}
+
+.settings-section-title {
+    margin: 4px 0 0 0;
+    text-align: left;
+    color: #ffffff;
+    font-size: clamp(1.06rem, 1rem + 0.12vw, 1.15rem);
+}
+
+.settings-options {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.settings-option {
+    display: grid;
+    grid-template-columns: 20px 1fr;
+    gap: 12px;
+    align-items: start;
+    cursor: pointer;
+    text-align: left;
+}
+
+.settings-option input[type="radio"] {
+    margin-top: 6px;
+    accent-color: #2196f3;
+}
+
+.settings-option-label {
+    display: block;
+    color: #ffffff;
+    font-weight: 700;
+    font-size: clamp(1.02rem, 0.98rem + 0.12vw, 1.1rem);
+}
+
+.settings-option-description {
+    display: block;
+    margin-top: 2px;
+    color: #cfd7df;
+    font-size: clamp(0.95rem, 0.92rem + 0.08vw, 1rem);
+    line-height: 1.45;
+}
+
 /* Модалка "Авторство" */
 #authorshipModal .modal-content {
     padding: 20px 25px;
@@ -779,13 +978,254 @@ h1 {
 /* ====================
    Медіа-запити
    ==================== */
+@media (min-width: 1440px) {
+    .container {
+        max-width: 35.8vw;
+        padding: 1.04vw;
+    }
+
+    h1 {
+        margin-top: 1.74vw;
+        margin-bottom: 0.69vw;
+        font-size: 1.56vw;
+    }
+
+    .game-info {
+        gap: 0.83vw;
+        margin-top: 0.69vw;
+        margin-bottom: 0.69vw;
+        padding: 0.14vw 0 0.83vw;
+        font-size: 0.97vw;
+    }
+
+    .gameStats {
+        gap: 0.83vw;
+    }
+
+    #gameDateLabel,
+    .guess-counter,
+    .hint-counter {
+        padding: 0;
+    }
+
+    .gameStats > span + span {
+        padding-left: 0.83vw;
+    }
+
+    .gameStats > span + span::before {
+        height: 0.95vw;
+    }
+
+    .input-section {
+        gap: 0.56vw;
+        margin-bottom: 1.39vw;
+    }
+
+    #guessInput {
+        padding: 0.69vw;
+        font-size: 1.11vw;
+        min-height: 3.06vw;
+        border-radius: 0.35vw;
+    }
+
+    .menu-button {
+        font-size: 1.56vw;
+        padding: 0;
+        width: 3.06vw;
+        min-width: 3.06vw;
+        min-height: 3.06vw;
+        border-radius: 0.35vw;
+    }
+
+    .btn-wide,
+    #shareButton,
+    #closestWordsBtn,
+    #giveUpYesBtn,
+    #giveUpNoBtn,
+    #randomGameBtn {
+        padding: 0.69vw 1.04vw;
+        min-height: 3.06vw;
+        border-radius: 0.35vw;
+        font-size: 1.06vw;
+    }
+
+    .dropdown-menu {
+        min-width: 13.89vw;
+        padding: 0.56vw;
+        max-width: min(19.44vw, calc(100vw - 1.67vw));
+    }
+
+    .dropdown-menu .menu-item {
+        padding: 0.83vw 1.11vw;
+        font-size: 1vw;
+        min-height: 3.06vw;
+    }
+
+    #guessesContainer,
+    #closestWordsList {
+        margin-top: 1.11vw;
+    }
+
+    .guessItem {
+        margin: 0.56vw 0;
+        min-height: 3.06vw;
+        border-radius: 0.35vw;
+    }
+
+    .fillBar {
+        border-radius: 0.35vw;
+    }
+
+    .guessText {
+        min-height: 3.06vw;
+        padding: 0.56vw 0.83vw;
+        gap: 0.69vw;
+        font-size: 1.11vw;
+    }
+
+    .guessText .rank {
+        font-size: 1vw;
+    }
+
+    .guessMeta {
+        min-width: 4.9em;
+        gap: 0.07vw;
+    }
+
+    .guessText .similarity {
+        font-size: 0.74vw;
+    }
+
+    .lastGuessWrapper {
+        margin-bottom: 1.39vw;
+    }
+
+    #lastGuessDisplay {
+        margin: 0.69vw 0;
+    }
+
+    .howToPlayBlock,
+    .congratsBlock {
+        padding: 1.25vw;
+        margin-bottom: 1.39vw;
+        border-radius: 0.56vw;
+    }
+
+    .howToPlayBlock h2,
+    .congratsBlock h2,
+    .modal-content h2 {
+        font-size: 1.33vw;
+    }
+
+    .howToPlayBlock p,
+    .congratsBlock p,
+    #closestWordsList,
+    #authorshipContent {
+        font-size: 1.06vw;
+    }
+
+    .modal {
+        padding: 1.04vw;
+    }
+
+    .modal-content {
+        max-width: 34.72vw;
+        padding: 1.39vw;
+    }
+
+    #settingsModal .modal-content {
+        max-width: 47.22vw;
+    }
+
+    .create-game-shell {
+        max-width: min(760px, 45vw);
+        padding: 1.18vw 1.04vw 2.22vw;
+    }
+
+    .create-game-panel {
+        padding: 1.11vw;
+        border-radius: 0.69vw;
+    }
+
+    .create-game-back {
+        margin-bottom: 0.97vw;
+        font-size: 1vw;
+    }
+
+    .create-game-title {
+        margin-bottom: 0.69vw;
+        font-size: 1.56vw;
+    }
+
+    .create-game-subtitle {
+        margin-bottom: 1.25vw;
+        font-size: 1vw;
+    }
+
+    .create-game-label {
+        font-size: 0.92vw;
+    }
+
+    .create-game-form-page {
+        gap: 0.69vw;
+    }
+
+    .create-game-input,
+    .create-game-link-input {
+        min-height: 3.06vw;
+        padding: 0.69vw 0.83vw;
+        font-size: 1vw;
+        border-radius: 0.35vw;
+    }
+
+    .create-game-submit,
+    .create-game-copy-btn {
+        min-width: 12.5vw;
+    }
+
+    .create-game-result {
+        margin-top: 1.67vw;
+        padding: 1.11vw;
+        border-radius: 0.56vw;
+    }
+
+    .create-game-result-title {
+        font-size: 1.22vw;
+    }
+
+    .create-game-result-subtitle,
+    .create-game-copy-status,
+    .create-game-open-link {
+        font-size: 0.94vw;
+    }
+
+    .create-game-table-title {
+        margin-top: 1.25vw;
+        margin-bottom: 0.69vw;
+        font-size: 1vw;
+    }
+
+    .create-game-table-wrap {
+        border-radius: 0.56vw;
+    }
+
+    .create-game-table thead th,
+    .create-game-table tbody td {
+        padding: 0.69vw 0.83vw;
+        font-size: 0.92vw;
+    }
+
+    .close {
+        font-size: 1.94vw;
+    }
+}
+
 @media (max-width: 360px) {
     .container { padding: 10px; }
     h1 { font-size: 1.3em; }
     #guessInput { font-size: 0.95em; }
 
     /* Компактніші кнопки на дуже малих екранах */
-    #submitGuess,
     #giveUpModal .btn-wide {
         padding: 8px 10px;
         font-size: 0.9em;
@@ -809,10 +1249,8 @@ h1 {
 
     .modal-content { padding: 15px; }
     .modal-content h2 { font-size: 1.1em; }
-    .create-game-shell {
-        margin: 10px;
-        padding: 16px;
-    }
+    .create-game-shell { padding: 12px 10px 28px; }
+    .create-game-panel { padding: 14px; }
     .create-game-link-row {
         flex-direction: column;
     }

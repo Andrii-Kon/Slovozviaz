@@ -28,7 +28,7 @@
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
 
     <!-- Основні стилі -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260215-3') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260403-21') }}">
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/favicon.png') }}">
 </head>
 <body>
@@ -58,16 +58,19 @@
         </div>
     </div>
 
-    <!-- Поле введення слова + кнопка відправки + меню -->
+    <!-- Поле введення слова + меню -->
     <div class="input-section">
-        <input type="text" id="guessInput" placeholder="Введіть слово" autocomplete="off">
-        <button id="submitGuess" class="btn-wide">Відправити</button>
+        <input type="text" id="guessInput" placeholder="Введіть слово" autocomplete="off" enterkeyhint="send">
         <div class="menu-container">
             <button class="menu-button" id="menuButton" aria-label="Меню гри">⋮</button>
             <div class="dropdown-menu hidden" id="dropdownMenu">
                 <button class="menu-item" id="hintButton">
                     <span class="menu-icon">💡</span>
                     Підказка
+                </button>
+                <button class="menu-item" id="settingsBtn">
+                    <span class="menu-icon">⚙️</span>
+                    Налаштування
                 </button>
                 <button class="menu-item" id="giveUpBtn">
                     <span class="menu-icon">🚩</span>
@@ -80,10 +83,6 @@
                 <button class="menu-item" id="createGameBtn">
                     <span class="menu-icon">🧩</span>
                     Створити гру
-                </button>
-                <button class="menu-item" id="authorshipBtn">
-                    <span class="menu-icon">✨</span>
-                    Авторство
                 </button>
             </div>
         </div>
@@ -115,11 +114,60 @@
     <!-- Список усіх спроб -->
     <div id="guessesContainer"></div>
 
-    <!-- Посилання на політику конфіденційності -->
-    <div id="privacyPolicyBlock" class="privacy-policy-block">
-        <p>
-            <a href="{{ url_for('privacy_policy') }}">Політика Конфіденційності</a>
-        </p>
+</div>
+
+<!-- Модалка: налаштування -->
+<div id="settingsModal" class="modal hidden">
+    <div class="modal-content">
+        <span id="closeSettingsModal" class="close">×</span>
+        <h2>Налаштування</h2>
+
+        <div class="settings-section">
+            <h3 class="settings-section-title">Підказки</h3>
+            <div class="settings-options" role="radiogroup" aria-label="Складність підказок">
+                <label class="settings-option" for="hintModeEasy">
+                    <input type="radio" id="hintModeEasy" name="hintMode" value="easy">
+                    <span>
+                        <span class="settings-option-label">Легко</span>
+                        <span class="settings-option-description">Підказка буде вдвічі ближчою за ваше найкраще слово.</span>
+                    </span>
+                </label>
+                <label class="settings-option" for="hintModeMedium">
+                    <input type="radio" id="hintModeMedium" name="hintMode" value="medium">
+                    <span>
+                        <span class="settings-option-label">Середньо</span>
+                        <span class="settings-option-description">Підказка буде на одну позицію ближчою за ваше найкраще слово.</span>
+                    </span>
+                </label>
+                <label class="settings-option" for="hintModeHard">
+                    <input type="radio" id="hintModeHard" name="hintMode" value="hard">
+                    <span>
+                        <span class="settings-option-label">Важко</span>
+                        <span class="settings-option-description">Підказка буде випадковою серед ще не відкритих позицій.</span>
+                    </span>
+                </label>
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <h3 class="settings-section-title">Сортування</h3>
+            <div class="settings-options" role="radiogroup" aria-label="Сортування списку спроб">
+                <label class="settings-option" for="sortModeSimilarity">
+                    <input type="radio" id="sortModeSimilarity" name="sortMode" value="similarity">
+                    <span>
+                        <span class="settings-option-label">За схожістю</span>
+                        <span class="settings-option-description">Найближчі слова будуть зверху списку.</span>
+                    </span>
+                </label>
+                <label class="settings-option" for="sortModeGuessOrder">
+                    <input type="radio" id="sortModeGuessOrder" name="sortMode" value="guess-order">
+                    <span>
+                        <span class="settings-option-label">За порядком спроб</span>
+                        <span class="settings-option-description">Слова відображатимуться в тій послідовності, у якій ви їх вводили.</span>
+                    </span>
+                </label>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -193,6 +241,6 @@
 </div>
 
 <!-- Основний скрипт -->
-<script type="module" src="{{ url_for('static', filename='js/main.js', v='20260215-3') }}"></script>
+<script type="module" src="{{ url_for('static', filename='js/main.js', v='20260403-18') }}"></script>
 </body>
 </html>

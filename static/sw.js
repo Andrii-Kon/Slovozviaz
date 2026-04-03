@@ -1,4 +1,4 @@
-const CACHE_NAME = 'slovozviaz-cache-v2';
+const CACHE_NAME = 'slovozviaz-cache-v21';
 const urlsToCache = [
     '/',
     '/static/css/style.css',
