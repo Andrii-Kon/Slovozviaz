@@ -160,6 +160,11 @@ function normalizeGameId(value) {
     return (value || "").trim().toLowerCase();
 }
 
+function normalizeDateParam(value) {
+    const normalized = (value || "").trim();
+    return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? normalized : null;
+}
+
 function getCurrentGameNumber() {
     if (currentCustomGameId || !currentGameDate) return null;
     return computeGameNumber(currentGameDate);
@@ -282,9 +287,16 @@ function updateUrlForCurrentGame() {
     if (currentCustomGameId) {
         url.searchParams.set("game", currentCustomGameId);
         url.searchParams.delete("custom");
+        url.searchParams.delete("date");
     } else {
         url.searchParams.delete("game");
         url.searchParams.delete("custom");
+        const todayStr = new Date().toISOString().split("T")[0];
+        if (currentGameDate && currentGameDate !== todayStr) {
+            url.searchParams.set("date", currentGameDate);
+        } else {
+            url.searchParams.delete("date");
+        }
     }
     history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
 }
@@ -689,6 +701,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const closeAuthorshipModalBtn = document.getElementById('closeAuthorshipModal');
     const urlParams = new URLSearchParams(window.location.search);
     const customGameIdFromUrl = normalizeGameId(urlParams.get("game"));
+    const requestedDateFromUrl = normalizeDateParam(urlParams.get("date"));
     const legacyCustomWordFromUrl = normalizeWord(urlParams.get("custom"));
 
     if (randomGameBtn) randomGameBtn.textContent = "🔀 Випадкова";
@@ -851,7 +864,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     const todayStr = new Date().toISOString().split("T")[0];
     if (!currentGameDate && !currentCustomGameId) {
-        currentGameDate = todayStr;
+        currentGameDate = requestedDateFromUrl || todayStr;
         resetRuntimeGameState();
     }
     dayNumber = computeGameNumber(todayStr);

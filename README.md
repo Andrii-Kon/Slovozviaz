@@ -126,6 +126,18 @@ To run this project locally, follow these steps:
         ```bash
         python generate_archives.py
         ```
+      * Or generate ranking for one custom word:
+        ```bash
+        python generate_rankings.py --word "слово" --date 2026-02-15
+        ```
+      * If you need live custom games on hosting without the 900MB model, build compact vectors for wordlist:
+        ```bash
+        python build_live_vectors.py
+        ```
+        Then deploy `data/word_vectors_ubercorpus_wordlist_fp16.npz` and set env var:
+        ```bash
+        LIVE_VECTORS_PATH=data/word_vectors_ubercorpus_wordlist_fp16.npz
+        ```
 
 6.  **Run the web server:**
 

@@ -1,5 +1,5 @@
 # app.py
-from flask import Flask, render_template, jsonify, request, Response
+from flask import Flask, render_template, jsonify, request, Response, abort
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime, date
 from dotenv import load_dotenv
@@ -25,6 +25,23 @@ load_dotenv()
 
 app = Flask(__name__)
 app.config["JSON_AS_ASCII"] = False  # коректна UTF-8 відповідь
+
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default
+    return raw_value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _env_int(name: str, default: int, minimum: int = 0) -> int:
+    raw_value = os.getenv(name)
+    if raw_value is None or not raw_value.strip():
+        return default
+    try:
+        return max(minimum, int(raw_value))
+    except ValueError:
+        return default
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 instance_path = os.path.join(basedir, "instance")
@@ -86,6 +103,25 @@ CUSTOM_GAME_TOKEN_SECRET = (
     or os.getenv("SECRET_KEY")
     or "slovozviaz-custom-game-v1"
 ).encode("utf-8")
+DEV_MODE_ENABLED = _env_flag("DEV_MODE_ENABLED")
+DEV_MODE_PASSWORD = (os.getenv("DEV_MODE_PASSWORD") or "").strip()
+DEV_MODE_PATH = (os.getenv("DEV_MODE_PATH") or "").strip()
+DEV_MODE_COOKIE_NAME = os.getenv("DEV_MODE_COOKIE_NAME", "slovozviaz_dev_mode")
+DEV_MODE_COOKIE_MAX_AGE_SECONDS = _env_int(
+    "DEV_MODE_COOKIE_MAX_AGE_SECONDS",
+    60 * 60 * 24 * 30,
+    minimum=300,
+)
+
+if DEV_MODE_PATH and not DEV_MODE_PATH.startswith("/"):
+    DEV_MODE_PATH = f"/{DEV_MODE_PATH}"
+if len(DEV_MODE_PATH) > 1:
+    DEV_MODE_PATH = DEV_MODE_PATH.rstrip("/")
+if DEV_MODE_PATH == "/":
+    DEV_MODE_PATH = ""
+
+if DEV_MODE_ENABLED and (not DEV_MODE_PASSWORD or not DEV_MODE_PATH):
+    print("[DEV MODE] Потрібні DEV_MODE_PASSWORD і DEV_MODE_PATH. Без них dev mode буде вимкнено.")
 
 # ── Допоміжні для імпорту JSON → SQLite (локально) ────────────────────────────
 CANDIDATE_DIRS = ["precomputed", "archive", "data", "rankings", "json"]
@@ -294,6 +330,18 @@ def _get_archive_dates_cached() -> List[str]:
     return dates
 
 
+def _invalidate_archive_caches(target_date: Optional[date] = None) -> None:
+    global ARCHIVE_DATES_CACHE, ARCHIVE_DATES_CACHE_EXPIRES_AT
+
+    if target_date is None:
+        RANKING_CACHE.clear()
+    else:
+        RANKING_CACHE.pop(target_date, None)
+
+    ARCHIVE_DATES_CACHE = None
+    ARCHIVE_DATES_CACHE_EXPIRES_AT = 0.0
+
+
 def _normalize_word(raw_word: Optional[str]) -> str:
     return (raw_word or "").strip().lower()
 
@@ -475,6 +523,153 @@ def _get_live_ranking_cached(target_word: str) -> List[Dict[str, Any]]:
         CUSTOM_RANKING_CACHE.popitem(last=False)
     return ranking
 
+
+def _is_dev_mode_available() -> bool:
+    return DEV_MODE_ENABLED and bool(DEV_MODE_PASSWORD) and bool(DEV_MODE_PATH)
+
+
+def _require_dev_mode_enabled() -> None:
+    if not _is_dev_mode_available():
+        abort(404)
+
+
+def _build_dev_auth_cookie_value() -> str:
+    if not DEV_MODE_PASSWORD:
+        return ""
+
+    return hmac.new(
+        DEV_MODE_PASSWORD.encode("utf-8"),
+        b"slovozviaz-dev-auth-cookie",
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def _has_dev_access() -> bool:
+    if not _is_dev_mode_available():
+        return False
+
+    cookie_value = request.cookies.get(DEV_MODE_COOKIE_NAME, "")
+    expected_value = _build_dev_auth_cookie_value()
+    return bool(cookie_value) and bool(expected_value) and hmac.compare_digest(cookie_value, expected_value)
+
+
+def _set_dev_auth_cookie(response: Response) -> None:
+    response.set_cookie(
+        DEV_MODE_COOKIE_NAME,
+        _build_dev_auth_cookie_value(),
+        max_age=DEV_MODE_COOKIE_MAX_AGE_SECONDS,
+        httponly=True,
+        samesite="Lax",
+        secure=bool(request.is_secure),
+        path="/",
+    )
+
+
+def _clear_dev_auth_cookie(response: Response) -> None:
+    response.delete_cookie(DEV_MODE_COOKIE_NAME, path="/")
+
+
+def _dev_auth_required_response():
+    return jsonify({"error": "Потрібен доступ до dev-режиму."}), 401
+
+
+def _parse_requested_game_date(raw_value: Any) -> date:
+    if not isinstance(raw_value, str) or not raw_value.strip():
+        raise ValueError("Вкажіть дату гри у форматі YYYY-MM-DD.")
+
+    try:
+        return datetime.strptime(raw_value.strip(), "%Y-%m-%d").date()
+    except ValueError as exc:
+        raise ValueError("Невірний формат дати. Використовуйте YYYY-MM-DD.") from exc
+
+
+def _resolve_secret_word_for_archive(raw_value: Any) -> Tuple[str, str, bool]:
+    normalized_word = _normalize_word(raw_value if isinstance(raw_value, str) else "")
+    if not normalized_word:
+        raise ValueError("Введіть секретне слово.")
+
+    if normalized_word in VALID_WORDS:
+        return normalized_word, normalized_word, False
+
+    resolved_word = _resolve_word_to_valid_lemma(normalized_word)
+    if not resolved_word:
+        raise ValueError("Цього слова немає у словнику гри.")
+
+    return normalized_word, resolved_word, resolved_word != normalized_word
+
+
+def _build_dev_public_game_url(game_date: date) -> str:
+    return f"{request.url_root.rstrip('/')}/?date={game_date.isoformat()}"
+
+
+def _build_dev_archive_preview(game_date: date, raw_word: Any) -> Dict[str, Any]:
+    requested_word, resolved_word, was_normalized = _resolve_secret_word_for_archive(raw_word)
+
+    existing_row = _run_db_query_with_retry(
+        lambda: ArchivedGame.query
+        .options(load_only(ArchivedGame.game_date, ArchivedGame.secret_word, ArchivedGame.created_at))
+        .filter_by(game_date=game_date)
+        .first()
+    )
+
+    ranking = _get_live_ranking_cached(resolved_word)
+    today_utc = datetime.utcnow().date()
+    if game_date < today_utc:
+        date_relation = "past"
+    elif game_date > today_utc:
+        date_relation = "future"
+    else:
+        date_relation = "today"
+
+    return {
+        "game_date": game_date.isoformat(),
+        "today_utc": today_utc.isoformat(),
+        "date_relation": date_relation,
+        "requested_word": requested_word,
+        "secret_word": resolved_word,
+        "word_was_normalized": was_normalized,
+        "existing_game": (
+            {
+                "game_date": existing_row.game_date.isoformat(),
+                "secret_word": existing_row.secret_word,
+                "created_at": existing_row.created_at.isoformat() if existing_row.created_at else None,
+            }
+            if existing_row
+            else None
+        ),
+        "action": "replace" if existing_row else "create",
+        "ranking_preview": ranking[:500],
+        "total_ranking_words": len(ranking),
+        "public_game_url": _build_dev_public_game_url(game_date),
+    }
+
+
+def _upsert_archived_game_for_date(game_date: date, secret_word: str, ranking: List[Dict[str, Any]]) -> Dict[str, Any]:
+    row = ArchivedGame.query.filter_by(game_date=game_date).first()
+    previous_secret_word = row.secret_word if row else None
+    payload = json.dumps(ranking, ensure_ascii=False)
+
+    if row is None:
+        row = ArchivedGame(
+            game_date=game_date,
+            secret_word=secret_word,
+            ranking_json=payload,
+        )
+        db.session.add(row)
+        save_action = "created"
+    else:
+        row.secret_word = secret_word
+        row.ranking_json = payload
+        save_action = "replaced"
+
+    db.session.commit()
+    _invalidate_archive_caches(game_date)
+
+    return {
+        "save_action": save_action,
+        "previous_secret_word": previous_secret_word,
+    }
+
 # ── Маршрути ───────────────────────────────────────────────────────────────────
 @app.route("/")
 def index():
@@ -484,6 +679,21 @@ def index():
 @app.route("/create-game")
 def create_game_page():
     return render_template("create_game.html")
+
+
+def dev_archive_game_page():
+    _require_dev_mode_enabled()
+    response = Response(render_template(
+        "dev_archive_game.html",
+        dev_authenticated=_has_dev_access(),
+        today_utc=datetime.utcnow().date().isoformat(),
+        dev_login_path=f"{DEV_MODE_PATH}/login",
+        dev_logout_path=f"{DEV_MODE_PATH}/logout",
+        dev_preview_path=f"{DEV_MODE_PATH}/preview",
+        dev_save_path=f"{DEV_MODE_PATH}/save",
+    ))
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
 
 @app.route("/ranked")
 @app.route("/api/ranked")
@@ -606,6 +816,102 @@ def ranked_by_game():
     })
     response.headers["Cache-Control"] = "private, no-store"
     return response
+
+
+def dev_login():
+    _require_dev_mode_enabled()
+
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "Очікував JSON-об'єкт."}), 400
+
+    password = payload.get("password")
+    if not isinstance(password, str) or not hmac.compare_digest(password, DEV_MODE_PASSWORD):
+        return jsonify({"error": "Невірний dev-пароль."}), 401
+
+    response = jsonify({"ok": True})
+    _set_dev_auth_cookie(response)
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
+
+
+def dev_logout():
+    _require_dev_mode_enabled()
+
+    response = jsonify({"ok": True})
+    _clear_dev_auth_cookie(response)
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
+
+
+def dev_archive_game_preview():
+    _require_dev_mode_enabled()
+    if not _has_dev_access():
+        return _dev_auth_required_response()
+
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "Очікував JSON-об'єкт."}), 400
+
+    try:
+        game_date = _parse_requested_game_date(payload.get("game_date"))
+        preview = _build_dev_archive_preview(game_date, payload.get("word"))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except (OperationalError, InterfaceError):
+        return jsonify({"error": "Тимчасова помилка підключення до бази. Спробуйте ще раз."}), 503
+    except FileNotFoundError as e:
+        return jsonify({"error": str(e)}), 503
+    except Exception as e:
+        print(f"[DEV] Помилка preview для {payload!r}: {e}")
+        return jsonify({"error": "Не вдалося підготувати preview гри."}), 500
+
+    response = jsonify(preview)
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
+
+
+def dev_archive_game_save():
+    _require_dev_mode_enabled()
+    if not _has_dev_access():
+        return _dev_auth_required_response()
+
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "Очікував JSON-об'єкт."}), 400
+
+    try:
+        game_date = _parse_requested_game_date(payload.get("game_date"))
+        preview = _build_dev_archive_preview(game_date, payload.get("word"))
+        ranking = _get_live_ranking_cached(preview["secret_word"])
+        save_result = _upsert_archived_game_for_date(game_date, preview["secret_word"], ranking)
+    except ValueError as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 400
+    except (OperationalError, InterfaceError):
+        db.session.rollback()
+        return jsonify({"error": "Тимчасова помилка підключення до бази. Спробуйте ще раз."}), 503
+    except FileNotFoundError as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 503
+    except Exception as e:
+        db.session.rollback()
+        print(f"[DEV] Помилка save для {payload!r}: {e}")
+        return jsonify({"error": "Не вдалося зберегти гру в архів."}), 500
+
+    response = jsonify({
+        **preview,
+        **save_result,
+    })
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
+
+if DEV_MODE_PATH:
+    app.add_url_rule(DEV_MODE_PATH, view_func=dev_archive_game_page, methods=["GET"])
+    app.add_url_rule(f"{DEV_MODE_PATH}/login", view_func=dev_login, methods=["POST"])
+    app.add_url_rule(f"{DEV_MODE_PATH}/logout", view_func=dev_logout, methods=["POST"])
+    app.add_url_rule(f"{DEV_MODE_PATH}/preview", view_func=dev_archive_game_preview, methods=["POST"])
+    app.add_url_rule(f"{DEV_MODE_PATH}/save", view_func=dev_archive_game_save, methods=["POST"])
 
 @app.route("/api/daily-index")
 def daily_index():
