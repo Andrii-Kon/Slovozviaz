@@ -3,6 +3,12 @@ import { renderGuesses, createGuessItem } from "./ui.js?v=20260403-2";
 
 const weekdayFmt = new Intl.DateTimeFormat('uk-UA', { weekday: 'short' });
 const monthFmt = new Intl.DateTimeFormat('uk-UA', { month: 'short' });
+const kyivDateFmt = new Intl.DateTimeFormat("uk-UA", {
+    timeZone: "Europe/Kyiv",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+});
 
 let isGoingUp = false;
 let allowedWords = new Set();
@@ -165,6 +171,19 @@ function normalizeDateParam(value) {
     return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? normalized : null;
 }
 
+function getCurrentKyivDateString() {
+    const parts = kyivDateFmt.formatToParts(new Date());
+    const year = parts.find(part => part.type === "year")?.value;
+    const month = parts.find(part => part.type === "month")?.value;
+    const day = parts.find(part => part.type === "day")?.value;
+
+    if (!year || !month || !day) {
+        throw new Error("Cannot format current Kyiv date.");
+    }
+
+    return `${year}-${month}-${day}`;
+}
+
 function getCurrentGameNumber() {
     if (currentCustomGameId || !currentGameDate) return null;
     return computeGameNumber(currentGameDate);
@@ -291,7 +310,7 @@ function updateUrlForCurrentGame() {
     } else {
         url.searchParams.delete("game");
         url.searchParams.delete("custom");
-        const todayStr = new Date().toISOString().split("T")[0];
+        const todayStr = getCurrentKyivDateString();
         if (currentGameDate && currentGameDate !== todayStr) {
             url.searchParams.set("date", currentGameDate);
         } else {
@@ -437,7 +456,7 @@ async function fetchArchiveDates(forceRefresh = false) {
                 const dates = await response.json();
                 if (!Array.isArray(dates)) throw new Error("Archive list format incorrect");
 
-                const today = new Date().toISOString().split("T")[0];
+                const today = getCurrentKyivDateString();
                 dates.sort((a, b) => b.localeCompare(a));
                 const filtered = dates.filter(d => d <= today);
 
@@ -862,7 +881,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
-    const todayStr = new Date().toISOString().split("T")[0];
+    const todayStr = getCurrentKyivDateString();
     if (!currentGameDate && !currentCustomGameId) {
         currentGameDate = requestedDateFromUrl || todayStr;
         resetRuntimeGameState();

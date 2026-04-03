@@ -17,6 +17,7 @@ import time
 import hashlib
 import hmac
 from typing import List, Dict, Any, Optional, Tuple
+from zoneinfo import ZoneInfo
 
 import numpy as np
 
@@ -25,6 +26,8 @@ load_dotenv()
 
 app = Flask(__name__)
 app.config["JSON_AS_ASCII"] = False  # коректна UTF-8 відповідь
+
+KYIV_TZ = ZoneInfo("Europe/Kyiv")
 
 
 def _env_flag(name: str, default: bool = False) -> bool:
@@ -330,6 +333,14 @@ def _get_archive_dates_cached() -> List[str]:
     return dates
 
 
+def _now_in_kyiv() -> datetime:
+    return datetime.now(KYIV_TZ)
+
+
+def _today_in_kyiv() -> date:
+    return _now_in_kyiv().date()
+
+
 def _invalidate_archive_caches(target_date: Optional[date] = None) -> None:
     global ARCHIVE_DATES_CACHE, ARCHIVE_DATES_CACHE_EXPIRES_AT
 
@@ -613,17 +624,17 @@ def _build_dev_archive_preview(game_date: date, raw_word: Any) -> Dict[str, Any]
     )
 
     ranking = _get_live_ranking_cached(resolved_word)
-    today_utc = datetime.utcnow().date()
-    if game_date < today_utc:
+    today_kyiv = _today_in_kyiv()
+    if game_date < today_kyiv:
         date_relation = "past"
-    elif game_date > today_utc:
+    elif game_date > today_kyiv:
         date_relation = "future"
     else:
         date_relation = "today"
 
     return {
         "game_date": game_date.isoformat(),
-        "today_utc": today_utc.isoformat(),
+        "today_kyiv": today_kyiv.isoformat(),
         "date_relation": date_relation,
         "requested_word": requested_word,
         "secret_word": resolved_word,
@@ -686,7 +697,7 @@ def dev_archive_game_page():
     response = Response(render_template(
         "dev_archive_game.html",
         dev_authenticated=_has_dev_access(),
-        today_utc=datetime.utcnow().date().isoformat(),
+        today_kyiv=_today_in_kyiv().isoformat(),
         dev_login_path=f"{DEV_MODE_PATH}/login",
         dev_logout_path=f"{DEV_MODE_PATH}/logout",
         dev_preview_path=f"{DEV_MODE_PATH}/preview",
@@ -705,8 +716,8 @@ def get_ranked():
         except ValueError:
             return jsonify({"error": "Невірний формат дати. Використовуйте YYYY-MM-DD."}), 400
     else:
-        # Використовуємо UTC-дату, щоб менше впливала таймзона хостингу
-        target = datetime.utcnow().date()
+        # Базова "сьогоднішня" гра перемикається о 00:00 за Києвом
+        target = _today_in_kyiv()
 
     # 1) Кеш у пам'яті
     cached = RANKING_CACHE.get(target)
@@ -915,7 +926,7 @@ if DEV_MODE_PATH:
 
 @app.route("/api/daily-index")
 def daily_index():
-    delta = (date.today() - BASE_DATE).days
+    delta = (_today_in_kyiv() - BASE_DATE).days
     response = jsonify({"game_number": delta + 1})
     response.headers["Cache-Control"] = "public, max-age=60"
     return response
@@ -994,7 +1005,7 @@ def robots_txt():
 @app.route("/sitemap.xml")
 def sitemap_xml():
     base_url = request.url_root.rstrip('/')
-    last_mod = date.today().isoformat()
+    last_mod = _today_in_kyiv().isoformat()
     xml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>{base_url}/</loc><lastmod>{last_mod}</lastmod><changefreq>daily</changefreq><priority>1.0</priority></url>
