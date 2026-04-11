@@ -28,7 +28,7 @@
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
 
     <!-- Основні стилі -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260403-21') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260411-1') }}">
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/favicon.png') }}">
 </head>
 <body>
@@ -56,6 +56,14 @@
             <span class="guess-counter">Спроб: <span id="guessCount">0</span></span>
             <span class="hint-counter">Підказки: <span id="hintCount">0</span></span>
         </div>
+    </div>
+
+    <div id="twitchChatBanner" class="twitchChatBanner hidden" aria-live="polite">
+        <div class="twitchChatStatusRow">
+            <span class="twitchChatStatusDot" aria-hidden="true"></span>
+            <span id="twitchChatStatusText">Twitch chat mode вимкнено.</span>
+        </div>
+        <div id="twitchChatLastEvent" class="twitchChatLastEvent">Очікування нових слів із чату.</div>
     </div>
 
     <!-- Поле введення слова + меню -->
@@ -241,6 +249,6 @@
 </div>
 
 <!-- Основний скрипт -->
-<script type="module" src="{{ url_for('static', filename='js/main.js', v='20260404-1') }}"></script>
+<script type="module" src="{{ url_for('static', filename='js/main.js', v='20260411-2') }}"></script>
 </body>
 </html>

@@ -1,4 +1,11 @@
-import { fetchRankedWords, fetchRankedWordsByWord, fetchRankedWordsByGameId, normalizeWordToKnownLemma } from "./api.js?v=20260402-3";
+import {
+    fetchRankedWords,
+    fetchRankedWordsByWord,
+    fetchRankedWordsByGameId,
+    normalizeWordToKnownLemma,
+    registerTwitchChatTarget,
+    fetchTwitchChatEvents
+} from "./api.js?v=20260411-2";
 import { renderGuesses, createGuessItem } from "./ui.js?v=20260403-2";
 
 const weekdayFmt = new Intl.DateTimeFormat('uk-UA', { weekday: 'short' });
@@ -35,6 +42,20 @@ let giveUpWord = null;
 let archiveDatesCache = null;
 let archiveDatesInFlight = null;
 let nextEntrySequence = 0;
+let guessSubmissionQueue = Promise.resolve();
+
+const twitchChatState = {
+    enabled: false,
+    channel: null,
+    gameScope: null,
+    pollIntervalMs: 1500,
+    targetRefreshMs: 45000,
+    lastEventId: 0,
+    isPolling: false,
+    pollTimerId: null,
+    targetHeartbeatId: null,
+    errorCount: 0
+};
 
 const ARCHIVE_DATES_CACHE_KEY = "archiveDatesCache_v1";
 const ARCHIVE_DATES_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -169,6 +190,21 @@ function normalizeGameId(value) {
 function normalizeDateParam(value) {
     const normalized = (value || "").trim();
     return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? normalized : null;
+}
+
+function normalizeTwitchChannel(value) {
+    return (value || "")
+        .trim()
+        .toLowerCase()
+        .replace(/^#/, "")
+        .replace(/[^a-z0-9_]/g, "");
+}
+
+function normalizeTwitchGameScope(value) {
+    return (value || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9:_-]/g, "");
 }
 
 function getCurrentKyivDateString() {
@@ -713,6 +749,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     const settingsBtn = document.getElementById("settingsBtn");
     const settingsModal = document.getElementById("settingsModal");
     const closeSettingsModal = document.getElementById("closeSettingsModal");
+    const twitchChatBanner = document.getElementById("twitchChatBanner");
+    const twitchChatStatusText = document.getElementById("twitchChatStatusText");
+    const twitchChatLastEvent = document.getElementById("twitchChatLastEvent");
     // const readMoreBtn = document.getElementById("readMoreBtn"); // Закоментовано, якщо не використовується
 
     const authorshipBtn = document.getElementById('authorshipBtn');
@@ -722,6 +761,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     const customGameIdFromUrl = normalizeGameId(urlParams.get("game"));
     const requestedDateFromUrl = normalizeDateParam(urlParams.get("date"));
     const legacyCustomWordFromUrl = normalizeWord(urlParams.get("custom"));
+    const twitchModeFromUrl = urlParams.get("twitch") === "1";
+    const twitchChannelFromUrl = normalizeTwitchChannel(urlParams.get("twitch_channel"));
 
     if (randomGameBtn) randomGameBtn.textContent = "🔀 Випадкова";
     loadSettings();
@@ -824,6 +865,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (lastGuessWrapper) lastGuessWrapper.classList.add("hidden");
             showInitialInfoBlocks();
             loadGameState();
+            if (twitchChatState.enabled) await syncTwitchChatScope();
             if (guessInput) guessInput.focus();
             return true;
         } catch (err) {
@@ -871,6 +913,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (lastGuessWrapper) lastGuessWrapper.classList.add("hidden");
             showInitialInfoBlocks();
             loadGameState();
+            if (twitchChatState.enabled) await syncTwitchChatScope();
             if (guessInput) guessInput.focus();
             return true;
         } catch (err) {
@@ -878,6 +921,278 @@ document.addEventListener("DOMContentLoaded", async () => {
             alert("Помилка генерації live-гри. Див. консоль для деталей.");
             if (guessesContainer) guessesContainer.innerHTML = '<p style="text-align: center;">Помилка генерації.</p>';
             return false;
+        }
+    }
+
+    function setTwitchChatStatus(message, state = "idle") {
+        if (!twitchChatBanner || !twitchChatStatusText) return;
+
+        twitchChatBanner.classList.remove("hidden", "live", "error");
+        if (state === "live") twitchChatBanner.classList.add("live");
+        if (state === "error") twitchChatBanner.classList.add("error");
+        twitchChatStatusText.textContent = message;
+    }
+
+    function setTwitchChatLastEvent(message) {
+        if (!twitchChatLastEvent) return;
+        twitchChatLastEvent.textContent = message;
+    }
+
+    function getCurrentTwitchGameScope() {
+        if (currentCustomGameId) {
+            return normalizeTwitchGameScope(`custom:${currentCustomGameId}`);
+        }
+
+        const todayStr = getCurrentKyivDateString();
+        if (currentGameDate && currentGameDate !== todayStr) {
+            return normalizeTwitchGameScope(`date:${currentGameDate}`);
+        }
+
+        return "daily:current";
+    }
+
+    function getTwitchGameScopeLabel(gameScope) {
+        if (!gameScope) return "усі активні ігри";
+        if (gameScope === "daily:current") return "поточну daily-гру";
+        if (gameScope.startsWith("date:")) return `гру за ${gameScope.slice(5)}`;
+        if (gameScope.startsWith("custom:")) return "цю кастомну гру";
+        return gameScope;
+    }
+
+    function formatTwitchChatterLabel(chatterName, chatterLogin) {
+        const label = (chatterName || chatterLogin || "").trim();
+        return label ? `@${label}` : "чат";
+    }
+
+    async function submitGuessWord(rawWord, options = {}) {
+        const {
+            source = "manual",
+            chatterName = "",
+            chatterLogin = ""
+        } = options;
+
+        if (didWin || didGiveUp) return false;
+
+        const isTwitchSource = source === "twitch";
+        let word = normalizeWord(rawWord);
+        if (!word) return false;
+
+        hideInitialInfoBlocks();
+        await fetchAllowedWords();
+
+        const resolvedGuess = await resolveGuessWord(word);
+        word = resolvedGuess.resolvedWord;
+        if (!word) return false;
+
+        if (!isTwitchSource && resolvedGuess.wasChanged && guessInput) {
+            guessInput.value = word;
+        }
+
+        if (getCombinedEntries().some(entry => entry.word === word)) {
+            if (isTwitchSource) {
+                setTwitchChatLastEvent(`Пропущено дубль: ${formatTwitchChatterLabel(chatterName, chatterLogin)} -> ${word}`);
+            } else if (lastGuessDisplay && lastGuessWrapper) {
+                const errorMsgElement = document.createElement("div");
+                errorMsgElement.textContent = `Слово "${word}" вже вгадано`;
+                if (guessInput) guessInput.value = "";
+                errorMsgElement.style.cssText = "color: #ffffff; padding: 0px 12px; text-align: left; font-style: italic;";
+                lastGuessDisplay.innerHTML = "";
+                lastGuessDisplay.appendChild(errorMsgElement);
+                lastGuessWrapper.classList.remove("hidden");
+            }
+
+            if (!isTwitchSource && guessInput) guessInput.focus();
+            return false;
+        }
+
+        if (allowedWordsLoaded && !allowedWords.has(word)) {
+            if (isTwitchSource) {
+                setTwitchChatLastEvent(`Пропущено невідоме слово: ${formatTwitchChatterLabel(chatterName, chatterLogin)} -> ${word}`);
+            } else if (lastGuessDisplay && lastGuessWrapper) {
+                const errorMsgElement = document.createElement("div");
+                errorMsgElement.textContent = "Вибачте, я не знаю цього слова";
+                errorMsgElement.style.cssText = "color: #ffffff; padding: 0px 12px; text-align: left; font-style: italic;";
+                lastGuessDisplay.innerHTML = "";
+                lastGuessDisplay.appendChild(errorMsgElement);
+                lastGuessWrapper.classList.remove("hidden");
+            }
+
+            if (!isTwitchSource && guessInput) guessInput.focus();
+            return false;
+        }
+
+        const match = getRankedWordEntry(word);
+        const data = match
+            ? { rank: match.rank, similarity: match.similarity }
+            : { rank: Infinity, error: true, errorMessage: "Цього слова немає у рейтингу цього дня." };
+
+        gameState.guessCount++;
+        if (guessCountElem) guessCountElem.textContent = gameState.guessCount;
+        lastWord = word;
+        gameState.guesses.push(createGameEntry({
+            word,
+            rank: data.rank,
+            similarity: data.similarity,
+            error: data.error || false,
+            errorMessage: data.errorMessage,
+            source: isTwitchSource ? "twitch" : "manual",
+            submittedBy: isTwitchSource ? formatTwitchChatterLabel(chatterName, chatterLogin) : null
+        }));
+
+        if (isTwitchSource) {
+            setTwitchChatLastEvent(`${formatTwitchChatterLabel(chatterName, chatterLogin)} -> ${word}`);
+        }
+
+        if (!data.error) {
+            if (data.rank < bestRank) bestRank = data.rank;
+            if (data.rank === 1) {
+                renderCurrentGuesses();
+                endGameAsWin();
+                return true;
+            }
+        }
+
+        renderCurrentGuesses();
+        if (!isTwitchSource && guessInput) {
+            guessInput.value = "";
+            guessInput.focus();
+        }
+        saveGameState();
+        return true;
+    }
+
+    function enqueueGuessSubmission(rawWord, options = {}) {
+        guessSubmissionQueue = guessSubmissionQueue
+            .then(() => submitGuessWord(rawWord, options))
+            .catch(err => {
+                console.error("[Error] submitGuessWord failed:", err);
+                return false;
+            });
+
+        return guessSubmissionQueue;
+    }
+
+    async function pollTwitchChatEventsLoop() {
+        if (!twitchChatState.enabled || twitchChatState.isPolling) return;
+
+        twitchChatState.isPolling = true;
+        try {
+            const payload = await fetchTwitchChatEvents(
+                twitchChatState.lastEventId,
+                twitchChatState.channel,
+                twitchChatState.gameScope,
+                25
+            );
+
+            if (!payload.ok) {
+                throw new Error(payload?.data?.error || `HTTP ${payload.status}`);
+            }
+
+            const events = Array.isArray(payload?.data?.events) ? payload.data.events : [];
+            for (const event of events) {
+                const eventId = Number(event?.id);
+                if (Number.isFinite(eventId) && eventId > twitchChatState.lastEventId) {
+                    twitchChatState.lastEventId = eventId;
+                }
+
+                const word = normalizeWord(event?.word);
+                if (!word) continue;
+
+                await enqueueGuessSubmission(word, {
+                    source: "twitch",
+                    chatterName: event?.user_name || "",
+                    chatterLogin: event?.user_login || ""
+                });
+            }
+
+            twitchChatState.errorCount = 0;
+            const channelLabel = twitchChatState.channel ? `#${twitchChatState.channel}` : "активного каналу";
+            setTwitchChatStatus(
+                `Twitch chat mode активний для ${channelLabel} через ${getTwitchGameScopeLabel(twitchChatState.gameScope)}.`,
+                "live"
+            );
+        } catch (err) {
+            twitchChatState.errorCount += 1;
+            console.error("[Error] Twitch chat polling failed:", err);
+            setTwitchChatStatus("Twitch chat тимчасово недоступний. Пробую перепідключитися…", "error");
+        } finally {
+            twitchChatState.isPolling = false;
+        }
+    }
+
+    async function syncTwitchChatScope() {
+        if (!twitchChatState.enabled) return;
+
+        const nextGameScope = getCurrentTwitchGameScope();
+        twitchChatState.gameScope = nextGameScope;
+
+        const pageUrl = `${window.location.origin}${window.location.pathname}${window.location.search}`;
+        const payload = await registerTwitchChatTarget(
+            twitchChatState.channel,
+            nextGameScope,
+            pageUrl
+        );
+        if (!payload.ok) {
+            throw new Error(payload?.data?.error || `HTTP ${payload.status}`);
+        }
+
+        twitchChatState.pollIntervalMs = Number.isFinite(payload?.data?.poll_interval_ms)
+            ? payload.data.poll_interval_ms
+            : twitchChatState.pollIntervalMs;
+        const targetTtlSeconds = Number.isFinite(payload?.data?.target_ttl_seconds)
+            ? payload.data.target_ttl_seconds
+            : 90;
+        twitchChatState.targetRefreshMs = Math.max(15000, Math.floor(targetTtlSeconds * 500));
+        twitchChatState.lastEventId = Number.isFinite(payload?.data?.latest_event_id)
+            ? payload.data.latest_event_id
+            : 0;
+
+        const channelLabel = twitchChatState.channel ? `#${twitchChatState.channel}` : "активного каналу";
+        setTwitchChatStatus(
+            `Twitch chat mode активний для ${channelLabel} через ${getTwitchGameScopeLabel(nextGameScope)}.`,
+            "live"
+        );
+        setTwitchChatLastEvent("Нові слова з чату будуть додаватися лише до цієї гри.");
+    }
+
+    function restartTwitchTargetHeartbeat() {
+        if (twitchChatState.targetHeartbeatId) {
+            window.clearInterval(twitchChatState.targetHeartbeatId);
+            twitchChatState.targetHeartbeatId = null;
+        }
+
+        if (!twitchChatState.enabled) return;
+
+        twitchChatState.targetHeartbeatId = window.setInterval(async () => {
+            try {
+                await syncTwitchChatScope();
+            } catch (err) {
+                console.error("[Error] Twitch target heartbeat failed:", err);
+                setTwitchChatStatus("Не вдалося оновити активну Twitch-гру. Пробую ще раз…", "error");
+            }
+        }, twitchChatState.targetRefreshMs);
+    }
+
+    async function initializeTwitchChatMode() {
+        if (!twitchModeFromUrl) return;
+
+        twitchChatState.enabled = true;
+        twitchChatState.channel = twitchChannelFromUrl || null;
+        setTwitchChatStatus("Підключення до Twitch chat…");
+        setTwitchChatLastEvent("Нові слова з чату будуть додаватися автоматично.");
+
+        try {
+            await syncTwitchChatScope();
+            restartTwitchTargetHeartbeat();
+            await pollTwitchChatEventsLoop();
+            twitchChatState.pollTimerId = window.setInterval(
+                pollTwitchChatEventsLoop,
+                twitchChatState.pollIntervalMs
+            );
+        } catch (err) {
+            console.error("[Error] initializeTwitchChatMode failed:", err);
+            setTwitchChatStatus("Не вдалося запустити Twitch chat mode.", "error");
+            setTwitchChatLastEvent("Перевірте /api/twitch-chat/status і налаштування bridge.");
         }
     }
 
@@ -917,78 +1232,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     loadGameState(); // Це оновить видимість howToPlayBlock та privacyPolicyBlock
+    await initializeTwitchChatMode();
 
     async function handleSubmit() {
-        if (didWin || didGiveUp) return;
-
-        let word = guessInput.value.trim().toLowerCase();
-        if (!word) return;
-
-        hideInitialInfoBlocks(); // Ховаємо блоки при першій спробі
-
-        await fetchAllowedWords();
-
-        const resolvedGuess = await resolveGuessWord(word);
-        word = resolvedGuess.resolvedWord;
-        if (resolvedGuess.wasChanged && guessInput) {
-            guessInput.value = word;
-        }
-
-        if (getCombinedEntries().some(entry => entry.word === word)) {
-            if (lastGuessDisplay && lastGuessWrapper) {
-                const errorMsgElement = document.createElement("div");
-                errorMsgElement.textContent = `Слово "${word}" вже вгадано`;
-                guessInput.value = "";
-                errorMsgElement.style.cssText = "color: #ffffff; padding: 0px 12px; text-align: left; font-style: italic;";
-                lastGuessDisplay.innerHTML = "";
-                lastGuessDisplay.appendChild(errorMsgElement);
-                lastGuessWrapper.classList.remove("hidden");
-            }
-            guessInput.focus();
-            return;
-        }
-
-        if (allowedWordsLoaded && !allowedWords.has(word)) {
-            if (lastGuessDisplay && lastGuessWrapper) {
-                const errorMsgElement = document.createElement("div");
-                errorMsgElement.textContent = "Вибачте, я не знаю цього слова";
-                errorMsgElement.style.cssText = "color: #ffffff; padding: 0px 12px; text-align: left; font-style: italic;";
-                lastGuessDisplay.innerHTML = "";
-                lastGuessDisplay.appendChild(errorMsgElement);
-                lastGuessWrapper.classList.remove("hidden");
-            }
-            guessInput.focus();
-            return;
-        }
-
-        const match = getRankedWordEntry(word);
-        let data = match
-            ? { rank: match.rank, similarity: match.similarity }
-            : { rank: Infinity, error: true, errorMessage: "Цього слова немає у рейтингу цього дня." };
-
-        gameState.guessCount++;
-        if (guessCountElem) guessCountElem.textContent = gameState.guessCount;
-        lastWord = word;
-        gameState.guesses.push(createGameEntry({
-            word,
-            rank: data.rank,
-            similarity: data.similarity,
-            error: data.error || false,
-            errorMessage: data.errorMessage
-        }));
-
-        if (!data.error) {
-            if (data.rank < bestRank) bestRank = data.rank;
-            if (data.rank === 1) {
-                renderCurrentGuesses();
-                endGameAsWin();
-                return;
-            }
-        }
-        renderCurrentGuesses();
-        guessInput.value = "";
-        guessInput.focus();
-        saveGameState();
+        if (!guessInput) return;
+        await enqueueGuessSubmission(guessInput.value, { source: "manual" });
     }
 
     async function loadArchive(game_date) {
@@ -1043,6 +1291,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             showInitialInfoBlocks(); // Показуємо інфо-блоки для нової гри
             loadGameState(); // Завантажуємо стан, якщо він є, або ініціалізуємо
+            if (twitchChatState.enabled) await syncTwitchChatScope();
 
         } catch (err) {
             console.error("Error loading archive for date", game_date, err);
@@ -1294,6 +1543,16 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     });
     window.addEventListener("resize", positionDropdownMenu);
+    window.addEventListener("beforeunload", () => {
+        if (twitchChatState.pollTimerId) {
+            window.clearInterval(twitchChatState.pollTimerId);
+            twitchChatState.pollTimerId = null;
+        }
+        if (twitchChatState.targetHeartbeatId) {
+            window.clearInterval(twitchChatState.targetHeartbeatId);
+            twitchChatState.targetHeartbeatId = null;
+        }
+    });
 
     if (shareButton) {
         shareButton.addEventListener('click', async () => {

@@ -147,6 +147,31 @@ To run this project locally, follow these steps:
 
     Open `http://127.0.0.1:5000` in your browser.
 
+7.  **Optional: bridge Twitch chat into the game:**
+
+      * Add a shared secret to your `.env` so the website can accept chat events:
+        ```env
+        TWITCH_CHAT_BRIDGE_SECRET=replace-me
+        ```
+      * Create a Twitch user access token for your bot account with at least the `user:read:chat` scope.
+      * Run the bridge script with the target website URL and your Twitch settings:
+        ```bash
+        export TWITCH_BOT_USERNAME=your_bot_account
+        export TWITCH_OAUTH_TOKEN=oauth:your_access_token
+        export TWITCH_CHANNEL=your_channel_name
+        export TWITCH_BRIDGE_TARGET_URL=http://127.0.0.1:5000/api/twitch-chat/publish
+        export TWITCH_CHAT_BRIDGE_SECRET=replace-me
+        export TWITCH_CHAT_COMMAND_PREFIX=!guess
+        python twitch_chat_bridge.py
+        ```
+      * Open the game with Twitch mode enabled:
+        ```text
+        http://127.0.0.1:5000/?twitch=1&twitch_channel=your_channel_name
+        ```
+      * The active page in Twitch mode automatically registers itself as the current target game for that channel, so you can switch between daily, archive, and custom `?game=...` links without restarting the bridge.
+      * If you ever need to force the bridge to a specific game manually, you can still set `TWITCH_GAME_URL` or `TWITCH_GAME_SCOPE`.
+      * When chatters send `!guess слово`, the website will automatically add that word as a guess.
+
 ## 🎲 How to Play
 
 1.  Navigate to the game's website.

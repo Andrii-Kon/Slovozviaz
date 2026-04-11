@@ -1,7 +1,7 @@
 # app.py
 from flask import Flask, render_template, jsonify, request, Response, abort
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from dotenv import load_dotenv
 from sqlalchemy.dialects.mysql import LONGTEXT
 from sqlalchemy.orm import load_only
@@ -75,6 +75,36 @@ class ArchivedGame(db.Model):
     ranking_json = db.Column(db.Text().with_variant(LONGTEXT, "mysql"), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+
+class TwitchChatEvent(db.Model):
+    __tablename__ = "twitch_chat_event"
+
+    id = db.Column(db.Integer, primary_key=True)
+    channel = db.Column(db.String(100), nullable=False, index=True)
+    game_scope = db.Column(db.String(160), nullable=False, default="", index=True)
+    chatter_user_login = db.Column(db.String(100), nullable=False)
+    chatter_display_name = db.Column(db.String(100), nullable=False)
+    raw_message = db.Column(db.String(500), nullable=False)
+    guessed_word = db.Column(db.String(100), nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+
+class TwitchChatActiveTarget(db.Model):
+    __tablename__ = "twitch_chat_active_target"
+
+    id = db.Column(db.Integer, primary_key=True)
+    channel = db.Column(db.String(100), nullable=False, unique=True, index=True)
+    game_scope = db.Column(db.String(160), nullable=False, default="", index=True)
+    page_url = db.Column(db.String(500), nullable=False, default="")
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(
+        db.DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+        index=True,
+    )
+
 # ── Дані / невеликі словники (опціонально) ─────────────────────────────────────
 def load_daily_words():
     try:
@@ -106,6 +136,18 @@ CUSTOM_GAME_TOKEN_SECRET = (
     or os.getenv("SECRET_KEY")
     or "slovozviaz-custom-game-v1"
 ).encode("utf-8")
+TWITCH_CHAT_BRIDGE_SECRET = (os.getenv("TWITCH_CHAT_BRIDGE_SECRET") or "").strip()
+TWITCH_CHAT_EVENT_RETENTION_HOURS = _env_int("TWITCH_CHAT_EVENT_RETENTION_HOURS", 24, minimum=1)
+TWITCH_CHAT_EVENT_POLL_LIMIT = _env_int("TWITCH_CHAT_EVENT_POLL_LIMIT", 25, minimum=1)
+TWITCH_CHAT_POLL_INTERVAL_MS = _env_int("TWITCH_CHAT_POLL_INTERVAL_MS", 1500, minimum=500)
+TWITCH_CHAT_TARGET_TTL_SECONDS = _env_int("TWITCH_CHAT_TARGET_TTL_SECONDS", 120, minimum=30)
+TWITCH_CHAT_PRUNE_INTERVAL_SECONDS = _env_int(
+    "TWITCH_CHAT_PRUNE_INTERVAL_SECONDS",
+    300,
+    minimum=30,
+)
+TWITCH_CHAT_MAX_STORED_EVENTS = _env_int("TWITCH_CHAT_MAX_STORED_EVENTS", 5000, minimum=100)
+TWITCH_CHAT_MAX_FETCH_LIMIT = 100
 DEV_MODE_ENABLED = _env_flag("DEV_MODE_ENABLED")
 DEV_MODE_PASSWORD = (os.getenv("DEV_MODE_PASSWORD") or "").strip()
 DEV_MODE_PATH = (os.getenv("DEV_MODE_PATH") or "").strip()
@@ -263,11 +305,43 @@ def import_json_into_sqlite_if_needed():
         else:
             print("[DB INIT] Підходящих JSON не знайдено — нічого не додано.")
 
+
+def ensure_twitch_chat_event_schema() -> None:
+    """Додає службові колонки для Twitch-черги, якщо таблиця вже існувала раніше."""
+    with app.app_context():
+        insp = inspect(db.engine)
+        if "twitch_chat_event" not in insp.get_table_names():
+            return
+
+        column_names = {column["name"] for column in insp.get_columns("twitch_chat_event")}
+        if "game_scope" in column_names:
+            return
+
+        dialect_name = db.engine.url.drivername
+        if dialect_name.startswith("sqlite"):
+            alter_sql = (
+                "ALTER TABLE twitch_chat_event "
+                "ADD COLUMN game_scope VARCHAR(160) NOT NULL DEFAULT ''"
+            )
+        elif dialect_name.startswith("mysql"):
+            alter_sql = (
+                "ALTER TABLE twitch_chat_event "
+                "ADD COLUMN game_scope VARCHAR(160) NOT NULL DEFAULT ''"
+            )
+        else:
+            alter_sql = (
+                "ALTER TABLE twitch_chat_event "
+                "ADD COLUMN game_scope VARCHAR(160) DEFAULT ''"
+            )
+
+        with db.engine.begin() as connection:
+            connection.exec_driver_sql(alter_sql)
+
 # ──  Ініціалізація БД при імпорті (працює і для `flask run`)  ──────────────────
 with app.app_context():
-    # Гарантуємо наявність таблиць
-    if "archived_game" not in inspect(db.engine).get_table_names():
-        db.create_all()
+    # Гарантуємо наявність усіх таблиць, включно з новими службовими.
+    db.create_all()
+    ensure_twitch_chat_event_schema()
     # Якщо локальний SQLite і таблиця порожня — імпортуємо з JSON
     import_json_into_sqlite_if_needed()
 
@@ -284,6 +358,7 @@ LIVE_NORMS: Optional[np.ndarray] = None
 CUSTOM_GAME_ID_TO_WORD: Optional[Dict[str, str]] = None
 UK_MORPH_ANALYZER: Any | None = None
 UK_MORPH_ANALYZER_INIT_ATTEMPTED = False
+LAST_TWITCH_CHAT_PRUNE_AT = 0.0
 
 def _reset_db_connection():
     try:
@@ -359,6 +434,157 @@ def _normalize_word(raw_word: Optional[str]) -> str:
 
 def _normalize_game_id(raw_game_id: Optional[str]) -> str:
     return (raw_game_id or "").strip().lower()
+
+
+def _is_twitch_chat_bridge_enabled() -> bool:
+    return bool(TWITCH_CHAT_BRIDGE_SECRET)
+
+
+def _normalize_twitch_channel(raw_channel: Optional[str]) -> str:
+    channel = (raw_channel or "").strip().lower()
+    if channel.startswith("#"):
+        channel = channel[1:]
+    return re.sub(r"[^a-z0-9_]", "", channel)
+
+
+def _normalize_twitch_game_scope(raw_scope: Optional[str]) -> str:
+    scope = (raw_scope or "").strip().lower()
+    if not scope:
+        return ""
+
+    if len(scope) > 160:
+        scope = scope[:160]
+
+    return re.sub(r"[^a-z0-9:_-]", "", scope)
+
+
+def _normalize_twitch_text(raw_value: Optional[str], fallback: str = "", max_length: int = 100) -> str:
+    value = (raw_value or "").strip()
+    if not value:
+        value = fallback.strip()
+    return value[:max_length]
+
+
+def _normalize_twitch_page_url(raw_value: Optional[str]) -> str:
+    return (raw_value or "").strip()[:500]
+
+
+def _resolve_twitch_guess_word(raw_word: Any) -> Optional[str]:
+    normalized_word = _normalize_word(raw_word if isinstance(raw_word, str) else "")
+    if not normalized_word:
+        return None
+
+    if normalized_word in VALID_WORDS:
+        return normalized_word
+
+    return _resolve_word_to_valid_lemma(normalized_word)
+
+
+def _serialize_twitch_chat_event(row: TwitchChatEvent) -> Dict[str, Any]:
+    return {
+        "id": row.id,
+        "channel": row.channel,
+        "game_scope": row.game_scope,
+        "user_login": row.chatter_user_login,
+        "user_name": row.chatter_display_name,
+        "message": row.raw_message,
+        "word": row.guessed_word,
+        "created_at": row.created_at.isoformat() + "Z",
+    }
+
+
+def _load_twitch_chat_latest_event_id(channel: str = "", game_scope: str = "") -> int:
+    query = db.session.query(TwitchChatEvent.id)
+    if channel:
+        query = query.filter(TwitchChatEvent.channel == channel)
+    if game_scope:
+        query = query.filter(TwitchChatEvent.game_scope == game_scope)
+
+    row = query.order_by(TwitchChatEvent.id.desc()).first()
+    return int(row[0]) if row else 0
+
+
+def _load_twitch_chat_active_target(channel: str) -> Optional[TwitchChatActiveTarget]:
+    if not channel:
+        return None
+
+    row = TwitchChatActiveTarget.query.filter(
+        TwitchChatActiveTarget.channel == channel,
+        TwitchChatActiveTarget.updated_at >= datetime.utcnow() - timedelta(seconds=TWITCH_CHAT_TARGET_TTL_SECONDS),
+    ).first()
+    return row
+
+
+def _upsert_twitch_chat_active_target(channel: str, game_scope: str, page_url: str) -> TwitchChatActiveTarget:
+    row = TwitchChatActiveTarget.query.filter_by(channel=channel).first()
+    if row is None:
+        row = TwitchChatActiveTarget(
+            channel=channel,
+            game_scope=game_scope,
+            page_url=page_url,
+        )
+        db.session.add(row)
+    else:
+        row.game_scope = game_scope
+        row.page_url = page_url
+        row.updated_at = datetime.utcnow()
+
+    db.session.commit()
+    return row
+
+
+def _resolve_active_twitch_game_scope(channel: str) -> Optional[str]:
+    active_target = _load_twitch_chat_active_target(channel)
+    if active_target is None:
+        return None
+
+    game_scope = _normalize_twitch_game_scope(active_target.game_scope)
+    return game_scope or None
+
+
+def _load_twitch_chat_events(after_id: int, channel: str, game_scope: str, limit: int) -> List[TwitchChatEvent]:
+    query = TwitchChatEvent.query.filter(TwitchChatEvent.id > after_id)
+    if channel:
+        query = query.filter(TwitchChatEvent.channel == channel)
+    if game_scope:
+        query = query.filter(TwitchChatEvent.game_scope == game_scope)
+
+    return query.order_by(TwitchChatEvent.id.asc()).limit(limit).all()
+
+
+def _prune_twitch_chat_events_if_needed(force: bool = False) -> None:
+    global LAST_TWITCH_CHAT_PRUNE_AT
+
+    if not _is_twitch_chat_bridge_enabled():
+        return
+
+    now = time.time()
+    if not force and (now - LAST_TWITCH_CHAT_PRUNE_AT) < TWITCH_CHAT_PRUNE_INTERVAL_SECONDS:
+        return
+
+    LAST_TWITCH_CHAT_PRUNE_AT = now
+    cutoff = datetime.utcnow() - timedelta(hours=TWITCH_CHAT_EVENT_RETENTION_HOURS)
+
+    db.session.query(TwitchChatEvent).filter(
+        TwitchChatEvent.created_at < cutoff
+    ).delete(synchronize_session=False)
+
+    total_rows = db.session.query(TwitchChatEvent.id).count()
+    overflow = total_rows - TWITCH_CHAT_MAX_STORED_EVENTS
+    if overflow > 0:
+        overflow_ids = [
+            row.id
+            for row in TwitchChatEvent.query
+            .order_by(TwitchChatEvent.id.asc())
+            .limit(overflow)
+            .all()
+        ]
+        if overflow_ids:
+            db.session.query(TwitchChatEvent).filter(
+                TwitchChatEvent.id.in_(overflow_ids)
+            ).delete(synchronize_session=False)
+
+    db.session.commit()
 
 
 def _get_uk_morph_analyzer() -> Any | None:
@@ -829,6 +1055,202 @@ def ranked_by_game():
     return response
 
 
+@app.route("/api/twitch-chat/target", methods=["POST"])
+def twitch_chat_target():
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "Очікував JSON-об'єкт."}), 400
+
+    channel = _normalize_twitch_channel(payload.get("channel"))
+    game_scope = _normalize_twitch_game_scope(payload.get("game_scope"))
+    page_url = _normalize_twitch_page_url(payload.get("page_url"))
+
+    if not channel:
+        return jsonify({"error": "Передайте назву Twitch-каналу в полі 'channel'."}), 400
+    if not game_scope:
+        return jsonify({"error": "Передайте scope активної гри в полі 'game_scope'."}), 400
+
+    try:
+        row = _run_db_query_with_retry(
+            lambda: _upsert_twitch_chat_active_target(channel, game_scope, page_url)
+        )
+        latest_event_id = _run_db_query_with_retry(
+            lambda: _load_twitch_chat_latest_event_id(channel, game_scope)
+        )
+    except (OperationalError, InterfaceError):
+        db.session.rollback()
+        return jsonify({"error": "Тимчасова помилка збереження активної Twitch-гри."}), 503
+    except Exception as e:
+        db.session.rollback()
+        print(f"[TWITCH CHAT] Помилка target для channel='{channel}', scope='{game_scope}': {e}")
+        return jsonify({"error": "Не вдалося зберегти активну гру для Twitch."}), 500
+
+    response = jsonify({
+        "ok": True,
+        "channel": row.channel,
+        "game_scope": row.game_scope,
+        "page_url": row.page_url or None,
+        "latest_event_id": latest_event_id,
+        "poll_interval_ms": TWITCH_CHAT_POLL_INTERVAL_MS,
+        "target_ttl_seconds": TWITCH_CHAT_TARGET_TTL_SECONDS,
+    })
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
+
+
+@app.route("/api/twitch-chat/status")
+def twitch_chat_status():
+    channel = _normalize_twitch_channel(request.args.get("channel"))
+    game_scope = _normalize_twitch_game_scope(request.args.get("game_scope"))
+
+    try:
+        latest_event_id = _run_db_query_with_retry(
+            lambda: _load_twitch_chat_latest_event_id(channel, game_scope)
+        )
+    except (OperationalError, InterfaceError):
+        return jsonify({"error": "Тимчасова помилка підключення до Twitch-черги."}), 503
+    except Exception as e:
+        print(f"[TWITCH CHAT] Помилка status для channel='{channel}', scope='{game_scope}': {e}")
+        return jsonify({"error": "Не вдалося прочитати Twitch-чергу."}), 500
+
+    response = jsonify({
+        "bridge_enabled": _is_twitch_chat_bridge_enabled(),
+        "channel": channel or None,
+        "game_scope": game_scope or None,
+        "latest_event_id": latest_event_id,
+        "poll_interval_ms": TWITCH_CHAT_POLL_INTERVAL_MS,
+        "target_ttl_seconds": TWITCH_CHAT_TARGET_TTL_SECONDS,
+    })
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
+
+
+@app.route("/api/twitch-chat/events")
+def twitch_chat_events():
+    raw_after_id = request.args.get("after_id", "0")
+    raw_limit = request.args.get("limit", str(TWITCH_CHAT_EVENT_POLL_LIMIT))
+    channel = _normalize_twitch_channel(request.args.get("channel"))
+    game_scope = _normalize_twitch_game_scope(request.args.get("game_scope"))
+
+    try:
+        after_id = max(0, int(raw_after_id))
+    except ValueError:
+        return jsonify({"error": "Параметр after_id має бути цілим числом."}), 400
+
+    try:
+        limit = int(raw_limit)
+    except ValueError:
+        return jsonify({"error": "Параметр limit має бути цілим числом."}), 400
+
+    limit = max(1, min(limit, TWITCH_CHAT_MAX_FETCH_LIMIT))
+
+    try:
+        rows = _run_db_query_with_retry(
+            lambda: _load_twitch_chat_events(after_id, channel, game_scope, limit)
+        )
+    except (OperationalError, InterfaceError):
+        return jsonify({"error": "Тимчасова помилка підключення до Twitch-черги."}), 503
+    except Exception as e:
+        print(f"[TWITCH CHAT] Помилка читання подій для channel='{channel}', scope='{game_scope}': {e}")
+        return jsonify({"error": "Не вдалося прочитати Twitch-події."}), 500
+
+    response = jsonify({
+        "events": [_serialize_twitch_chat_event(row) for row in rows],
+        "next_after_id": rows[-1].id if rows else after_id,
+    })
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
+
+
+@app.route("/api/twitch-chat/publish", methods=["POST"])
+def twitch_chat_publish():
+    if not _is_twitch_chat_bridge_enabled():
+        return jsonify({"error": "Twitch bridge не налаштований на сервері."}), 503
+
+    provided_secret = request.headers.get("X-Twitch-Bridge-Secret", "")
+    if not provided_secret or not hmac.compare_digest(provided_secret, TWITCH_CHAT_BRIDGE_SECRET):
+        return jsonify({"error": "Недійсний ключ Twitch bridge."}), 401
+
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "Очікував JSON-об'єкт."}), 400
+
+    channel = _normalize_twitch_channel(payload.get("channel"))
+    if not channel:
+        return jsonify({"error": "Передайте назву Twitch-каналу в полі 'channel'."}), 400
+
+    game_scope = _normalize_twitch_game_scope(payload.get("game_scope"))
+    if not game_scope:
+        try:
+            game_scope = _run_db_query_with_retry(
+                lambda: _resolve_active_twitch_game_scope(channel)
+            ) or ""
+        except (OperationalError, InterfaceError):
+            return jsonify({"error": "Тимчасова помилка пошуку активної Twitch-гри."}), 503
+        except Exception as e:
+            print(f"[TWITCH CHAT] Помилка resolve active scope для channel='{channel}': {e}")
+            return jsonify({"error": "Не вдалося визначити активну гру для Twitch-каналу."}), 500
+
+    if not game_scope:
+        response = jsonify({"accepted": False, "reason": "no_active_game"})
+        response.headers["Cache-Control"] = "private, no-store"
+        return response, 202
+
+    resolved_word = _resolve_twitch_guess_word(payload.get("word"))
+    if not resolved_word:
+        response = jsonify({"accepted": False, "reason": "unknown_word"})
+        response.headers["Cache-Control"] = "private, no-store"
+        return response, 202
+
+    chatter_user_login = _normalize_twitch_channel(payload.get("user_login")) or "chat"
+    chatter_display_name = _normalize_twitch_text(
+        payload.get("user_name"),
+        fallback=chatter_user_login,
+        max_length=100,
+    )
+    raw_message = _normalize_twitch_text(
+        payload.get("message"),
+        fallback=resolved_word,
+        max_length=500,
+    )
+
+    row = TwitchChatEvent(
+        channel=channel,
+        game_scope=game_scope,
+        chatter_user_login=chatter_user_login,
+        chatter_display_name=chatter_display_name,
+        raw_message=raw_message,
+        guessed_word=resolved_word,
+    )
+
+    try:
+        db.session.add(row)
+        db.session.commit()
+    except (OperationalError, InterfaceError):
+        db.session.rollback()
+        return jsonify({"error": "Тимчасова помилка запису Twitch-події."}), 503
+    except Exception as e:
+        db.session.rollback()
+        print(f"[TWITCH CHAT] Помилка publish для payload={payload!r}: {e}")
+        return jsonify({"error": "Не вдалося зберегти Twitch-подію."}), 500
+
+    try:
+        _prune_twitch_chat_events_if_needed()
+    except Exception as e:
+        db.session.rollback()
+        print(f"[TWITCH CHAT] Не вдалося почистити старі події: {e}")
+
+    response = jsonify({
+        "accepted": True,
+        "event_id": row.id,
+        "word": resolved_word,
+        "channel": channel,
+        "game_scope": game_scope,
+    })
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
+
+
 def dev_login():
     _require_dev_mode_enabled()
 
@@ -1022,6 +1444,7 @@ try:
         """Створити всі таблиці БД та (локально) спробувати імпорт із JSON."""
         with app.app_context():
             db.create_all()
+            ensure_twitch_chat_event_schema()
             import_json_into_sqlite_if_needed()
         click.echo("DB initialized (and imported from JSON if applicable).")
 except Exception:
@@ -1030,5 +1453,6 @@ except Exception:
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
+        ensure_twitch_chat_event_schema()
         import_json_into_sqlite_if_needed()
     app.run(debug=True)
