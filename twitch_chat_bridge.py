@@ -26,8 +26,11 @@ import ssl
 import time
 import urllib.error
 import urllib.request
+from dotenv import load_dotenv
 from typing import Dict, Optional
 from urllib.parse import parse_qs, urlparse
+
+load_dotenv()
 
 
 IRC_HOST = "irc.chat.twitch.tv"
@@ -218,9 +221,12 @@ def run_bridge() -> None:
                 send_irc_line(sock, f"JOIN #{channel}")
 
                 buffer = ""
+                authenticated = False
                 while True:
                     chunk = sock.recv(4096)
                     if not chunk:
+                        if not authenticated:
+                            raise ConnectionError("Twitch IRC closed the connection before authentication completed.")
                         raise ConnectionError("Twitch IRC connection closed.")
 
                     buffer += chunk.decode("utf-8", errors="ignore")
@@ -228,6 +234,15 @@ def run_bridge() -> None:
                         line, buffer = buffer.split("\r\n", 1)
                         if not line:
                             continue
+
+                        if " NOTICE * :Login authentication failed" in line:
+                            raise ConnectionError(
+                                "Twitch IRC login failed. Regenerate the token with the IRC scope chat:read."
+                            )
+                        if " NOTICE * :Improperly formatted auth" in line:
+                            raise ConnectionError("Twitch IRC rejected the PASS/NICK authentication format.")
+                        if line.startswith(":tmi.twitch.tv 001 "):
+                            authenticated = True
 
                         if line.startswith("PING "):
                             send_irc_line(sock, line.replace("PING", "PONG", 1))

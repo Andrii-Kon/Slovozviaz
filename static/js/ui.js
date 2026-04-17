@@ -104,9 +104,19 @@ export function createGuessItem(guessObj, maxRank) {
     const guessText = document.createElement("div");
     guessText.classList.add("guessText");
 
+    const wordInfo = document.createElement("div");
+    wordInfo.classList.add("guessWordInfo");
     const wordSpan = document.createElement("span");
     wordSpan.classList.add("word");
     wordSpan.textContent = guessObj.word;
+    wordInfo.appendChild(wordSpan);
+
+    if (guessObj.source === "twitch" && guessObj.submittedBy) {
+        const submittedByLine = document.createElement("div");
+        submittedByLine.classList.add("guessSubmittedBy");
+        submittedByLine.textContent = guessObj.submittedBy.replace(/^@+/, "");
+        wordInfo.appendChild(submittedByLine);
+    }
 
     const metaWrap = document.createElement("div");
     metaWrap.classList.add("guessMeta");
@@ -124,7 +134,7 @@ export function createGuessItem(guessObj, maxRank) {
         metaWrap.appendChild(similaritySpan);
     }
 
-    guessText.appendChild(wordSpan);
+    guessText.appendChild(wordInfo);
     guessText.appendChild(metaWrap);
 
     guessItem.appendChild(fillBar);
