@@ -3,10 +3,12 @@ import {
     fetchRankedWordsByWord,
     fetchRankedWordsByGameId,
     normalizeWordToKnownLemma,
+    fetchTwitchConnectionStatus,
+    disconnectTwitchConnection,
     registerTwitchChatTarget,
     fetchTwitchChatEvents
-} from "./api.js?v=20260411-2";
-import { renderGuesses, createGuessItem } from "./ui.js?v=20260403-2";
+} from "./api.js?v=20260417-1";
+import { renderGuesses, createGuessItem } from "./ui.js?v=20260415-1";
 
 const weekdayFmt = new Intl.DateTimeFormat('uk-UA', { weekday: 'short' });
 const monthFmt = new Intl.DateTimeFormat('uk-UA', { month: 'short' });
@@ -56,6 +58,24 @@ const twitchChatState = {
     targetHeartbeatId: null,
     errorCount: 0
 };
+
+const twitchConnectionState = {
+    oauthEnabled: false,
+    workerReady: false,
+    connected: false,
+    connection: null,
+    connectUrl: null
+};
+
+function setButtonTextPreservingIcon(button, label) {
+    if (!button) return;
+    const textNode = button.querySelector("span:last-child");
+    if (textNode) {
+        textNode.textContent = label;
+        return;
+    }
+    button.textContent = label;
+}
 
 const ARCHIVE_DATES_CACHE_KEY = "archiveDatesCache_v1";
 const ARCHIVE_DATES_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -567,19 +587,29 @@ function showInitialInfoBlocks() {
     }
 }
 
-function loadGameState() {
-    const storageKey = getCurrentGameStateKey();
-    if (!storageKey) return;
+    function loadGameState() {
+        const storageKey = getCurrentGameStateKey();
+        if (!storageKey) return;
 
-    const savedState = localStorage.getItem(storageKey);
-    const guessCountElem = document.getElementById("guessCount");
-    const howToPlayBlock = document.getElementById("howToPlayBlock");
-    const privacyPolicyBlock = document.getElementById("privacyPolicyBlock");
+        const guessCountElem = document.getElementById("guessCount");
+        const howToPlayBlock = document.getElementById("howToPlayBlock");
+        const privacyPolicyBlock = document.getElementById("privacyPolicyBlock");
+        let savedState = null;
 
-    if (!savedState) {
-        resetUIForActiveGame();
-        if (howToPlayBlock) howToPlayBlock.style.display = ""; // Show on new game
-        if (privacyPolicyBlock) privacyPolicyBlock.style.display = ""; // Show on new game
+        try {
+            savedState = localStorage.getItem(storageKey);
+        } catch (e) {
+            console.warn("Cannot read game state from localStorage:", e);
+            resetUIForActiveGame();
+            if (howToPlayBlock) howToPlayBlock.style.display = "";
+            if (privacyPolicyBlock) privacyPolicyBlock.style.display = "";
+            return;
+        }
+
+        if (!savedState) {
+            resetUIForActiveGame();
+            if (howToPlayBlock) howToPlayBlock.style.display = ""; // Show on new game
+            if (privacyPolicyBlock) privacyPolicyBlock.style.display = ""; // Show on new game
         return;
     }
 
@@ -615,14 +645,18 @@ function loadGameState() {
         } else {
             resetUIForActiveGame();
         }
-    } catch (e) {
-        console.error("Failed to parse or apply saved game state:", e);
-        localStorage.removeItem(storageKey);
-        resetUIForActiveGame();
-        if (howToPlayBlock) howToPlayBlock.style.display = "";
-        if (privacyPolicyBlock) privacyPolicyBlock.style.display = "";
+        } catch (e) {
+            console.error("Failed to parse or apply saved game state:", e);
+            try {
+                localStorage.removeItem(storageKey);
+            } catch (storageErr) {
+                console.warn("Cannot remove broken game state from localStorage:", storageErr);
+            }
+            resetUIForActiveGame();
+            if (howToPlayBlock) howToPlayBlock.style.display = "";
+            if (privacyPolicyBlock) privacyPolicyBlock.style.display = "";
+        }
     }
-}
 
 function showWinMessageUI() {
     const congratsBlock = document.getElementById("congratsBlock");
@@ -752,6 +786,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     const twitchChatBanner = document.getElementById("twitchChatBanner");
     const twitchChatStatusText = document.getElementById("twitchChatStatusText");
     const twitchChatLastEvent = document.getElementById("twitchChatLastEvent");
+    const twitchConnectButton = document.getElementById("twitchConnectButton");
+    const twitchUseChatButton = document.getElementById("twitchUseChatButton");
+    const twitchDisconnectButton = document.getElementById("twitchDisconnectButton");
     // const readMoreBtn = document.getElementById("readMoreBtn"); // Закоментовано, якщо не використовується
 
     const authorshipBtn = document.getElementById('authorshipBtn');
@@ -763,6 +800,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const legacyCustomWordFromUrl = normalizeWord(urlParams.get("custom"));
     const twitchModeFromUrl = urlParams.get("twitch") === "1";
     const twitchChannelFromUrl = normalizeTwitchChannel(urlParams.get("twitch_channel"));
+    twitchConnectionState.oauthEnabled = pageContainer?.dataset?.twitchOauthEnabled === "true";
 
     if (randomGameBtn) randomGameBtn.textContent = "🔀 Випадкова";
     loadSettings();
@@ -938,6 +976,121 @@ document.addEventListener("DOMContentLoaded", async () => {
         twitchChatLastEvent.textContent = message;
     }
 
+    function stopTwitchChatMode() {
+        twitchChatState.enabled = false;
+        twitchChatState.channel = null;
+        twitchChatState.gameScope = null;
+        twitchChatState.lastEventId = 0;
+        twitchChatState.errorCount = 0;
+        twitchChatState.isPolling = false;
+
+        if (twitchChatState.pollTimerId) {
+            window.clearInterval(twitchChatState.pollTimerId);
+            twitchChatState.pollTimerId = null;
+        }
+        if (twitchChatState.targetHeartbeatId) {
+            window.clearInterval(twitchChatState.targetHeartbeatId);
+            twitchChatState.targetHeartbeatId = null;
+        }
+
+        if (twitchChatBanner) {
+            twitchChatBanner.classList.add("hidden");
+            twitchChatBanner.classList.remove("live", "error");
+        }
+        setTwitchChatLastEvent("");
+    }
+
+    function updateTwitchConnectPanel() {
+        const connection = twitchConnectionState.connection;
+        const activeForConnectedChannel = Boolean(
+            twitchChatState.enabled &&
+            connection?.twitch_login &&
+            twitchChatState.channel === connection.twitch_login
+        );
+
+        if (twitchConnectionState.connected && connection) {
+            if (twitchConnectButton) twitchConnectButton.classList.add("hidden");
+            if (twitchDisconnectButton) twitchDisconnectButton.classList.remove("hidden");
+            if (twitchUseChatButton) {
+                twitchUseChatButton.classList.remove("hidden");
+                twitchUseChatButton.disabled = activeForConnectedChannel;
+                setButtonTextPreservingIcon(twitchUseChatButton, activeForConnectedChannel
+                    ? "Чат увімкнено"
+                    : "Увімкнути чат");
+            }
+            return;
+        }
+
+        if (twitchConnectionState.oauthEnabled) {
+            if (twitchConnectButton) {
+                twitchConnectButton.classList.remove("hidden");
+                twitchConnectButton.href = twitchConnectionState.connectUrl || "/auth/twitch/start";
+                setButtonTextPreservingIcon(twitchConnectButton, "Підключити Twitch");
+                twitchConnectButton.title = twitchConnectionState.workerReady
+                    ? "Підключити Twitch для чату стріму"
+                    : "OAuth готовий, але worker на сервері ще не запущений";
+            }
+            if (twitchUseChatButton) twitchUseChatButton.classList.add("hidden");
+            if (twitchDisconnectButton) twitchDisconnectButton.classList.add("hidden");
+            return;
+        }
+
+        if (twitchConnectButton) twitchConnectButton.classList.add("hidden");
+        if (twitchUseChatButton) twitchUseChatButton.classList.add("hidden");
+        if (twitchDisconnectButton) twitchDisconnectButton.classList.add("hidden");
+    }
+
+    async function loadTwitchConnectionState() {
+        try {
+            const next = `${window.location.pathname}${window.location.search}`;
+            const payload = await fetchTwitchConnectionStatus(next);
+            if (!payload.ok) {
+                throw new Error(payload?.data?.error || `HTTP ${payload.status}`);
+            }
+
+            twitchConnectionState.oauthEnabled = Boolean(payload?.data?.oauth_enabled);
+            twitchConnectionState.workerReady = Boolean(payload?.data?.worker_ready);
+            twitchConnectionState.connected = Boolean(payload?.data?.connected);
+            twitchConnectionState.connection = payload?.data?.connection || null;
+            twitchConnectionState.connectUrl = payload?.data?.connect_url || null;
+        } catch (err) {
+            console.error("[Error] Failed to load Twitch connection state:", err);
+        } finally {
+            updateTwitchConnectPanel();
+        }
+    }
+
+    function refreshTwitchPollTimer() {
+        if (twitchChatState.pollTimerId) {
+            window.clearInterval(twitchChatState.pollTimerId);
+            twitchChatState.pollTimerId = null;
+        }
+
+        if (!twitchChatState.enabled) return;
+        twitchChatState.pollTimerId = window.setInterval(
+            pollTwitchChatEventsLoop,
+            twitchChatState.pollIntervalMs
+        );
+    }
+
+    async function enableTwitchChatMode(channel) {
+        const normalizedChannel = normalizeTwitchChannel(channel);
+        if (!normalizedChannel) {
+            throw new Error("Не вдалося визначити Twitch-канал.");
+        }
+
+        twitchChatState.enabled = true;
+        twitchChatState.channel = normalizedChannel;
+        setTwitchChatStatus("Twitch chat: підключення…");
+        setTwitchChatLastEvent("");
+
+        await syncTwitchChatScope();
+        restartTwitchTargetHeartbeat();
+        await pollTwitchChatEventsLoop();
+        refreshTwitchPollTimer();
+        updateTwitchConnectPanel();
+    }
+
     function getCurrentTwitchGameScope() {
         if (currentCustomGameId) {
             return normalizeTwitchGameScope(`custom:${currentCustomGameId}`);
@@ -953,9 +1106,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     function getTwitchGameScopeLabel(gameScope) {
         if (!gameScope) return "усі активні ігри";
-        if (gameScope === "daily:current") return "поточну daily-гру";
-        if (gameScope.startsWith("date:")) return `гру за ${gameScope.slice(5)}`;
-        if (gameScope.startsWith("custom:")) return "цю кастомну гру";
+        if (gameScope === "daily:current") return "daily";
+        if (gameScope.startsWith("date:")) return gameScope.slice(5);
+        if (gameScope.startsWith("custom:")) return "custom";
         return gameScope;
     }
 
@@ -1108,7 +1261,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             twitchChatState.errorCount = 0;
             const channelLabel = twitchChatState.channel ? `#${twitchChatState.channel}` : "активного каналу";
             setTwitchChatStatus(
-                `Twitch chat mode активний для ${channelLabel} через ${getTwitchGameScopeLabel(twitchChatState.gameScope)}.`,
+                `Twitch chat: ${channelLabel} · ${getTwitchGameScopeLabel(twitchChatState.gameScope)}`,
                 "live"
             );
         } catch (err) {
@@ -1149,10 +1302,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         const channelLabel = twitchChatState.channel ? `#${twitchChatState.channel}` : "активного каналу";
         setTwitchChatStatus(
-            `Twitch chat mode активний для ${channelLabel} через ${getTwitchGameScopeLabel(nextGameScope)}.`,
+            `Twitch chat: ${channelLabel} · ${getTwitchGameScopeLabel(nextGameScope)}`,
             "live"
         );
-        setTwitchChatLastEvent("Нові слова з чату будуть додаватися лише до цієї гри.");
+        setTwitchChatLastEvent("");
     }
 
     function restartTwitchTargetHeartbeat() {
@@ -1176,23 +1329,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     async function initializeTwitchChatMode() {
         if (!twitchModeFromUrl) return;
 
-        twitchChatState.enabled = true;
-        twitchChatState.channel = twitchChannelFromUrl || null;
-        setTwitchChatStatus("Підключення до Twitch chat…");
-        setTwitchChatLastEvent("Нові слова з чату будуть додаватися автоматично.");
-
         try {
-            await syncTwitchChatScope();
-            restartTwitchTargetHeartbeat();
-            await pollTwitchChatEventsLoop();
-            twitchChatState.pollTimerId = window.setInterval(
-                pollTwitchChatEventsLoop,
-                twitchChatState.pollIntervalMs
-            );
+            const fallbackConnectedChannel = twitchConnectionState.connection?.twitch_login || null;
+            await enableTwitchChatMode(twitchChannelFromUrl || fallbackConnectedChannel || null);
         } catch (err) {
             console.error("[Error] initializeTwitchChatMode failed:", err);
             setTwitchChatStatus("Не вдалося запустити Twitch chat mode.", "error");
-            setTwitchChatLastEvent("Перевірте /api/twitch-chat/status і налаштування bridge.");
+            setTwitchChatLastEvent("Перевірте Twitch підключення і worker на сервері.");
         }
     }
 
@@ -1232,6 +1375,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     loadGameState(); // Це оновить видимість howToPlayBlock та privacyPolicyBlock
+    await loadTwitchConnectionState();
     await initializeTwitchChatMode();
 
     async function handleSubmit() {
@@ -1528,6 +1672,42 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (closestWordsBtn) closestWordsBtn.addEventListener("click", showClosestWords);
     if (closeModalBtn) closeModalBtn.addEventListener("click", () => closestWordsModal && closestWordsModal.classList.add("hidden"));
     if (closestWordsModal) closestWordsModal.addEventListener('click', e => e.target === closestWordsModal && closestWordsModal.classList.add('hidden'));
+
+    if (twitchUseChatButton) {
+        twitchUseChatButton.addEventListener("click", async () => {
+            const channel = twitchConnectionState.connection?.twitch_login || null;
+            if (!channel) return;
+
+            try {
+                await enableTwitchChatMode(channel);
+            } catch (err) {
+                console.error("[Error] Failed to enable Twitch chat for current game:", err);
+                setTwitchChatStatus("Не вдалося увімкнути чат для цієї гри.", "error");
+                setTwitchChatLastEvent("Спробуй ще раз або перевір worker на сервері.");
+            }
+        });
+    }
+
+    if (twitchDisconnectButton) {
+        twitchDisconnectButton.addEventListener("click", async () => {
+            try {
+                const payload = await disconnectTwitchConnection();
+                if (!payload.ok) {
+                    throw new Error(payload?.data?.error || `HTTP ${payload.status}`);
+                }
+
+                twitchConnectionState.connected = false;
+                twitchConnectionState.connection = null;
+                if (!twitchModeFromUrl) {
+                    stopTwitchChatMode();
+                }
+                updateTwitchConnectPanel();
+            } catch (err) {
+                console.error("[Error] Failed to disconnect Twitch:", err);
+                alert("Не вдалося відключити Twitch.");
+            }
+        });
+    }
 
     if (menuButton && dropdownMenu) {
         menuButton.setAttribute("aria-haspopup", "menu");

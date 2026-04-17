@@ -133,6 +133,58 @@ h1 {
     font-weight: 700;
 }
 
+.twitchChatBanner {
+    margin-bottom: 12px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: linear-gradient(180deg, rgba(39, 39, 39, 0.98), rgba(28, 28, 28, 0.98));
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    text-align: left;
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
+}
+
+.twitchChatBanner.live {
+    border-color: rgba(76, 175, 80, 0.34);
+}
+
+.twitchChatBanner.error {
+    border-color: rgba(255, 138, 128, 0.36);
+}
+
+.twitchChatStatusRow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.87em;
+    font-weight: 650;
+    color: rgba(255, 255, 255, 0.9);
+    line-height: 1.25;
+}
+
+.twitchChatStatusDot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background-color: #90a4ae;
+    box-shadow: 0 0 0 4px rgba(144, 164, 174, 0.12);
+    flex-shrink: 0;
+}
+
+.twitchChatBanner.live .twitchChatStatusDot {
+    background-color: #4caf50;
+    box-shadow: 0 0 0 4px rgba(76, 175, 80, 0.12);
+}
+
+.twitchChatBanner.error .twitchChatStatusDot {
+    background-color: #ff8a80;
+    box-shadow: 0 0 0 4px rgba(255, 138, 128, 0.12);
+}
+
+.twitchChatLastEvent {
+    display: none;
+}
+
+
 /* ====================
    Секція вводу
    ==================== */
@@ -319,9 +371,40 @@ h1 {
 .dropdown-menu button#previousGamesBtn,
 .dropdown-menu button#giveUpBtn,
 .dropdown-menu button#createGameBtn,
+.dropdown-menu #twitchConnectButton,
+.dropdown-menu #twitchUseChatButton,
+.dropdown-menu #twitchDisconnectButton,
 .dropdown-menu button#authorshipBtn {
     justify-content: flex-start;
     box-shadow: none;
+}
+
+.dropdown-menu #twitchConnectButton,
+.dropdown-menu #twitchUseChatButton,
+.dropdown-menu #twitchDisconnectButton {
+    text-decoration: none;
+}
+
+.dropdown-menu #twitchConnectButton .menu-icon,
+.dropdown-menu #twitchUseChatButton .menu-icon,
+.dropdown-menu #twitchDisconnectButton .menu-icon {
+    color: #c6a7ff !important;
+    opacity: 1 !important;
+}
+
+.twitchMenuIcon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.15em;
+    height: 1.15em;
+    flex-shrink: 0;
+}
+
+.twitchMenuIcon svg {
+    width: 100%;
+    height: 100%;
+    display: block;
 }
 
 /* Іконка "Авторство" світліша */
@@ -384,11 +467,35 @@ h1 {
     font-weight: bold;
 }
 
+.guessWordInfo {
+    min-width: 0;
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    overflow: hidden;
+}
+
 .guessText .word {
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
     flex-grow: 1;
+    min-width: 0;
+}
+
+.guessSubmittedBy {
+    flex: 0 1 auto;
+    color: rgba(255, 255, 255, 0.62);
+    font-size: 0.68em;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-align: right;
+    line-height: 1.1;
+    max-width: 9ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .guessMeta {

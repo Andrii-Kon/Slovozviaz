@@ -153,8 +153,7 @@ To run this project locally, follow these steps:
         ```env
         TWITCH_CHAT_BRIDGE_SECRET=replace-me
         ```
-      * Create a Twitch user access token for your bot account with at least the `user:read:chat` scope.
-      * Run the bridge script with the target website URL and your Twitch settings:
+      * For the older single-channel setup, create a Twitch user access token for your bot account with the `chat:read` scope and run:
         ```bash
         export TWITCH_BOT_USERNAME=your_bot_account
         export TWITCH_OAUTH_TOKEN=oauth:your_access_token
@@ -171,6 +170,21 @@ To run this project locally, follow these steps:
       * The active page in Twitch mode automatically registers itself as the current target game for that channel, so you can switch between daily, archive, and custom `?game=...` links without restarting the bridge.
       * If you ever need to force the bridge to a specific game manually, you can still set `TWITCH_GAME_URL` or `TWITCH_GAME_SCOPE`.
       * When chatters send `!guess слово`, the website will automatically add that word as a guess.
+      * For the proper self-service setup, register a Twitch app and add these env vars to the website:
+        ```env
+        TWITCH_CLIENT_ID=...
+        TWITCH_CLIENT_SECRET=...
+        TWITCH_OAUTH_REDIRECT_URI=http://127.0.0.1:5000/auth/twitch/callback
+        ```
+        Then streamers can connect through the site UI, and a centralized worker can listen to every connected channel:
+        ```bash
+        export TWITCH_BOT_USERNAME=your_shared_bot
+        export TWITCH_OAUTH_TOKEN=oauth:your_shared_bot_token
+        export TWITCH_BRIDGE_TARGET_URL=http://127.0.0.1:5000/api/twitch-chat/publish
+        export TWITCH_CHAT_BRIDGE_SECRET=replace-me
+        export TWITCH_WORKER_CHANNELS_URL=http://127.0.0.1:5000/api/twitch-worker/channels
+        python twitch_chat_worker.py
+        ```
 
 ## 🎲 How to Play
 

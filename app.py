@@ -1,5 +1,5 @@
 # app.py
-from flask import Flask, render_template, jsonify, request, Response, abort
+from flask import Flask, render_template, jsonify, request, Response, abort, redirect, session, url_for
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime, date, timedelta
 from dotenv import load_dotenv
@@ -16,6 +16,10 @@ import re
 import time
 import hashlib
 import hmac
+import secrets
+import urllib.error
+import urllib.parse
+import urllib.request
 from typing import List, Dict, Any, Optional, Tuple
 from zoneinfo import ZoneInfo
 
@@ -26,6 +30,11 @@ load_dotenv()
 
 app = Flask(__name__)
 app.config["JSON_AS_ASCII"] = False  # коректна UTF-8 відповідь
+app.config["SECRET_KEY"] = (
+    os.getenv("FLASK_SECRET_KEY")
+    or os.getenv("SECRET_KEY")
+    or "slovozviaz-dev-secret"
+)
 
 KYIV_TZ = ZoneInfo("Europe/Kyiv")
 
@@ -105,6 +114,33 @@ class TwitchChatActiveTarget(db.Model):
         index=True,
     )
 
+
+class TwitchConnection(db.Model):
+    __tablename__ = "twitch_connection"
+
+    id = db.Column(db.Integer, primary_key=True)
+    twitch_user_id = db.Column(db.String(100), nullable=False, unique=True, index=True)
+    twitch_login = db.Column(db.String(100), nullable=False, unique=True, index=True)
+    twitch_display_name = db.Column(db.String(120), nullable=False)
+    access_token = db.Column(db.Text().with_variant(LONGTEXT, "mysql"), nullable=False)
+    refresh_token = db.Column(db.Text().with_variant(LONGTEXT, "mysql"), nullable=False)
+    token_type = db.Column(db.String(50), nullable=False, default="bearer")
+    token_scopes = db.Column(db.String(500), nullable=False, default="")
+    token_expires_at = db.Column(db.DateTime, nullable=True, index=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=True, index=True)
+    connected_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    disconnected_at = db.Column(db.DateTime, nullable=True)
+    last_validated_at = db.Column(db.DateTime, nullable=True)
+    last_worker_seen_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(
+        db.DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+        index=True,
+    )
+
 # ── Дані / невеликі словники (опціонально) ─────────────────────────────────────
 def load_daily_words():
     try:
@@ -137,6 +173,14 @@ CUSTOM_GAME_TOKEN_SECRET = (
     or "slovozviaz-custom-game-v1"
 ).encode("utf-8")
 TWITCH_CHAT_BRIDGE_SECRET = (os.getenv("TWITCH_CHAT_BRIDGE_SECRET") or "").strip()
+TWITCH_CLIENT_ID = (os.getenv("TWITCH_CLIENT_ID") or "").strip()
+TWITCH_CLIENT_SECRET = (os.getenv("TWITCH_CLIENT_SECRET") or "").strip()
+TWITCH_OAUTH_REDIRECT_URI = (os.getenv("TWITCH_OAUTH_REDIRECT_URI") or "").strip()
+TWITCH_OAUTH_SCOPES = " ".join(
+    part.strip() for part in (os.getenv("TWITCH_OAUTH_SCOPES") or "").split() if part.strip()
+)
+TWITCH_SHARED_BOT_USERNAME = (os.getenv("TWITCH_BOT_USERNAME") or "").strip().lower()
+TWITCH_SHARED_BOT_TOKEN = (os.getenv("TWITCH_OAUTH_TOKEN") or "").strip()
 TWITCH_CHAT_EVENT_RETENTION_HOURS = _env_int("TWITCH_CHAT_EVENT_RETENTION_HOURS", 24, minimum=1)
 TWITCH_CHAT_EVENT_POLL_LIMIT = _env_int("TWITCH_CHAT_EVENT_POLL_LIMIT", 25, minimum=1)
 TWITCH_CHAT_POLL_INTERVAL_MS = _env_int("TWITCH_CHAT_POLL_INTERVAL_MS", 1500, minimum=500)
@@ -440,6 +484,14 @@ def _is_twitch_chat_bridge_enabled() -> bool:
     return bool(TWITCH_CHAT_BRIDGE_SECRET)
 
 
+def _is_twitch_oauth_enabled() -> bool:
+    return bool(TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET and TWITCH_OAUTH_REDIRECT_URI)
+
+
+def _is_twitch_worker_ready() -> bool:
+    return bool(TWITCH_SHARED_BOT_USERNAME and TWITCH_SHARED_BOT_TOKEN and _is_twitch_chat_bridge_enabled())
+
+
 def _normalize_twitch_channel(raw_channel: Optional[str]) -> str:
     channel = (raw_channel or "").strip().lower()
     if channel.startswith("#"):
@@ -467,6 +519,209 @@ def _normalize_twitch_text(raw_value: Optional[str], fallback: str = "", max_len
 
 def _normalize_twitch_page_url(raw_value: Optional[str]) -> str:
     return (raw_value or "").strip()[:500]
+
+
+def _serialize_twitch_connection(row: Optional[TwitchConnection]) -> Optional[Dict[str, Any]]:
+    if row is None:
+        return None
+
+    return {
+        "id": row.id,
+        "twitch_user_id": row.twitch_user_id,
+        "twitch_login": row.twitch_login,
+        "twitch_display_name": row.twitch_display_name,
+        "token_scopes": [scope for scope in row.token_scopes.split(" ") if scope],
+        "connected_at": row.connected_at.isoformat() + "Z" if row.connected_at else None,
+        "last_validated_at": row.last_validated_at.isoformat() + "Z" if row.last_validated_at else None,
+        "is_active": bool(row.is_active),
+    }
+
+
+def _twitch_connection_session_key() -> str:
+    return "twitch_connection_id"
+
+
+def _twitch_oauth_state_session_key() -> str:
+    return "twitch_oauth_state"
+
+
+def _twitch_oauth_next_session_key() -> str:
+    return "twitch_oauth_next"
+
+
+def _sanitize_local_redirect_target(raw_target: Optional[str]) -> str:
+    target = (raw_target or "").strip()
+    if not target.startswith("/"):
+        return "/"
+    if target.startswith("//"):
+        return "/"
+    return target
+
+
+def _build_twitch_authorize_url(state: str) -> str:
+    params = {
+        "response_type": "code",
+        "client_id": TWITCH_CLIENT_ID,
+        "redirect_uri": TWITCH_OAUTH_REDIRECT_URI,
+        "state": state,
+    }
+    if TWITCH_OAUTH_SCOPES:
+        params["scope"] = TWITCH_OAUTH_SCOPES
+    return f"https://id.twitch.tv/oauth2/authorize?{urllib.parse.urlencode(params)}"
+
+
+def _http_json_request(
+    url: str,
+    method: str = "GET",
+    headers: Optional[Dict[str, str]] = None,
+    data: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    encoded_data = None
+    request_headers = dict(headers or {})
+    if data is not None:
+        encoded_data = urllib.parse.urlencode(data).encode("utf-8")
+        request_headers.setdefault("Content-Type", "application/x-www-form-urlencoded")
+
+    req = urllib.request.Request(url, method=method, headers=request_headers, data=encoded_data)
+    with urllib.request.urlopen(req, timeout=15) as response:
+        body = response.read().decode("utf-8")
+        return json.loads(body or "{}")
+
+
+def _exchange_twitch_authorization_code(code: str) -> Dict[str, Any]:
+    return _http_json_request(
+        "https://id.twitch.tv/oauth2/token",
+        method="POST",
+        data={
+            "client_id": TWITCH_CLIENT_ID,
+            "client_secret": TWITCH_CLIENT_SECRET,
+            "code": code,
+            "grant_type": "authorization_code",
+            "redirect_uri": TWITCH_OAUTH_REDIRECT_URI,
+        },
+    )
+
+
+def _refresh_twitch_access_token(refresh_token: str) -> Dict[str, Any]:
+    return _http_json_request(
+        "https://id.twitch.tv/oauth2/token",
+        method="POST",
+        data={
+            "client_id": TWITCH_CLIENT_ID,
+            "client_secret": TWITCH_CLIENT_SECRET,
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+        },
+    )
+
+
+def _validate_twitch_access_token(access_token: str) -> Dict[str, Any]:
+    return _http_json_request(
+        "https://id.twitch.tv/oauth2/validate",
+        headers={"Authorization": f"OAuth {access_token}"},
+    )
+
+
+def _fetch_twitch_user_profile(access_token: str) -> Dict[str, Any]:
+    payload = _http_json_request(
+        "https://api.twitch.tv/helix/users",
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "Client-Id": TWITCH_CLIENT_ID,
+        },
+    )
+    users = payload.get("data")
+    if isinstance(users, list) and users:
+        first = users[0]
+        if isinstance(first, dict):
+            return first
+    return {}
+
+
+def _load_current_twitch_connection() -> Optional[TwitchConnection]:
+    connection_id = session.get(_twitch_connection_session_key())
+    if not isinstance(connection_id, int):
+        return None
+
+    row = TwitchConnection.query.filter_by(id=connection_id, is_active=True).first()
+    if row is None:
+        session.pop(_twitch_connection_session_key(), None)
+    return row
+
+
+def _load_twitch_connection_by_login(twitch_login: str) -> Optional[TwitchConnection]:
+    twitch_login = _normalize_twitch_channel(twitch_login)
+    if not twitch_login:
+        return None
+    return TwitchConnection.query.filter_by(twitch_login=twitch_login, is_active=True).first()
+
+
+def _load_active_twitch_connections() -> List[TwitchConnection]:
+    return TwitchConnection.query.filter_by(is_active=True).order_by(TwitchConnection.twitch_login.asc()).all()
+
+
+def _upsert_twitch_connection(
+    validate_payload: Dict[str, Any],
+    token_payload: Dict[str, Any],
+    profile_payload: Optional[Dict[str, Any]] = None,
+) -> TwitchConnection:
+    twitch_user_id = str(validate_payload.get("user_id") or "").strip()
+    twitch_login = _normalize_twitch_channel(validate_payload.get("login"))
+    if not twitch_user_id or not twitch_login:
+        raise ValueError("Twitch OAuth не повернув user_id або login.")
+
+    profile_payload = profile_payload or {}
+    display_name = _normalize_twitch_text(
+        profile_payload.get("display_name") if isinstance(profile_payload, dict) else None,
+        fallback=twitch_login,
+        max_length=120,
+    )
+    access_token = _normalize_twitch_text(token_payload.get("access_token"), max_length=2000)
+    refresh_token = _normalize_twitch_text(token_payload.get("refresh_token"), max_length=2000)
+    token_type = _normalize_twitch_text(token_payload.get("token_type"), fallback="bearer", max_length=50).lower()
+
+    scopes = token_payload.get("scope")
+    if not isinstance(scopes, list):
+        scopes = validate_payload.get("scopes")
+    scope_text = " ".join(
+        sorted({str(scope).strip() for scope in (scopes or []) if str(scope).strip()})
+    )
+
+    expires_in = token_payload.get("expires_in")
+    expires_at = None
+    if isinstance(expires_in, int) and expires_in > 0:
+        expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+
+    row = TwitchConnection.query.filter_by(twitch_user_id=twitch_user_id).first()
+    if row is None:
+        row = TwitchConnection(
+            twitch_user_id=twitch_user_id,
+            twitch_login=twitch_login,
+            twitch_display_name=display_name,
+            access_token=access_token,
+            refresh_token=refresh_token,
+            token_type=token_type,
+            token_scopes=scope_text,
+            token_expires_at=expires_at,
+            is_active=True,
+            connected_at=datetime.utcnow(),
+            last_validated_at=datetime.utcnow(),
+        )
+        db.session.add(row)
+    else:
+        row.twitch_login = twitch_login
+        row.twitch_display_name = display_name
+        row.access_token = access_token
+        row.refresh_token = refresh_token
+        row.token_type = token_type
+        row.token_scopes = scope_text
+        row.token_expires_at = expires_at
+        row.is_active = True
+        row.disconnected_at = None
+        row.last_validated_at = datetime.utcnow()
+
+    db.session.commit()
+    return row
 
 
 def _resolve_twitch_guess_word(raw_word: Any) -> Optional[str]:
@@ -910,12 +1165,131 @@ def _upsert_archived_game_for_date(game_date: date, secret_word: str, ranking: L
 # ── Маршрути ───────────────────────────────────────────────────────────────────
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return render_template(
+        "index.html",
+        twitch_oauth_enabled=_is_twitch_oauth_enabled(),
+    )
 
 
 @app.route("/create-game")
 def create_game_page():
     return render_template("create_game.html")
+
+
+@app.route("/auth/twitch/start")
+def twitch_oauth_start():
+    if not _is_twitch_oauth_enabled():
+        abort(404)
+
+    state = secrets.token_urlsafe(24)
+    session[_twitch_oauth_state_session_key()] = state
+    session[_twitch_oauth_next_session_key()] = _sanitize_local_redirect_target(
+        request.args.get("next") or request.referrer or "/"
+    )
+    return redirect(_build_twitch_authorize_url(state))
+
+
+@app.route("/auth/twitch/callback")
+def twitch_oauth_callback():
+    if not _is_twitch_oauth_enabled():
+        abort(404)
+
+    error = request.args.get("error")
+    if error:
+        target = _sanitize_local_redirect_target(session.pop(_twitch_oauth_next_session_key(), "/"))
+        session.pop(_twitch_oauth_state_session_key(), None)
+        separator = "&" if "?" in target else "?"
+        return redirect(f"{target}{separator}twitch_error={urllib.parse.quote(error)}")
+
+    expected_state = session.pop(_twitch_oauth_state_session_key(), None)
+    provided_state = request.args.get("state", "")
+    if not expected_state or not isinstance(expected_state, str) or not hmac.compare_digest(expected_state, provided_state):
+        abort(400)
+
+    code = (request.args.get("code") or "").strip()
+    if not code:
+        abort(400)
+
+    try:
+        token_payload = _exchange_twitch_authorization_code(code)
+        access_token = _normalize_twitch_text(token_payload.get("access_token"), max_length=2000)
+        validate_payload = _validate_twitch_access_token(access_token)
+        profile_payload = _fetch_twitch_user_profile(access_token)
+        row = _upsert_twitch_connection(validate_payload, token_payload, profile_payload)
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="ignore")
+        print(f"[TWITCH OAUTH] HTTP error during callback: {exc.code} {body}")
+        abort(502)
+    except Exception as exc:
+        print(f"[TWITCH OAUTH] Callback failed: {exc}")
+        abort(500)
+
+    session[_twitch_connection_session_key()] = row.id
+    target = _sanitize_local_redirect_target(session.pop(_twitch_oauth_next_session_key(), "/"))
+    separator = "&" if "?" in target else "?"
+    return redirect(f"{target}{separator}twitch_connected=1")
+
+
+@app.route("/api/twitch-connection/status")
+def twitch_connection_status():
+    connection = _load_current_twitch_connection()
+    response = jsonify({
+        "oauth_enabled": _is_twitch_oauth_enabled(),
+        "worker_ready": _is_twitch_worker_ready(),
+        "connected": bool(connection),
+        "connection": _serialize_twitch_connection(connection),
+        "connect_url": url_for("twitch_oauth_start", next=request.args.get("next") or request.referrer or "/")
+        if _is_twitch_oauth_enabled()
+        else None,
+    })
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
+
+
+@app.route("/api/twitch-connection/disconnect", methods=["POST"])
+def twitch_connection_disconnect():
+    connection = _load_current_twitch_connection()
+    if connection is None:
+        return jsonify({"ok": True, "connected": False})
+
+    try:
+        connection.is_active = False
+        connection.disconnected_at = datetime.utcnow()
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        print(f"[TWITCH OAUTH] Disconnect failed for {connection.twitch_login}: {exc}")
+        return jsonify({"error": "Не вдалося відключити Twitch."}), 500
+
+    session.pop(_twitch_connection_session_key(), None)
+    response = jsonify({"ok": True, "connected": False})
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
+
+
+@app.route("/api/twitch-worker/channels")
+def twitch_worker_channels():
+    if not _is_twitch_chat_bridge_enabled():
+        return jsonify({"error": "Twitch worker не налаштований на сервері."}), 503
+
+    provided_secret = request.headers.get("X-Twitch-Bridge-Secret", "")
+    if not provided_secret or not hmac.compare_digest(provided_secret, TWITCH_CHAT_BRIDGE_SECRET):
+        return jsonify({"error": "Недійсний ключ Twitch worker."}), 401
+
+    try:
+        rows = _run_db_query_with_retry(_load_active_twitch_connections)
+    except (OperationalError, InterfaceError):
+        return jsonify({"error": "Тимчасова помилка читання Twitch-підключень."}), 503
+    except Exception as exc:
+        print(f"[TWITCH WORKER] Failed to load channels: {exc}")
+        return jsonify({"error": "Не вдалося прочитати Twitch-підключення."}), 500
+
+    response = jsonify({
+        "channels": [row.twitch_login for row in rows if row.twitch_login],
+        "count": len(rows),
+    })
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
 
 
 def dev_archive_game_page():
@@ -1061,7 +1435,8 @@ def twitch_chat_target():
     if not isinstance(payload, dict):
         return jsonify({"error": "Очікував JSON-об'єкт."}), 400
 
-    channel = _normalize_twitch_channel(payload.get("channel"))
+    current_connection = _load_current_twitch_connection()
+    channel = current_connection.twitch_login if current_connection else _normalize_twitch_channel(payload.get("channel"))
     game_scope = _normalize_twitch_game_scope(payload.get("game_scope"))
     page_url = _normalize_twitch_page_url(payload.get("page_url"))
 

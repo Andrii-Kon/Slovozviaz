@@ -27,6 +27,28 @@ export async function normalizeWordToKnownLemma(word) {
     return { ok: response.ok, status: response.status, data };
 }
 
+export async function fetchTwitchConnectionStatus(next = null) {
+    const params = new URLSearchParams();
+    if (next) params.set("next", next);
+    const url = params.toString()
+        ? `/api/twitch-connection/status?${params.toString()}`
+        : "/api/twitch-connection/status";
+
+    const response = await fetch(url, { cache: "no-store" });
+    const data = await response.json();
+    return { ok: response.ok, status: response.status, data };
+}
+
+export async function disconnectTwitchConnection() {
+    const response = await fetch("/api/twitch-connection/disconnect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store"
+    });
+    const data = await response.json();
+    return { ok: response.ok, status: response.status, data };
+}
+
 export async function fetchTwitchChatStatus(channel = null, gameScope = null) {
     const params = new URLSearchParams();
     if (channel) params.set("channel", channel);
