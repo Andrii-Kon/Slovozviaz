@@ -68,15 +68,24 @@ h1 {
     font-variant-numeric: tabular-nums;
     display: flex;
     align-items: center;
-    flex-wrap: wrap;
-    justify-content: flex-start;
-    gap: 12px;
+    justify-content: space-between;
+    gap: 16px;
     margin-bottom: 10px;
     margin-top: 10px;
     padding: 2px 0 12px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     text-align: left;
     font-size: 0.88em;
+    position: relative;
+}
+
+.gameInfoLeft {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    min-width: 0;
+    flex: 1 1 auto;
 }
 
 #gameDateLabel {
@@ -98,6 +107,16 @@ h1 {
     gap: 12px;
     font-size: 1em;
     color: rgba(255, 255, 255, 0.72);
+    align-items: center;
+}
+
+.twitchHeaderControls {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    flex: 0 0 auto;
+    min-width: 0;
 }
 
 .guess-counter, .hint-counter {
@@ -133,55 +152,114 @@ h1 {
     font-weight: 700;
 }
 
-.twitchChatBanner {
-    margin-bottom: 12px;
-    padding: 8px 10px;
-    border-radius: 8px;
-    background: linear-gradient(180deg, rgba(39, 39, 39, 0.98), rgba(28, 28, 28, 0.98));
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    text-align: left;
-    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
-}
-
-.twitchChatBanner.live {
-    border-color: rgba(76, 175, 80, 0.34);
-}
-
-.twitchChatBanner.error {
-    border-color: rgba(255, 138, 128, 0.36);
-}
-
-.twitchChatStatusRow {
+.twitchInlineControls {
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 0.87em;
-    font-weight: 650;
-    color: rgba(255, 255, 255, 0.9);
-    line-height: 1.25;
+    gap: 10px;
+    min-height: 28px;
+    color: rgba(255, 255, 255, 0.72);
+    white-space: nowrap;
+    align-self: center;
+    line-height: 1;
 }
 
-.twitchChatStatusDot {
-    width: 8px;
-    height: 8px;
-    border-radius: 999px;
-    background-color: #90a4ae;
-    box-shadow: 0 0 0 4px rgba(144, 164, 174, 0.12);
+.gameStats > .twitchInlineControls {
+    position: relative;
+    padding-left: 12px;
+}
+
+.gameStats > .twitchInlineControls::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 1px;
+    height: 0.95em;
+    background-color: rgba(255, 255, 255, 0.18);
+    transform: translateY(-50%);
+}
+
+.twitchInlineStreamer {
+    font-weight: 620;
+    color: rgba(255, 255, 255, 0.72);
+    letter-spacing: 0.01em;
+    display: inline-flex;
+    align-items: center;
+    align-self: center;
+    line-height: 1;
+    margin-top: -1px;
+}
+
+.twitchInlineControls.connected .twitchInlineStreamer {
+    color: rgba(255, 255, 255, 0.72);
+}
+
+.twitchInlineControls.live .twitchInlineStreamer {
+    color: rgba(255, 255, 255, 0.95);
+}
+
+.twitchInlineControls.error .twitchInlineStreamer {
+    color: #ffb3ad;
+}
+
+.twitchChatSwitch {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
     flex-shrink: 0;
+    cursor: pointer;
+    align-self: center;
+    margin-top: 2px;
 }
 
-.twitchChatBanner.live .twitchChatStatusDot {
-    background-color: #4caf50;
-    box-shadow: 0 0 0 4px rgba(76, 175, 80, 0.12);
+.twitchChatSwitch input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
 }
 
-.twitchChatBanner.error .twitchChatStatusDot {
-    background-color: #ff8a80;
-    box-shadow: 0 0 0 4px rgba(255, 138, 128, 0.12);
+.twitchChatSwitchTrack {
+    width: 42px;
+    height: 24px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.26);
+    transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    position: relative;
 }
 
-.twitchChatLastEvent {
-    display: none;
+.twitchChatSwitchTrack::after {
+    content: "";
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 16px;
+    height: 16px;
+    border-radius: 999px;
+    background: #fff;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
+    transition: transform 0.2s ease;
+}
+
+.twitchChatSwitch input:checked + .twitchChatSwitchTrack {
+    background: linear-gradient(135deg, #1565c0, #1976d2);
+    border-color: rgba(25, 118, 210, 0.55);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.18), 0 0 0 4px rgba(25, 118, 210, 0.10);
+}
+
+.twitchChatSwitch input:checked + .twitchChatSwitchTrack::after {
+    transform: translateX(18px);
+}
+
+.twitchChatSwitch input:focus-visible + .twitchChatSwitchTrack {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.16);
+}
+
+.twitchChatSwitch input:disabled + .twitchChatSwitchTrack {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 
@@ -372,7 +450,6 @@ h1 {
 .dropdown-menu button#giveUpBtn,
 .dropdown-menu button#createGameBtn,
 .dropdown-menu #twitchConnectButton,
-.dropdown-menu #twitchUseChatButton,
 .dropdown-menu #twitchDisconnectButton,
 .dropdown-menu button#authorshipBtn {
     justify-content: flex-start;
@@ -380,13 +457,11 @@ h1 {
 }
 
 .dropdown-menu #twitchConnectButton,
-.dropdown-menu #twitchUseChatButton,
 .dropdown-menu #twitchDisconnectButton {
     text-decoration: none;
 }
 
 .dropdown-menu #twitchConnectButton .menu-icon,
-.dropdown-menu #twitchUseChatButton .menu-icon,
 .dropdown-menu #twitchDisconnectButton .menu-icon {
     color: #c6a7ff !important;
     opacity: 1 !important;

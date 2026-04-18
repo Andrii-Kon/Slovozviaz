@@ -783,12 +783,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     const settingsBtn = document.getElementById("settingsBtn");
     const settingsModal = document.getElementById("settingsModal");
     const closeSettingsModal = document.getElementById("closeSettingsModal");
-    const twitchChatBanner = document.getElementById("twitchChatBanner");
-    const twitchChatStatusText = document.getElementById("twitchChatStatusText");
-    const twitchChatLastEvent = document.getElementById("twitchChatLastEvent");
+    const twitchHeaderControls = document.getElementById("twitchHeaderControls");
+    const twitchInlineControls = document.getElementById("twitchInlineControls");
+    const twitchInlineStreamer = document.getElementById("twitchInlineStreamer");
     const twitchConnectButton = document.getElementById("twitchConnectButton");
-    const twitchUseChatButton = document.getElementById("twitchUseChatButton");
     const twitchDisconnectButton = document.getElementById("twitchDisconnectButton");
+    const twitchChatToggleRow = document.getElementById("twitchChatToggleRow");
+    const twitchChatToggle = document.getElementById("twitchChatToggle");
     // const readMoreBtn = document.getElementById("readMoreBtn"); // Закоментовано, якщо не використовується
 
     const authorshipBtn = document.getElementById('authorshipBtn');
@@ -963,17 +964,24 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     function setTwitchChatStatus(message, state = "idle") {
-        if (!twitchChatBanner || !twitchChatStatusText) return;
+        if (!twitchInlineControls) return;
 
-        twitchChatBanner.classList.remove("hidden", "live", "error");
-        if (state === "live") twitchChatBanner.classList.add("live");
-        if (state === "error") twitchChatBanner.classList.add("error");
-        twitchChatStatusText.textContent = message;
+        twitchInlineControls.classList.remove("hidden", "live", "connected", "error");
+        if (state === "connected") twitchInlineControls.classList.add("connected");
+        if (state === "live") twitchInlineControls.classList.add("live");
+        if (state === "error") twitchInlineControls.classList.add("error");
+        if (message) {
+            twitchInlineControls.title = message;
+        } else {
+            twitchInlineControls.removeAttribute("title");
+        }
     }
 
     function setTwitchChatLastEvent(message) {
-        if (!twitchChatLastEvent) return;
-        twitchChatLastEvent.textContent = message;
+        if (!twitchInlineControls) return;
+        if (message) {
+            twitchInlineControls.title = message;
+        }
     }
 
     function stopTwitchChatMode() {
@@ -993,11 +1001,19 @@ document.addEventListener("DOMContentLoaded", async () => {
             twitchChatState.targetHeartbeatId = null;
         }
 
-        if (twitchChatBanner) {
-            twitchChatBanner.classList.add("hidden");
-            twitchChatBanner.classList.remove("live", "error");
+        if (twitchHeaderControls && !twitchConnectionState.connected) {
+            twitchHeaderControls.classList.add("hidden");
+        }
+        if (twitchInlineControls && !twitchConnectionState.connected) {
+            twitchInlineControls.classList.add("hidden");
+            twitchInlineControls.classList.remove("live", "connected", "error");
+            twitchInlineControls.removeAttribute("title");
+        }
+        if (twitchChatToggleRow && !twitchConnectionState.connected) {
+            twitchChatToggleRow.classList.add("hidden");
         }
         setTwitchChatLastEvent("");
+        updateTwitchConnectPanel();
     }
 
     function updateTwitchConnectPanel() {
@@ -1011,12 +1027,17 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (twitchConnectionState.connected && connection) {
             if (twitchConnectButton) twitchConnectButton.classList.add("hidden");
             if (twitchDisconnectButton) twitchDisconnectButton.classList.remove("hidden");
-            if (twitchUseChatButton) {
-                twitchUseChatButton.classList.remove("hidden");
-                twitchUseChatButton.disabled = activeForConnectedChannel;
-                setButtonTextPreservingIcon(twitchUseChatButton, activeForConnectedChannel
-                    ? "Чат увімкнено"
-                    : "Увімкнути чат");
+            if (twitchHeaderControls) twitchHeaderControls.classList.remove("hidden");
+            if (twitchInlineControls) twitchInlineControls.classList.remove("hidden");
+            if (twitchChatToggleRow) twitchChatToggleRow.classList.remove("hidden");
+            if (twitchInlineStreamer) twitchInlineStreamer.textContent = connection.twitch_login;
+            if (twitchChatToggle) {
+                twitchChatToggle.checked = activeForConnectedChannel;
+                twitchChatToggle.disabled = false;
+            }
+            if (!twitchChatState.enabled) {
+                setTwitchChatStatus(`Twitch chat для #${connection.twitch_login} вимкнено`, "connected");
+                setTwitchChatLastEvent("");
             }
             return;
         }
@@ -1030,14 +1051,34 @@ document.addEventListener("DOMContentLoaded", async () => {
                     ? "Підключити Twitch для чату стріму"
                     : "OAuth готовий, але worker на сервері ще не запущений";
             }
-            if (twitchUseChatButton) twitchUseChatButton.classList.add("hidden");
             if (twitchDisconnectButton) twitchDisconnectButton.classList.add("hidden");
+            if (twitchHeaderControls) twitchHeaderControls.classList.add("hidden");
+            if (twitchInlineControls) {
+                twitchInlineControls.classList.add("hidden");
+                twitchInlineControls.classList.remove("live", "connected", "error");
+                twitchInlineControls.removeAttribute("title");
+            }
+            if (twitchChatToggleRow) twitchChatToggleRow.classList.add("hidden");
+            if (twitchChatToggle) {
+                twitchChatToggle.checked = false;
+                twitchChatToggle.disabled = true;
+            }
             return;
         }
 
         if (twitchConnectButton) twitchConnectButton.classList.add("hidden");
-        if (twitchUseChatButton) twitchUseChatButton.classList.add("hidden");
         if (twitchDisconnectButton) twitchDisconnectButton.classList.add("hidden");
+        if (twitchHeaderControls) twitchHeaderControls.classList.add("hidden");
+        if (twitchInlineControls) {
+            twitchInlineControls.classList.add("hidden");
+            twitchInlineControls.classList.remove("live", "connected", "error");
+            twitchInlineControls.removeAttribute("title");
+        }
+        if (twitchChatToggleRow) twitchChatToggleRow.classList.add("hidden");
+        if (twitchChatToggle) {
+            twitchChatToggle.checked = false;
+            twitchChatToggle.disabled = true;
+        }
     }
 
     async function loadTwitchConnectionState() {
@@ -1301,10 +1342,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             : 0;
 
         const channelLabel = twitchChatState.channel ? `#${twitchChatState.channel}` : "активного каналу";
-        setTwitchChatStatus(
-            `Twitch chat: ${channelLabel} · ${getTwitchGameScopeLabel(nextGameScope)}`,
-            "live"
-        );
+        setTwitchChatStatus(`Twitch chat: ${channelLabel} · ${getTwitchGameScopeLabel(nextGameScope)}`, "live");
         setTwitchChatLastEvent("");
     }
 
@@ -1673,18 +1711,27 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (closeModalBtn) closeModalBtn.addEventListener("click", () => closestWordsModal && closestWordsModal.classList.add("hidden"));
     if (closestWordsModal) closestWordsModal.addEventListener('click', e => e.target === closestWordsModal && closestWordsModal.classList.add('hidden'));
 
-    if (twitchUseChatButton) {
-        twitchUseChatButton.addEventListener("click", async () => {
-            const channel = twitchConnectionState.connection?.twitch_login || null;
-            if (!channel) return;
+    if (twitchChatToggle) {
+        twitchChatToggle.addEventListener("change", async () => {
+            if (twitchChatToggle.checked) {
+                const channel = twitchConnectionState.connection?.twitch_login || null;
+                if (!channel) {
+                    twitchChatToggle.checked = false;
+                    return;
+                }
 
-            try {
-                await enableTwitchChatMode(channel);
-            } catch (err) {
-                console.error("[Error] Failed to enable Twitch chat for current game:", err);
-                setTwitchChatStatus("Не вдалося увімкнути чат для цієї гри.", "error");
-                setTwitchChatLastEvent("Спробуй ще раз або перевір worker на сервері.");
+                try {
+                    await enableTwitchChatMode(channel);
+                } catch (err) {
+                    console.error("[Error] Failed to enable Twitch chat for current game:", err);
+                    twitchChatToggle.checked = false;
+                    setTwitchChatStatus("Не вдалося увімкнути чат для цієї гри.", "error");
+                    setTwitchChatLastEvent("Спробуй ще раз або перевір worker на сервері.");
+                }
+                return;
             }
+
+            stopTwitchChatMode();
         });
     }
 
@@ -1698,9 +1745,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
                 twitchConnectionState.connected = false;
                 twitchConnectionState.connection = null;
-                if (!twitchModeFromUrl) {
-                    stopTwitchChatMode();
-                }
+                stopTwitchChatMode();
                 updateTwitchConnectPanel();
             } catch (err) {
                 console.error("[Error] Failed to disconnect Twitch:", err);

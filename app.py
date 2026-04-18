@@ -179,6 +179,9 @@ TWITCH_OAUTH_REDIRECT_URI = (os.getenv("TWITCH_OAUTH_REDIRECT_URI") or "").strip
 TWITCH_OAUTH_SCOPES = " ".join(
     part.strip() for part in (os.getenv("TWITCH_OAUTH_SCOPES") or "").split() if part.strip()
 )
+TWITCH_MOCK_ENABLED = _env_flag("TWITCH_MOCK_ENABLED")
+TWITCH_MOCK_LOGIN = (os.getenv("TWITCH_MOCK_LOGIN") or "espero_n").strip()
+TWITCH_MOCK_DISPLAY_NAME = (os.getenv("TWITCH_MOCK_DISPLAY_NAME") or "").strip()
 TWITCH_SHARED_BOT_USERNAME = (os.getenv("TWITCH_BOT_USERNAME") or "").strip().lower()
 TWITCH_SHARED_BOT_TOKEN = (os.getenv("TWITCH_OAUTH_TOKEN") or "").strip()
 TWITCH_CHAT_EVENT_RETENTION_HOURS = _env_int("TWITCH_CHAT_EVENT_RETENTION_HOURS", 24, minimum=1)
@@ -485,11 +488,11 @@ def _is_twitch_chat_bridge_enabled() -> bool:
 
 
 def _is_twitch_oauth_enabled() -> bool:
-    return bool(TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET and TWITCH_OAUTH_REDIRECT_URI)
+    return bool(TWITCH_MOCK_ENABLED or (TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET and TWITCH_OAUTH_REDIRECT_URI))
 
 
 def _is_twitch_worker_ready() -> bool:
-    return bool(TWITCH_SHARED_BOT_USERNAME and TWITCH_SHARED_BOT_TOKEN and _is_twitch_chat_bridge_enabled())
+    return bool(TWITCH_MOCK_ENABLED or (TWITCH_SHARED_BOT_USERNAME and TWITCH_SHARED_BOT_TOKEN and _is_twitch_chat_bridge_enabled()))
 
 
 def _normalize_twitch_channel(raw_channel: Optional[str]) -> str:
@@ -716,6 +719,47 @@ def _upsert_twitch_connection(
         row.token_type = token_type
         row.token_scopes = scope_text
         row.token_expires_at = expires_at
+        row.is_active = True
+        row.disconnected_at = None
+        row.last_validated_at = datetime.utcnow()
+
+    db.session.commit()
+    return row
+
+
+def _upsert_mock_twitch_connection() -> TwitchConnection:
+    mock_login = _normalize_twitch_channel(TWITCH_MOCK_LOGIN) or "espero_n"
+    mock_display_name = _normalize_twitch_text(
+        TWITCH_MOCK_DISPLAY_NAME,
+        fallback=mock_login,
+        max_length=120,
+    )
+    mock_user_id = f"mock-{mock_login}"
+
+    row = TwitchConnection.query.filter_by(twitch_user_id=mock_user_id).first()
+    if row is None:
+        row = TwitchConnection(
+            twitch_user_id=mock_user_id,
+            twitch_login=mock_login,
+            twitch_display_name=mock_display_name,
+            access_token="mock-access-token",
+            refresh_token="mock-refresh-token",
+            token_type="bearer",
+            token_scopes="chat:read",
+            token_expires_at=datetime.utcnow() + timedelta(days=3650),
+            is_active=True,
+            connected_at=datetime.utcnow(),
+            last_validated_at=datetime.utcnow(),
+        )
+        db.session.add(row)
+    else:
+        row.twitch_login = mock_login
+        row.twitch_display_name = mock_display_name
+        row.access_token = "mock-access-token"
+        row.refresh_token = "mock-refresh-token"
+        row.token_type = "bearer"
+        row.token_scopes = "chat:read"
+        row.token_expires_at = datetime.utcnow() + timedelta(days=3650)
         row.is_active = True
         row.disconnected_at = None
         row.last_validated_at = datetime.utcnow()
@@ -1181,6 +1225,9 @@ def twitch_oauth_start():
     if not _is_twitch_oauth_enabled():
         abort(404)
 
+    if TWITCH_MOCK_ENABLED:
+        return redirect(url_for("twitch_mock_start", next=request.args.get("next") or request.referrer or "/"))
+
     state = secrets.token_urlsafe(24)
     session[_twitch_oauth_state_session_key()] = state
     session[_twitch_oauth_next_session_key()] = _sanitize_local_redirect_target(
@@ -1230,6 +1277,24 @@ def twitch_oauth_callback():
     return redirect(f"{target}{separator}twitch_connected=1")
 
 
+@app.route("/auth/twitch/mock-start")
+def twitch_mock_start():
+    if not TWITCH_MOCK_ENABLED:
+        abort(404)
+
+    try:
+        row = _upsert_mock_twitch_connection()
+    except Exception as exc:
+        db.session.rollback()
+        print(f"[TWITCH MOCK] Failed to create mock connection: {exc}")
+        abort(500)
+
+    session[_twitch_connection_session_key()] = row.id
+    target = _sanitize_local_redirect_target(request.args.get("next") or request.referrer or "/")
+    separator = "&" if "?" in target else "?"
+    return redirect(f"{target}{separator}twitch_connected=1")
+
+
 @app.route("/api/twitch-connection/status")
 def twitch_connection_status():
     connection = _load_current_twitch_connection()
@@ -1238,7 +1303,10 @@ def twitch_connection_status():
         "worker_ready": _is_twitch_worker_ready(),
         "connected": bool(connection),
         "connection": _serialize_twitch_connection(connection),
-        "connect_url": url_for("twitch_oauth_start", next=request.args.get("next") or request.referrer or "/")
+        "connect_url": url_for(
+            "twitch_mock_start" if TWITCH_MOCK_ENABLED else "twitch_oauth_start",
+            next=request.args.get("next") or request.referrer or "/",
+        )
         if _is_twitch_oauth_enabled()
         else None,
     })

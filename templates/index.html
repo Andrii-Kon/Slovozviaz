@@ -28,7 +28,7 @@
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
 
     <!-- Основні стилі -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260417-4') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260418-1') }}">
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/favicon.png') }}">
 </head>
 <body>
@@ -51,19 +51,22 @@
 
     <!-- Інформація про гру: номер гри та лічильники -->
     <div class="game-info">
-        <h3 id="gameDateLabel" class="game-date-label">Гра: #?</h3>
-        <div class="gameStats">
-            <span class="guess-counter">Спроб: <span id="guessCount">0</span></span>
-            <span class="hint-counter">Підказки: <span id="hintCount">0</span></span>
+        <div class="gameInfoLeft">
+            <h3 id="gameDateLabel" class="game-date-label">Гра: #?</h3>
+            <div class="gameStats">
+                <span class="guess-counter">Спроб: <span id="guessCount">0</span></span>
+                <span class="hint-counter">Підказки: <span id="hintCount">0</span></span>
+            </div>
         </div>
-    </div>
-
-    <div id="twitchChatBanner" class="twitchChatBanner hidden" aria-live="polite">
-        <div class="twitchChatStatusRow">
-            <span class="twitchChatStatusDot" aria-hidden="true"></span>
-            <span id="twitchChatStatusText">Twitch chat mode вимкнено.</span>
+        <div id="twitchHeaderControls" class="twitchHeaderControls hidden" aria-live="polite">
+            <div id="twitchInlineControls" class="twitchInlineControls hidden" aria-live="polite">
+                <span id="twitchInlineStreamer" class="twitchInlineStreamer">espero_n</span>
+            </div>
+            <label id="twitchChatToggleRow" class="twitchChatSwitch hidden" for="twitchChatToggle" aria-label="Увімкнути чат Twitch для цієї гри">
+                <input type="checkbox" id="twitchChatToggle">
+                <span class="twitchChatSwitchTrack" aria-hidden="true"></span>
+            </label>
         </div>
-        <div id="twitchChatLastEvent" class="twitchChatLastEvent">Очікування нових слів із чату.</div>
     </div>
 
     <!-- Поле введення слова + меню -->
@@ -100,14 +103,6 @@
                     </span>
                     <span>Підключити Twitch</span>
                 </a>
-                <button class="menu-item hidden" id="twitchUseChatButton" type="button">
-                    <span class="menu-icon twitchMenuIcon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" role="img" focusable="false">
-                            <path fill="currentColor" d="M5.5 3 3 9.5V18h3.5v3H10l3-3h3.5L21 13V3H5.5Zm13 9-2 2h-4l-3 3v-3H6V5h12.5v7ZM14 7h2v4h-2V7Zm-5 0h2v4H9V7Z"/>
-                        </svg>
-                    </span>
-                    <span>Увімкнути чат</span>
-                </button>
                 <button class="menu-item hidden" id="twitchDisconnectButton" type="button">
                     <span class="menu-icon twitchMenuIcon" aria-hidden="true">
                         <svg viewBox="0 0 24 24" role="img" focusable="false">
@@ -273,6 +268,6 @@
 </div>
 
 <!-- Основний скрипт -->
-<script type="module" src="{{ url_for('static', filename='js/main.js', v='20260417-4') }}"></script>
+<script type="module" src="{{ url_for('static', filename='js/main.js', v='20260418-1') }}"></script>
 </body>
 </html>
