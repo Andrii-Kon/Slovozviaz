@@ -16,6 +16,7 @@ Optional:
   TWITCH_WORKER_CHANNELS_URL=https://your-site/api/twitch-worker/channels
   TWITCH_CHAT_COMMAND_PREFIX=!guess
   TWITCH_CHAT_ACCEPT_BARE_WORDS=false
+  TWITCH_CHAT_ACCEPT_ALL_MESSAGES=false
   TWITCH_WORKER_REFRESH_SECONDS=30
   TWITCH_WORKER_RECONNECT_DELAY_SECONDS=5
 """
@@ -76,10 +77,23 @@ def parse_tags(raw_tags: str) -> Dict[str, str]:
     return parsed
 
 
-def extract_guess_word(message: str, command_prefix: str, accept_bare_words: bool) -> Optional[str]:
+def extract_guess_word(
+    message: str,
+    command_prefix: str,
+    accept_bare_words: bool,
+    accept_all_messages: bool,
+) -> Optional[str]:
     text = message.strip()
     if not text:
         return None
+
+    if accept_all_messages:
+        parts = text.split()
+        if not parts:
+            return None
+        if parts[0].startswith(("http://", "https://")):
+            return None
+        return parts[0].strip().lower()
 
     normalized_prefix = command_prefix.strip()
     if normalized_prefix:
@@ -188,6 +202,7 @@ def run_worker() -> None:
     secret = (os.getenv("TWITCH_CHAT_BRIDGE_SECRET") or "").strip()
     command_prefix = (os.getenv("TWITCH_CHAT_COMMAND_PREFIX") or "!guess").strip()
     accept_bare_words = env_flag("TWITCH_CHAT_ACCEPT_BARE_WORDS", default=False)
+    accept_all_messages = env_flag("TWITCH_CHAT_ACCEPT_ALL_MESSAGES", default=False)
     refresh_seconds = max(10, int(os.getenv("TWITCH_WORKER_REFRESH_SECONDS", "30")))
     reconnect_delay_seconds = max(1, int(os.getenv("TWITCH_WORKER_RECONNECT_DELAY_SECONDS", "5")))
 
@@ -262,7 +277,12 @@ def run_worker() -> None:
                         user_login = match.group("prefix").split("!", 1)[0].strip().lower()
                         user_name = (tags.get("display-name") or user_login or "chat").strip()
                         message = match.group("message").strip()
-                        guess_word = extract_guess_word(message, command_prefix, accept_bare_words)
+                        guess_word = extract_guess_word(
+                            message,
+                            command_prefix,
+                            accept_bare_words,
+                            accept_all_messages,
+                        )
                         if not guess_word:
                             continue
 

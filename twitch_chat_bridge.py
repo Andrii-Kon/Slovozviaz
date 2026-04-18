@@ -13,6 +13,7 @@ Optional:
   TWITCH_GAME_SCOPE=custom:...
   TWITCH_CHAT_COMMAND_PREFIX=!guess
   TWITCH_CHAT_ACCEPT_BARE_WORDS=false
+  TWITCH_CHAT_ACCEPT_ALL_MESSAGES=false
   TWITCH_BRIDGE_RECONNECT_DELAY_SECONDS=5
 """
 
@@ -90,10 +91,23 @@ def parse_tags(raw_tags: str) -> Dict[str, str]:
     return parsed
 
 
-def extract_guess_word(message: str, command_prefix: str, accept_bare_words: bool) -> Optional[str]:
+def extract_guess_word(
+    message: str,
+    command_prefix: str,
+    accept_bare_words: bool,
+    accept_all_messages: bool,
+) -> Optional[str]:
     text = message.strip()
     if not text:
         return None
+
+    if accept_all_messages:
+        parts = text.split()
+        if not parts:
+            return None
+        if parts[0].startswith(("http://", "https://")):
+            return None
+        return parts[0].strip().lower()
 
     normalized_prefix = command_prefix.strip()
     if normalized_prefix:
@@ -181,6 +195,7 @@ def run_bridge() -> None:
     raw_game_scope = (os.getenv("TWITCH_GAME_SCOPE") or "").strip()
     command_prefix = (os.getenv("TWITCH_CHAT_COMMAND_PREFIX") or "!guess").strip()
     accept_bare_words = env_flag("TWITCH_CHAT_ACCEPT_BARE_WORDS", default=False)
+    accept_all_messages = env_flag("TWITCH_CHAT_ACCEPT_ALL_MESSAGES", default=False)
     reconnect_delay_seconds = max(1, int(os.getenv("TWITCH_BRIDGE_RECONNECT_DELAY_SECONDS", "5")))
     game_scope = normalize_game_scope(raw_game_scope)
     if not game_scope and raw_game_url:
@@ -256,7 +271,12 @@ def run_bridge() -> None:
                         user_login = match.group("prefix").split("!", 1)[0].strip().lower()
                         user_name = (tags.get("display-name") or user_login or "chat").strip()
                         message = match.group("message").strip()
-                        guess_word = extract_guess_word(message, command_prefix, accept_bare_words)
+                        guess_word = extract_guess_word(
+                            message,
+                            command_prefix,
+                            accept_bare_words,
+                            accept_all_messages,
+                        )
                         if not guess_word:
                             continue
 
