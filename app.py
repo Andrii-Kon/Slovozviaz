@@ -663,6 +663,25 @@ def _load_active_twitch_connections() -> List[TwitchConnection]:
     return TwitchConnection.query.filter_by(is_active=True).order_by(TwitchConnection.twitch_login.asc()).all()
 
 
+def _load_worker_active_twitch_channels() -> List[str]:
+    cutoff = datetime.utcnow() - timedelta(seconds=TWITCH_CHAT_TARGET_TTL_SECONDS)
+    rows = (
+        db.session.query(TwitchChatActiveTarget.channel)
+        .join(
+            TwitchConnection,
+            TwitchConnection.twitch_login == TwitchChatActiveTarget.channel,
+        )
+        .filter(
+            TwitchConnection.is_active.is_(True),
+            TwitchChatActiveTarget.updated_at >= cutoff,
+        )
+        .distinct()
+        .order_by(TwitchChatActiveTarget.channel.asc())
+        .all()
+    )
+    return [row[0] for row in rows if row and row[0]]
+
+
 def _upsert_twitch_connection(
     validate_payload: Dict[str, Any],
     token_payload: Dict[str, Any],
@@ -1345,7 +1364,7 @@ def twitch_worker_channels():
         return jsonify({"error": "Недійсний ключ Twitch worker."}), 401
 
     try:
-        rows = _run_db_query_with_retry(_load_active_twitch_connections)
+        channels = _run_db_query_with_retry(_load_worker_active_twitch_channels)
     except (OperationalError, InterfaceError):
         return jsonify({"error": "Тимчасова помилка читання Twitch-підключень."}), 503
     except Exception as exc:
@@ -1353,8 +1372,8 @@ def twitch_worker_channels():
         return jsonify({"error": "Не вдалося прочитати Twitch-підключення."}), 500
 
     response = jsonify({
-        "channels": [row.twitch_login for row in rows if row.twitch_login],
-        "count": len(rows),
+        "channels": channels,
+        "count": len(channels),
     })
     response.headers["Cache-Control"] = "private, no-store"
     return response
