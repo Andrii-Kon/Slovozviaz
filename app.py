@@ -990,6 +990,129 @@ def _load_twitch_chat_events(after_id: int, channel: str, game_scope: str, limit
     return query.order_by(TwitchChatEvent.id.asc()).limit(limit).all()
 
 
+@lru_cache(maxsize=2048)
+def _resolve_secret_word_for_twitch_game_scope(game_scope: str) -> str:
+    normalized_scope = _normalize_twitch_game_scope(game_scope)
+    if not normalized_scope:
+        return ""
+
+    if normalized_scope == "daily:current":
+        return _normalize_word(guess_secret_word_for_date(_today_in_kyiv()))
+
+    if normalized_scope.startswith("date:"):
+        raw_date = normalized_scope[5:]
+        try:
+            target_date = datetime.strptime(raw_date, "%Y-%m-%d").date()
+        except ValueError:
+            return ""
+
+        row = (
+            ArchivedGame.query
+            .options(load_only(ArchivedGame.secret_word))
+            .filter(ArchivedGame.game_date == target_date)
+            .first()
+        )
+        if row and row.secret_word:
+            return _normalize_word(row.secret_word)
+        return _normalize_word(guess_secret_word_for_date(target_date))
+
+    if normalized_scope.startswith("custom:"):
+        game_id = normalize_game_id(normalized_scope[7:])
+        if not game_id:
+            return ""
+        try:
+            return _get_custom_game_id_map().get(game_id, "")
+        except RuntimeError:
+            return ""
+
+    return ""
+
+
+def _load_twitch_chat_solver_leaderboard(channel: str, limit: int) -> List[Dict[str, Any]]:
+    if not channel:
+        return []
+
+    rows = (
+        TwitchChatEvent.query
+        .options(load_only(
+            TwitchChatEvent.game_scope,
+            TwitchChatEvent.chatter_user_login,
+            TwitchChatEvent.chatter_display_name,
+            TwitchChatEvent.guessed_word,
+            TwitchChatEvent.created_at,
+        ))
+        .filter(TwitchChatEvent.channel == channel)
+        .order_by(TwitchChatEvent.id.asc())
+        .all()
+    )
+
+    scope_secret_cache: Dict[str, str] = {}
+    solved_pairs: set[Tuple[str, str]] = set()
+    solver_map: Dict[str, Dict[str, Any]] = {}
+
+    for row in rows:
+        game_scope = _normalize_twitch_game_scope(row.game_scope)
+        chatter_login = _normalize_twitch_channel(row.chatter_user_login)
+        guessed_word = _normalize_word(row.guessed_word)
+        if not game_scope or not chatter_login or not guessed_word:
+            continue
+
+        secret_word = scope_secret_cache.get(game_scope)
+        if secret_word is None:
+            if game_scope == "daily:current":
+                secret_word = _normalize_word(guess_secret_word_for_date(_today_in_kyiv()))
+            else:
+                secret_word = _resolve_secret_word_for_twitch_game_scope(game_scope)
+            scope_secret_cache[game_scope] = secret_word
+
+        if not secret_word or guessed_word != secret_word:
+            continue
+
+        solved_key = (game_scope, chatter_login)
+        if solved_key in solved_pairs:
+            continue
+        solved_pairs.add(solved_key)
+
+        chatter_name = _normalize_twitch_text(
+            row.chatter_display_name,
+            fallback=chatter_login,
+            max_length=100,
+        )
+        solver_entry = solver_map.get(chatter_login)
+        if solver_entry is None:
+            solver_entry = {
+                "user_login": chatter_login,
+                "user_name": chatter_name or chatter_login,
+                "solved_count": 0,
+                "last_solved_at": row.created_at,
+            }
+            solver_map[chatter_login] = solver_entry
+
+        solver_entry["solved_count"] += 1
+        solver_entry["last_solved_at"] = row.created_at
+        if chatter_name:
+            solver_entry["user_name"] = chatter_name
+
+    leaderboard = list(solver_map.values())
+    leaderboard.sort(
+        key=lambda item: (
+            -int(item["solved_count"]),
+            -(item["last_solved_at"].timestamp() if item.get("last_solved_at") else 0),
+            item["user_login"],
+        )
+    )
+
+    trimmed = leaderboard[:limit]
+    return [
+        {
+            "user_login": item["user_login"],
+            "user_name": item["user_name"],
+            "solved_count": int(item["solved_count"]),
+        }
+        for item in trimmed
+    ]
+
+
 def _prune_twitch_chat_events_if_needed(force: bool = False) -> None:
     global LAST_TWITCH_CHAT_PRUNE_AT
 
@@ -1807,6 +1930,39 @@ def twitch_chat_events():
     response = jsonify({
         "events": [_serialize_twitch_chat_event(row) for row in rows],
         "next_after_id": rows[-1].id if rows else after_id,
+    })
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
+
+
+@app.route("/api/twitch-chat/solvers")
+def twitch_chat_solvers():
+    channel = _normalize_twitch_channel(request.args.get("channel"))
+    if not channel:
+        return jsonify({"error": "Передайте Twitch-канал у параметрі 'channel'."}), 400
+
+    raw_limit = request.args.get("limit", "50")
+    try:
+        limit = int(raw_limit)
+    except ValueError:
+        return jsonify({"error": "Параметр limit має бути цілим числом."}), 400
+
+    limit = max(1, min(limit, 200))
+
+    try:
+        solvers = _run_db_query_with_retry(
+            lambda: _load_twitch_chat_solver_leaderboard(channel, limit)
+        )
+    except (OperationalError, InterfaceError):
+        return jsonify({"error": "Тимчасова помилка читання Twitch-рейтингу."}), 503
+    except Exception as e:
+        print(f"[TWITCH CHAT] Помилка solvers для channel='{channel}': {e}")
+        return jsonify({"error": "Не вдалося прочитати рейтинг Twitch-чату."}), 500
+
+    response = jsonify({
+        "channel": channel,
+        "solvers": solvers,
+        "count": len(solvers),
     })
     response.headers["Cache-Control"] = "private, no-store"
     return response

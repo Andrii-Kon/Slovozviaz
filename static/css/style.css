@@ -119,6 +119,34 @@ h1 {
     min-width: 0;
 }
 
+.twitchHeaderIconButton {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, color 0.2s ease;
+    flex-shrink: 0;
+}
+
+.twitchHeaderIconButton:hover {
+    background: rgba(25, 118, 210, 0.14);
+    border-color: rgba(25, 118, 210, 0.36);
+    color: #d7ebff;
+    transform: translateY(-1px);
+}
+
+.twitchHeaderIconButton:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.18);
+}
+
 .guess-counter, .hint-counter {
     padding: 0;
     font-weight: 560;
@@ -260,6 +288,51 @@ h1 {
 .twitchChatSwitch input:disabled + .twitchChatSwitchTrack {
     opacity: 0.5;
     cursor: not-allowed;
+}
+
+.twitchWinnersList {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+.twitchWinnerRow {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.twitchWinnerPlace {
+    color: rgba(255, 255, 255, 0.5);
+    font-weight: 700;
+    min-width: 1.8em;
+}
+
+.twitchWinnerName {
+    color: rgba(255, 255, 255, 0.94);
+    font-weight: 620;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.twitchWinnerCount {
+    color: #8fc0ff;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.twitchWinnersEmpty,
+.twitchWinnersLoading {
+    margin: 6px 0 0;
+    color: rgba(255, 255, 255, 0.7);
 }
 
 

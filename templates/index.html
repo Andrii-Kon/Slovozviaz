@@ -28,7 +28,7 @@
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
 
     <!-- Основні стилі -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260418-1') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260420-2') }}">
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/favicon.png') }}">
 </head>
 <body>
@@ -62,6 +62,9 @@
             <div id="twitchInlineControls" class="twitchInlineControls hidden" aria-live="polite">
                 <span id="twitchInlineStreamer" class="twitchInlineStreamer">espero_n</span>
             </div>
+            <button id="twitchWinnersButton" class="twitchHeaderIconButton hidden" type="button" aria-label="Показати тих, хто відгадав слово" title="Хто відгадав слово">
+                <span aria-hidden="true">🏆</span>
+            </button>
             <label id="twitchChatToggleRow" class="twitchChatSwitch hidden" for="twitchChatToggle" aria-label="Увімкнути чат Twitch для цієї гри">
                 <input type="checkbox" id="twitchChatToggle">
                 <span class="twitchChatSwitchTrack" aria-hidden="true"></span>
@@ -267,7 +270,18 @@
     </div>
 </div>
 
+<!-- Модалка: рейтинг Twitch-переможців -->
+<div id="twitchWinnersModal" class="modal hidden">
+    <div class="modal-content">
+        <span id="closeTwitchWinnersModal" class="close">×</span>
+        <h2 id="twitchWinnersTitle">Хто відгадував слова</h2>
+        <div id="twitchWinnersList" class="twitchWinnersList">
+            <p class="twitchWinnersEmpty">Ще ніхто не відгадав слово.</p>
+        </div>
+    </div>
+</div>
+
 <!-- Основний скрипт -->
-<script type="module" src="{{ url_for('static', filename='js/main.js', v='20260418-1') }}"></script>
+<script type="module" src="{{ url_for('static', filename='js/main.js', v='20260420-2') }}"></script>
 </body>
 </html>

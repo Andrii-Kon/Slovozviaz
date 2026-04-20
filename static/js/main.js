@@ -6,8 +6,9 @@ import {
     fetchTwitchConnectionStatus,
     disconnectTwitchConnection,
     registerTwitchChatTarget,
-    fetchTwitchChatEvents
-} from "./api.js?v=20260417-1";
+    fetchTwitchChatEvents,
+    fetchTwitchChatSolvers
+} from "./api.js?v=20260420-2";
 import { renderGuesses, createGuessItem } from "./ui.js?v=20260415-1";
 
 const weekdayFmt = new Intl.DateTimeFormat('uk-UA', { weekday: 'short' });
@@ -790,6 +791,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     const twitchDisconnectButton = document.getElementById("twitchDisconnectButton");
     const twitchChatToggleRow = document.getElementById("twitchChatToggleRow");
     const twitchChatToggle = document.getElementById("twitchChatToggle");
+    const twitchWinnersButton = document.getElementById("twitchWinnersButton");
+    const twitchWinnersModal = document.getElementById("twitchWinnersModal");
+    const closeTwitchWinnersModal = document.getElementById("closeTwitchWinnersModal");
+    const twitchWinnersTitle = document.getElementById("twitchWinnersTitle");
+    const twitchWinnersList = document.getElementById("twitchWinnersList");
     // const readMoreBtn = document.getElementById("readMoreBtn"); // Закоментовано, якщо не використовується
 
     const authorshipBtn = document.getElementById('authorshipBtn');
@@ -984,6 +990,72 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
+    function renderTwitchWinnersList(solvers, channel) {
+        if (!twitchWinnersList) return;
+
+        twitchWinnersList.innerHTML = "";
+        if (twitchWinnersTitle) {
+            twitchWinnersTitle.textContent = channel
+                ? `Хто відгадував слова в #${channel}`
+                : "Хто відгадував слова";
+        }
+
+        if (!Array.isArray(solvers) || solvers.length === 0) {
+            twitchWinnersList.innerHTML = '<p class="twitchWinnersEmpty">Ще ніхто не відгадав слово.</p>';
+            return;
+        }
+
+        solvers.forEach((solver, index) => {
+            const row = document.createElement("div");
+            row.className = "twitchWinnerRow";
+
+            const rank = document.createElement("span");
+            rank.className = "twitchWinnerPlace";
+            rank.textContent = `${index + 1}.`;
+
+            const name = document.createElement("span");
+            name.className = "twitchWinnerName";
+            name.textContent = solver?.user_name || solver?.user_login || "чатер";
+
+            const count = document.createElement("span");
+            count.className = "twitchWinnerCount";
+            const solvedCount = Number.isFinite(Number(solver?.solved_count)) ? Number(solver.solved_count) : 0;
+            count.textContent = solvedCount === 1 ? "1 слово" : `${solvedCount} слів`;
+
+            row.append(rank, name, count);
+            twitchWinnersList.appendChild(row);
+        });
+    }
+
+    async function openTwitchWinnersModal() {
+        const channel = twitchConnectionState.connection?.twitch_login || twitchChatState.channel || null;
+        if (!channel) return;
+
+        if (twitchWinnersTitle) {
+            twitchWinnersTitle.textContent = `Хто відгадував слова в #${channel}`;
+        }
+        if (twitchWinnersList) {
+            twitchWinnersList.innerHTML = '<p class="twitchWinnersLoading">Завантаження рейтингу…</p>';
+        }
+        if (twitchWinnersModal) {
+            twitchWinnersModal.classList.remove("hidden");
+        }
+
+        try {
+            const payload = await fetchTwitchChatSolvers(channel, 50);
+            if (!payload.ok) {
+                throw new Error(payload?.data?.error || `HTTP ${payload.status}`);
+            }
+
+            renderTwitchWinnersList(payload?.data?.solvers || [], channel);
+        } catch (err) {
+            console.error("[Error] Failed to load Twitch solvers:", err);
+            if (twitchWinnersList) {
+                twitchWinnersList.innerHTML = '<p class="twitchWinnersEmpty">Не вдалося завантажити рейтинг.</p>';
+            }
+        }
+    }
+
     function stopTwitchChatMode() {
         twitchChatState.enabled = false;
         twitchChatState.channel = null;
@@ -1012,6 +1084,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (twitchChatToggleRow && !twitchConnectionState.connected) {
             twitchChatToggleRow.classList.add("hidden");
         }
+        if (twitchWinnersButton && !twitchConnectionState.connected) {
+            twitchWinnersButton.classList.add("hidden");
+        }
         setTwitchChatLastEvent("");
         updateTwitchConnectPanel();
     }
@@ -1029,6 +1104,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (twitchDisconnectButton) twitchDisconnectButton.classList.remove("hidden");
             if (twitchHeaderControls) twitchHeaderControls.classList.remove("hidden");
             if (twitchInlineControls) twitchInlineControls.classList.remove("hidden");
+            if (twitchWinnersButton) twitchWinnersButton.classList.remove("hidden");
             if (twitchChatToggleRow) twitchChatToggleRow.classList.remove("hidden");
             if (twitchInlineStreamer) twitchInlineStreamer.textContent = connection.twitch_login;
             if (twitchChatToggle) {
@@ -1058,6 +1134,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 twitchInlineControls.classList.remove("live", "connected", "error");
                 twitchInlineControls.removeAttribute("title");
             }
+            if (twitchWinnersButton) twitchWinnersButton.classList.add("hidden");
             if (twitchChatToggleRow) twitchChatToggleRow.classList.add("hidden");
             if (twitchChatToggle) {
                 twitchChatToggle.checked = false;
@@ -1074,6 +1151,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             twitchInlineControls.classList.remove("live", "connected", "error");
             twitchInlineControls.removeAttribute("title");
         }
+        if (twitchWinnersButton) twitchWinnersButton.classList.add("hidden");
         if (twitchChatToggleRow) twitchChatToggleRow.classList.add("hidden");
         if (twitchChatToggle) {
             twitchChatToggle.checked = false;
@@ -1240,6 +1318,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (!data.error) {
             if (data.rank < bestRank) bestRank = data.rank;
             if (data.rank === 1) {
+                if (isTwitchSource && twitchWinnersModal && !twitchWinnersModal.classList.contains("hidden")) {
+                    await openTwitchWinnersModal();
+                }
                 renderCurrentGuesses();
                 endGameAsWin();
                 return true;
@@ -1754,6 +1835,24 @@ document.addEventListener("DOMContentLoaded", async () => {
                 console.error("[Error] Failed to disconnect Twitch:", err);
                 alert("Не вдалося відключити Twitch.");
             }
+        });
+    }
+
+    if (twitchWinnersButton) {
+        twitchWinnersButton.addEventListener("click", async () => {
+            await openTwitchWinnersModal();
+        });
+    }
+
+    if (closeTwitchWinnersModal) {
+        closeTwitchWinnersModal.addEventListener("click", () => {
+            if (twitchWinnersModal) twitchWinnersModal.classList.add("hidden");
+        });
+    }
+
+    if (twitchWinnersModal) {
+        twitchWinnersModal.addEventListener("click", e => {
+            if (e.target === twitchWinnersModal) twitchWinnersModal.classList.add("hidden");
         });
     }
 

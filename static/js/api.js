@@ -91,6 +91,16 @@ export async function fetchTwitchChatEvents(afterId = 0, channel = null, gameSco
     return { ok: response.ok, status: response.status, data };
 }
 
+export async function fetchTwitchChatSolvers(channel, limit = 50) {
+    const params = new URLSearchParams();
+    if (channel) params.set("channel", channel);
+    if (Number.isFinite(limit) && limit > 0) params.set("limit", String(limit));
+
+    const response = await fetch(`/api/twitch-chat/solvers?${params.toString()}`, { cache: "no-store" });
+    const data = await response.json();
+    return { ok: response.ok, status: response.status, data };
+}
+
 export async function submitGuess(word) {
     const response = await fetch("/guess", {
         method: "POST",
