@@ -1337,9 +1337,12 @@ document.addEventListener("DOMContentLoaded", async () => {
             ? payload.data.target_ttl_seconds
             : 90;
         twitchChatState.targetRefreshMs = Math.max(15000, Math.floor(targetTtlSeconds * 500));
-        twitchChatState.lastEventId = Number.isFinite(payload?.data?.latest_event_id)
+        const latestEventId = Number.isFinite(payload?.data?.latest_event_id)
             ? payload.data.latest_event_id
             : 0;
+        if (!Number.isFinite(twitchChatState.lastEventId) || twitchChatState.lastEventId <= 0) {
+            twitchChatState.lastEventId = latestEventId;
+        }
 
         const channelLabel = twitchChatState.channel ? `#${twitchChatState.channel}` : "активного каналу";
         setTwitchChatStatus(`Twitch chat: ${channelLabel} · ${getTwitchGameScopeLabel(nextGameScope)}`, "live");

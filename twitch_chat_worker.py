@@ -25,9 +25,11 @@ from __future__ import annotations
 
 import json
 import os
+import queue
 import re
 import socket
 import ssl
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -44,6 +46,7 @@ IRC_PORT = 6697
 PRIVMSG_RE = re.compile(
     r"^(?:@(?P<tags>[^ ]+) )?:(?P<prefix>[^ ]+) PRIVMSG #(?P<channel>[^ ]+) :(?P<message>.*)$"
 )
+DEFAULT_PUBLISH_QUEUE_SIZE = int(os.getenv("TWITCH_WORKER_PUBLISH_QUEUE_SIZE", "2000"))
 
 
 def env_flag(name: str, default: bool = False) -> bool:
@@ -166,6 +169,22 @@ def publish_guess(
         print(f"[worker] published '{word}' from @{user_login} to #{channel} / {resolved_scope}")
 
 
+def publisher_loop(publish_queue: "queue.Queue[dict]") -> None:
+    while True:
+        payload = publish_queue.get()
+        try:
+            publish_guess(**payload)
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="ignore")
+            print(f"[worker] publish failed with HTTP {exc.code}: {body}")
+        except urllib.error.URLError as exc:
+            print(f"[worker] publish failed: {exc}")
+        except Exception as exc:
+            print(f"[worker] unexpected publish error: {exc}")
+        finally:
+            publish_queue.task_done()
+
+
 def load_active_channels() -> Set[str]:
     channels_url = (os.getenv("TWITCH_WORKER_CHANNELS_URL") or "").strip()
     secret = (os.getenv("TWITCH_CHAT_BRIDGE_SECRET") or "").strip()
@@ -205,6 +224,7 @@ def run_worker() -> None:
     accept_all_messages = env_flag("TWITCH_CHAT_ACCEPT_ALL_MESSAGES", default=False)
     refresh_seconds = max(10, int(os.getenv("TWITCH_WORKER_REFRESH_SECONDS", "30")))
     reconnect_delay_seconds = max(1, int(os.getenv("TWITCH_WORKER_RECONNECT_DELAY_SECONDS", "5")))
+    publish_queue_size = max(100, int(os.getenv("TWITCH_WORKER_PUBLISH_QUEUE_SIZE", str(DEFAULT_PUBLISH_QUEUE_SIZE))))
 
     missing = [
         name
@@ -220,6 +240,14 @@ def run_worker() -> None:
         raise SystemExit(f"Missing required environment variables: {', '.join(missing)}")
 
     ssl_context = ssl.create_default_context()
+    publish_queue: "queue.Queue[dict]" = queue.Queue(maxsize=publish_queue_size)
+    publisher = threading.Thread(
+        target=publisher_loop,
+        args=(publish_queue,),
+        name="twitch-publisher",
+        daemon=True,
+    )
+    publisher.start()
 
     while True:
         try:
@@ -286,23 +314,22 @@ def run_worker() -> None:
                         if not guess_word:
                             continue
 
+                        payload = {
+                            "target_url": target_url,
+                            "secret": secret,
+                            "channel": channel,
+                            "user_login": user_login,
+                            "user_name": user_name,
+                            "message": message,
+                            "word": guess_word,
+                        }
                         try:
-                            publish_guess(
-                                target_url=target_url,
-                                secret=secret,
-                                channel=channel,
-                                user_login=user_login,
-                                user_name=user_name,
-                                message=message,
-                                word=guess_word,
+                            publish_queue.put_nowait(payload)
+                        except queue.Full:
+                            print(
+                                f"[worker] publish queue full; dropped {guess_word!r} "
+                                f"from @{user_login} for #{channel}"
                             )
-                        except urllib.error.HTTPError as exc:
-                            body = exc.read().decode("utf-8", errors="ignore")
-                            print(f"[worker] publish failed with HTTP {exc.code}: {body}")
-                        except urllib.error.URLError as exc:
-                            print(f"[worker] publish failed: {exc}")
-                        except Exception as exc:
-                            print(f"[worker] unexpected publish error: {exc}")
 
                     if time.time() - last_refresh_at < refresh_seconds:
                         continue
