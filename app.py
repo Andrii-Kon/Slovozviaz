@@ -91,6 +91,7 @@ class TwitchChatEvent(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     channel = db.Column(db.String(100), nullable=False, index=True)
     game_scope = db.Column(db.String(160), nullable=False, default="", index=True)
+    source_message_id = db.Column(db.String(120), nullable=True, index=True)
     chatter_user_login = db.Column(db.String(100), nullable=False)
     chatter_display_name = db.Column(db.String(100), nullable=False)
     raw_message = db.Column(db.String(500), nullable=False)
@@ -176,9 +177,6 @@ TWITCH_CHAT_BRIDGE_SECRET = (os.getenv("TWITCH_CHAT_BRIDGE_SECRET") or "").strip
 TWITCH_CLIENT_ID = (os.getenv("TWITCH_CLIENT_ID") or "").strip()
 TWITCH_CLIENT_SECRET = (os.getenv("TWITCH_CLIENT_SECRET") or "").strip()
 TWITCH_OAUTH_REDIRECT_URI = (os.getenv("TWITCH_OAUTH_REDIRECT_URI") or "").strip()
-TWITCH_OAUTH_SCOPES = " ".join(
-    part.strip() for part in (os.getenv("TWITCH_OAUTH_SCOPES") or "").split() if part.strip()
-)
 TWITCH_MOCK_ENABLED = _env_flag("TWITCH_MOCK_ENABLED")
 TWITCH_MOCK_LOGIN = (os.getenv("TWITCH_MOCK_LOGIN") or "espero_n").strip()
 TWITCH_MOCK_DISPLAY_NAME = (os.getenv("TWITCH_MOCK_DISPLAY_NAME") or "").strip()
@@ -361,28 +359,26 @@ def ensure_twitch_chat_event_schema() -> None:
             return
 
         column_names = {column["name"] for column in insp.get_columns("twitch_chat_event")}
-        if "game_scope" in column_names:
+        alter_sqls: List[str] = []
+
+        if "game_scope" not in column_names:
+            alter_sqls.append(
+                "ALTER TABLE twitch_chat_event "
+                "ADD COLUMN game_scope VARCHAR(160) NOT NULL DEFAULT ''"
+            )
+
+        if "source_message_id" not in column_names:
+            alter_sqls.append(
+                "ALTER TABLE twitch_chat_event "
+                "ADD COLUMN source_message_id VARCHAR(120) DEFAULT NULL"
+            )
+
+        if not alter_sqls:
             return
 
-        dialect_name = db.engine.url.drivername
-        if dialect_name.startswith("sqlite"):
-            alter_sql = (
-                "ALTER TABLE twitch_chat_event "
-                "ADD COLUMN game_scope VARCHAR(160) NOT NULL DEFAULT ''"
-            )
-        elif dialect_name.startswith("mysql"):
-            alter_sql = (
-                "ALTER TABLE twitch_chat_event "
-                "ADD COLUMN game_scope VARCHAR(160) NOT NULL DEFAULT ''"
-            )
-        else:
-            alter_sql = (
-                "ALTER TABLE twitch_chat_event "
-                "ADD COLUMN game_scope VARCHAR(160) DEFAULT ''"
-            )
-
         with db.engine.begin() as connection:
-            connection.exec_driver_sql(alter_sql)
+            for alter_sql in alter_sqls:
+                connection.exec_driver_sql(alter_sql)
 
 # ──  Ініціалізація БД при імпорті (працює і для `flask run`)  ──────────────────
 with app.app_context():
@@ -492,7 +488,7 @@ def _is_twitch_oauth_enabled() -> bool:
 
 
 def _is_twitch_worker_ready() -> bool:
-    return bool(TWITCH_MOCK_ENABLED or (TWITCH_SHARED_BOT_USERNAME and TWITCH_SHARED_BOT_TOKEN and _is_twitch_chat_bridge_enabled()))
+    return bool(TWITCH_MOCK_ENABLED or (TWITCH_CLIENT_ID and _is_twitch_chat_bridge_enabled()))
 
 
 def _normalize_twitch_channel(raw_channel: Optional[str]) -> str:
@@ -524,16 +520,69 @@ def _normalize_twitch_page_url(raw_value: Optional[str]) -> str:
     return (raw_value or "").strip()[:500]
 
 
+def _normalize_twitch_scope(raw_value: Any) -> str:
+    scope = str(raw_value or "").strip()
+    legacy_map = {
+        "chat:read": "user:read:chat",
+        "chat:write": "user:write:chat",
+    }
+    return legacy_map.get(scope, scope)
+
+
+def _split_twitch_scope_values(raw_value: Any) -> List[str]:
+    if isinstance(raw_value, list):
+        parts = raw_value
+    else:
+        parts = str(raw_value or "").split()
+
+    ordered_scopes: List[str] = []
+    seen: set[str] = set()
+    for part in parts:
+        scope = _normalize_twitch_scope(part)
+        if not scope or scope in seen:
+            continue
+        seen.add(scope)
+        ordered_scopes.append(scope)
+    return ordered_scopes
+
+
+def _build_twitch_scope_text(raw_value: Any, required_scopes: Optional[List[str]] = None) -> str:
+    ordered_scopes = _split_twitch_scope_values(raw_value)
+    seen = set(ordered_scopes)
+    for scope in required_scopes or []:
+        normalized_scope = _normalize_twitch_scope(scope)
+        if not normalized_scope or normalized_scope in seen:
+            continue
+        ordered_scopes.append(normalized_scope)
+        seen.add(normalized_scope)
+    return " ".join(ordered_scopes)
+
+
+TWITCH_EVENTSUB_REQUIRED_SCOPES = ["user:read:chat"]
+TWITCH_OAUTH_SCOPES = _build_twitch_scope_text(
+    os.getenv("TWITCH_OAUTH_SCOPES"),
+    required_scopes=TWITCH_EVENTSUB_REQUIRED_SCOPES,
+)
+
+
 def _serialize_twitch_connection(row: Optional[TwitchConnection]) -> Optional[Dict[str, Any]]:
     if row is None:
         return None
 
+    scope_values = _split_twitch_scope_values(row.token_scopes)
+    missing_scopes = [
+        scope
+        for scope in TWITCH_EVENTSUB_REQUIRED_SCOPES
+        if scope not in scope_values
+    ]
     return {
         "id": row.id,
         "twitch_user_id": row.twitch_user_id,
         "twitch_login": row.twitch_login,
         "twitch_display_name": row.twitch_display_name,
-        "token_scopes": [scope for scope in row.token_scopes.split(" ") if scope],
+        "token_scopes": scope_values,
+        "eventsub_ready": not missing_scopes,
+        "eventsub_missing_scopes": missing_scopes,
         "connected_at": row.connected_at.isoformat() + "Z" if row.connected_at else None,
         "last_validated_at": row.last_validated_at.isoformat() + "Z" if row.last_validated_at else None,
         "is_active": bool(row.is_active),
@@ -663,6 +712,19 @@ def _load_active_twitch_connections() -> List[TwitchConnection]:
     return TwitchConnection.query.filter_by(is_active=True).order_by(TwitchConnection.twitch_login.asc()).all()
 
 
+def _twitch_connection_scope_values(row: TwitchConnection) -> List[str]:
+    return _split_twitch_scope_values(row.token_scopes)
+
+
+def _twitch_connection_missing_required_scopes(row: TwitchConnection) -> List[str]:
+    scope_values = set(_twitch_connection_scope_values(row))
+    return [scope for scope in TWITCH_EVENTSUB_REQUIRED_SCOPES if scope not in scope_values]
+
+
+def _twitch_connection_eventsub_ready(row: TwitchConnection) -> bool:
+    return not _twitch_connection_missing_required_scopes(row)
+
+
 def _load_worker_active_twitch_channels() -> List[str]:
     cutoff = datetime.utcnow() - timedelta(seconds=TWITCH_CHAT_TARGET_TTL_SECONDS)
     rows = (
@@ -680,6 +742,23 @@ def _load_worker_active_twitch_channels() -> List[str]:
         .all()
     )
     return [row[0] for row in rows if row and row[0]]
+
+
+def _load_worker_active_twitch_connections() -> List[Tuple[TwitchConnection, TwitchChatActiveTarget]]:
+    cutoff = datetime.utcnow() - timedelta(seconds=TWITCH_CHAT_TARGET_TTL_SECONDS)
+    return (
+        db.session.query(TwitchConnection, TwitchChatActiveTarget)
+        .join(
+            TwitchChatActiveTarget,
+            TwitchChatActiveTarget.channel == TwitchConnection.twitch_login,
+        )
+        .filter(
+            TwitchConnection.is_active.is_(True),
+            TwitchChatActiveTarget.updated_at >= cutoff,
+        )
+        .order_by(TwitchConnection.twitch_login.asc())
+        .all()
+    )
 
 
 def _upsert_twitch_connection(
@@ -705,8 +784,9 @@ def _upsert_twitch_connection(
     scopes = token_payload.get("scope")
     if not isinstance(scopes, list):
         scopes = validate_payload.get("scopes")
-    scope_text = " ".join(
-        sorted({str(scope).strip() for scope in (scopes or []) if str(scope).strip()})
+    scope_text = _build_twitch_scope_text(
+        scopes,
+        required_scopes=TWITCH_EVENTSUB_REQUIRED_SCOPES,
     )
 
     expires_in = token_payload.get("expires_in")
@@ -764,7 +844,10 @@ def _upsert_mock_twitch_connection() -> TwitchConnection:
             access_token="mock-access-token",
             refresh_token="mock-refresh-token",
             token_type="bearer",
-            token_scopes="chat:read",
+            token_scopes=_build_twitch_scope_text(
+                "user:read:chat",
+                required_scopes=TWITCH_EVENTSUB_REQUIRED_SCOPES,
+            ),
             token_expires_at=datetime.utcnow() + timedelta(days=3650),
             is_active=True,
             connected_at=datetime.utcnow(),
@@ -777,7 +860,10 @@ def _upsert_mock_twitch_connection() -> TwitchConnection:
         row.access_token = "mock-access-token"
         row.refresh_token = "mock-refresh-token"
         row.token_type = "bearer"
-        row.token_scopes = "chat:read"
+        row.token_scopes = _build_twitch_scope_text(
+            "user:read:chat",
+            required_scopes=TWITCH_EVENTSUB_REQUIRED_SCOPES,
+        )
         row.token_expires_at = datetime.utcnow() + timedelta(days=3650)
         row.is_active = True
         row.disconnected_at = None
@@ -785,6 +871,22 @@ def _upsert_mock_twitch_connection() -> TwitchConnection:
 
     db.session.commit()
     return row
+
+
+def _refresh_twitch_connection_if_needed(row: TwitchConnection, force: bool = False) -> TwitchConnection:
+    refresh_before = datetime.utcnow() + timedelta(minutes=10)
+    if (
+        not force
+        and row.token_expires_at is not None
+        and row.token_expires_at > refresh_before
+    ):
+        return row
+
+    token_payload = _refresh_twitch_access_token(row.refresh_token)
+    access_token = _normalize_twitch_text(token_payload.get("access_token"), max_length=2000)
+    validate_payload = _validate_twitch_access_token(access_token)
+    profile_payload = _fetch_twitch_user_profile(access_token)
+    return _upsert_twitch_connection(validate_payload, token_payload, profile_payload)
 
 
 def _resolve_twitch_guess_word(raw_word: Any) -> Optional[str]:
@@ -803,6 +905,7 @@ def _serialize_twitch_chat_event(row: TwitchChatEvent) -> Dict[str, Any]:
         "id": row.id,
         "channel": row.channel,
         "game_scope": row.game_scope,
+        "message_id": row.source_message_id,
         "user_login": row.chatter_user_login,
         "user_name": row.chatter_display_name,
         "message": row.raw_message,
@@ -820,6 +923,23 @@ def _load_twitch_chat_latest_event_id(channel: str = "", game_scope: str = "") -
 
     row = query.order_by(TwitchChatEvent.id.desc()).first()
     return int(row[0]) if row else 0
+
+
+def _load_twitch_chat_event_by_source_message(
+    channel: str,
+    game_scope: str,
+    source_message_id: str,
+) -> Optional[TwitchChatEvent]:
+    if not source_message_id:
+        return None
+
+    query = TwitchChatEvent.query.filter(
+        TwitchChatEvent.channel == channel,
+        TwitchChatEvent.source_message_id == source_message_id,
+    )
+    if game_scope:
+        query = query.filter(TwitchChatEvent.game_scope == game_scope)
+    return query.order_by(TwitchChatEvent.id.desc()).first()
 
 
 def _load_twitch_chat_active_target(channel: str) -> Optional[TwitchChatActiveTarget]:
@@ -1379,6 +1499,74 @@ def twitch_worker_channels():
     return response
 
 
+@app.route("/api/twitch-worker/connections")
+def twitch_worker_connections():
+    if not _is_twitch_chat_bridge_enabled():
+        return jsonify({"error": "Twitch worker не налаштований на сервері."}), 503
+
+    provided_secret = request.headers.get("X-Twitch-Bridge-Secret", "")
+    if not provided_secret or not hmac.compare_digest(provided_secret, TWITCH_CHAT_BRIDGE_SECRET):
+        return jsonify({"error": "Недійсний ключ Twitch worker."}), 401
+
+    try:
+        rows = _run_db_query_with_retry(_load_worker_active_twitch_connections)
+    except (OperationalError, InterfaceError):
+        return jsonify({"error": "Тимчасова помилка читання Twitch-підключень."}), 503
+    except Exception as exc:
+        print(f"[TWITCH WORKER] Failed to load connections: {exc}")
+        return jsonify({"error": "Не вдалося прочитати Twitch-підключення."}), 500
+
+    active_connections: List[Dict[str, Any]] = []
+    skipped_connections: List[Dict[str, Any]] = []
+
+    for connection, active_target in rows:
+        missing_scopes = _twitch_connection_missing_required_scopes(connection)
+        if missing_scopes:
+            skipped_connections.append({
+                "twitch_login": connection.twitch_login,
+                "twitch_user_id": connection.twitch_user_id,
+                "reason": "missing_scopes",
+                "missing_scopes": missing_scopes,
+            })
+            continue
+
+        try:
+            refreshed_connection = _run_db_query_with_retry(
+                lambda connection_id=connection.id: _refresh_twitch_connection_if_needed(
+                    TwitchConnection.query.get(connection_id)
+                )
+            )
+        except Exception as exc:
+            skipped_connections.append({
+                "twitch_login": connection.twitch_login,
+                "twitch_user_id": connection.twitch_user_id,
+                "reason": "token_refresh_failed",
+                "error": str(exc),
+            })
+            print(f"[TWITCH WORKER] Failed to refresh token for {connection.twitch_login}: {exc}")
+            continue
+
+        active_connections.append({
+            "connection_id": refreshed_connection.id,
+            "twitch_user_id": refreshed_connection.twitch_user_id,
+            "twitch_login": refreshed_connection.twitch_login,
+            "twitch_display_name": refreshed_connection.twitch_display_name,
+            "access_token": refreshed_connection.access_token,
+            "token_scopes": _twitch_connection_scope_values(refreshed_connection),
+            "game_scope": active_target.game_scope,
+            "page_url": active_target.page_url or None,
+        })
+
+    response = jsonify({
+        "connections": active_connections,
+        "count": len(active_connections),
+        "required_scopes": TWITCH_EVENTSUB_REQUIRED_SCOPES,
+        "skipped": skipped_connections,
+    })
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
+
+
 def dev_archive_game_page():
     _require_dev_mode_enabled()
     response = Response(render_template(
@@ -1658,6 +1846,11 @@ def twitch_chat_publish():
         response.headers["Cache-Control"] = "private, no-store"
         return response, 202
 
+    source_message_id = _normalize_twitch_text(
+        payload.get("message_id"),
+        fallback="",
+        max_length=120,
+    )
     resolved_word = _resolve_twitch_guess_word(payload.get("word"))
     if not resolved_word:
         response = jsonify({"accepted": False, "reason": "unknown_word"})
@@ -1676,9 +1869,35 @@ def twitch_chat_publish():
         max_length=500,
     )
 
+    if source_message_id:
+        try:
+            existing_row = _run_db_query_with_retry(
+                lambda: _load_twitch_chat_event_by_source_message(
+                    channel,
+                    game_scope,
+                    source_message_id,
+                )
+            )
+        except (OperationalError, InterfaceError):
+            return jsonify({"error": "Тимчасова помилка перевірки дубля Twitch-події."}), 503
+        except Exception as e:
+            print(f"[TWITCH CHAT] Помилка duplicate-check для payload={payload!r}: {e}")
+            return jsonify({"error": "Не вдалося перевірити дублікат Twitch-події."}), 500
+
+        if existing_row is not None:
+            response = jsonify({
+                "accepted": True,
+                "duplicate": True,
+                "event_id": existing_row.id,
+                "game_scope": existing_row.game_scope,
+            })
+            response.headers["Cache-Control"] = "private, no-store"
+            return response
+
     row = TwitchChatEvent(
         channel=channel,
         game_scope=game_scope,
+        source_message_id=source_message_id or None,
         chatter_user_login=chatter_user_login,
         chatter_display_name=chatter_display_name,
         raw_message=raw_message,

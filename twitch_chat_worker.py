@@ -1,24 +1,29 @@
 #!/usr/bin/env python3
-"""Centralized Twitch chat worker for Slovozviaz.
+"""Centralized Twitch EventSub chat worker for Slovozviaz.
 
-This worker uses one shared Twitch bot account to join every active streamer
-channel that connected through the website OAuth flow. Chat guesses are sent
-to the website publish endpoint, which then routes them to the currently
-active game for that channel.
+This worker listens to Twitch chat via EventSub WebSockets and forwards
+guesses to the website publish endpoint. The website remains the source of
+truth for active games and routing to the correct page/game scope.
 
 Required env vars:
-  TWITCH_BOT_USERNAME
-  TWITCH_OAUTH_TOKEN
+  TWITCH_CLIENT_ID
   TWITCH_BRIDGE_TARGET_URL
   TWITCH_CHAT_BRIDGE_SECRET
 
+Recommended env vars:
+  TWITCH_WORKER_CONNECTIONS_URL=https://your-site/api/twitch-worker/connections
+
 Optional:
-  TWITCH_WORKER_CHANNELS_URL=https://your-site/api/twitch-worker/channels
+  TWITCH_EVENTSUB_WEBSOCKET_URL=wss://eventsub.wss.twitch.tv/ws
   TWITCH_CHAT_COMMAND_PREFIX=!guess
   TWITCH_CHAT_ACCEPT_BARE_WORDS=false
   TWITCH_CHAT_ACCEPT_ALL_MESSAGES=false
   TWITCH_WORKER_REFRESH_SECONDS=30
   TWITCH_WORKER_RECONNECT_DELAY_SECONDS=5
+  TWITCH_WORKER_PUBLISH_QUEUE_SIZE=2000
+  TWITCH_WORKER_PUBLISH_RETRY_COUNT=3
+  TWITCH_WORKER_PUBLISH_RETRY_DELAY_SECONDS=1
+  TWITCH_EVENTSUB_KEEPALIVE_GRACE_SECONDS=15
 """
 
 from __future__ import annotations
@@ -26,27 +31,49 @@ from __future__ import annotations
 import json
 import os
 import queue
-import re
-import socket
-import ssl
 import threading
 import time
 import urllib.error
 import urllib.request
-from typing import Dict, Optional, Set
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
-
-from app import app, db, TwitchConnection
+from websocket import (
+    WebSocketConnectionClosedException,
+    WebSocketTimeoutException,
+    create_connection,
+)
 
 load_dotenv()
 
-IRC_HOST = "irc.chat.twitch.tv"
-IRC_PORT = 6697
-PRIVMSG_RE = re.compile(
-    r"^(?:@(?P<tags>[^ ]+) )?:(?P<prefix>[^ ]+) PRIVMSG #(?P<channel>[^ ]+) :(?P<message>.*)$"
-)
-DEFAULT_PUBLISH_QUEUE_SIZE = int(os.getenv("TWITCH_WORKER_PUBLISH_QUEUE_SIZE", "2000"))
+EVENTSUB_WEBSOCKET_URL = os.getenv("TWITCH_EVENTSUB_WEBSOCKET_URL", "wss://eventsub.wss.twitch.tv/ws").strip()
+EVENTSUB_SUBSCRIPTIONS_URL = "https://api.twitch.tv/helix/eventsub/subscriptions"
+
+DEFAULT_REFRESH_SECONDS = max(10, int(os.getenv("TWITCH_WORKER_REFRESH_SECONDS", "30")))
+DEFAULT_RECONNECT_DELAY_SECONDS = max(1, int(os.getenv("TWITCH_WORKER_RECONNECT_DELAY_SECONDS", "5")))
+DEFAULT_PUBLISH_QUEUE_SIZE = max(100, int(os.getenv("TWITCH_WORKER_PUBLISH_QUEUE_SIZE", "2000")))
+DEFAULT_PUBLISH_RETRY_COUNT = max(1, int(os.getenv("TWITCH_WORKER_PUBLISH_RETRY_COUNT", "3")))
+DEFAULT_PUBLISH_RETRY_DELAY_SECONDS = max(1, int(os.getenv("TWITCH_WORKER_PUBLISH_RETRY_DELAY_SECONDS", "1")))
+DEFAULT_KEEPALIVE_GRACE_SECONDS = max(5, int(os.getenv("TWITCH_EVENTSUB_KEEPALIVE_GRACE_SECONDS", "15")))
+
+
+@dataclass(frozen=True)
+class WorkerConnection:
+    connection_id: int
+    twitch_user_id: str
+    twitch_login: str
+    twitch_display_name: str
+    access_token: str
+    token_scopes: List[str]
+    game_scope: str
+    page_url: Optional[str]
+
+
+class EventSubReconnect(Exception):
+    def __init__(self, reconnect_url: str):
+        super().__init__("EventSub requested reconnect")
+        self.reconnect_url = reconnect_url
 
 
 def env_flag(name: str, default: bool = False) -> bool:
@@ -58,26 +85,6 @@ def env_flag(name: str, default: bool = False) -> bool:
 
 def normalize_channel(value: str) -> str:
     return value.strip().lower().lstrip("#")
-
-
-def normalize_token(value: str) -> str:
-    token = value.strip()
-    if token.startswith("oauth:"):
-        return token
-    return f"oauth:{token}"
-
-
-def parse_tags(raw_tags: str) -> Dict[str, str]:
-    parsed: Dict[str, str] = {}
-    if not raw_tags:
-        return parsed
-
-    for item in raw_tags.split(";"):
-        if "=" not in item:
-            continue
-        key, value = item.split("=", 1)
-        parsed[key] = value
-    return parsed
 
 
 def extract_guess_word(
@@ -116,15 +123,101 @@ def extract_guess_word(
     parts = text.split()
     if len(parts) != 1:
         return None
-
     if parts[0].startswith(("http://", "https://")):
         return None
-
     return parts[0].strip().lower()
 
 
-def send_irc_line(sock: ssl.SSLSocket, line: str) -> None:
-    sock.sendall(f"{line}\r\n".encode("utf-8"))
+def derive_connections_url() -> str:
+    explicit_url = (os.getenv("TWITCH_WORKER_CONNECTIONS_URL") or "").strip()
+    if explicit_url:
+        return explicit_url
+
+    legacy_url = (os.getenv("TWITCH_WORKER_CHANNELS_URL") or "").strip()
+    if legacy_url.endswith("/api/twitch-worker/channels"):
+        return legacy_url[: -len("/channels")] + "/connections"
+    if legacy_url:
+        return legacy_url
+    return ""
+
+
+def http_json_request(
+    url: str,
+    method: str = "GET",
+    headers: Optional[Dict[str, str]] = None,
+    json_payload: Optional[Dict[str, Any]] = None,
+    timeout: int = 20,
+) -> Dict[str, Any]:
+    data = None
+    request_headers = dict(headers or {})
+    if json_payload is not None:
+        data = json.dumps(json_payload).encode("utf-8")
+        request_headers.setdefault("Content-Type", "application/json")
+
+    req = urllib.request.Request(url, method=method, headers=request_headers, data=data)
+    with urllib.request.urlopen(req, timeout=timeout) as response:
+        body = response.read().decode("utf-8")
+        return json.loads(body or "{}")
+
+
+def load_active_connections(connections_url: str, secret: str) -> List[WorkerConnection]:
+    req = urllib.request.Request(
+        connections_url,
+        headers={
+            "Accept": "application/json",
+            "X-Twitch-Bridge-Secret": secret,
+        },
+    )
+    with urllib.request.urlopen(req, timeout=20) as response:
+        body = response.read().decode("utf-8")
+        payload = json.loads(body or "{}")
+
+    skipped = payload.get("skipped")
+    if isinstance(skipped, list):
+        for item in skipped:
+            if not isinstance(item, dict):
+                continue
+            login = item.get("twitch_login") or "unknown"
+            reason = item.get("reason") or "unknown"
+            if reason == "missing_scopes":
+                missing_scopes = ", ".join(item.get("missing_scopes") or [])
+                print(f"[worker] skipped @{login}: reconnect Twitch with scopes [{missing_scopes}]")
+            elif reason == "token_refresh_failed":
+                print(f"[worker] skipped @{login}: token refresh failed")
+
+    connections = payload.get("connections")
+    if not isinstance(connections, list):
+        return []
+
+    parsed: List[WorkerConnection] = []
+    for item in connections:
+        if not isinstance(item, dict):
+            continue
+        try:
+            parsed.append(
+                WorkerConnection(
+                    connection_id=int(item.get("connection_id")),
+                    twitch_user_id=str(item.get("twitch_user_id") or "").strip(),
+                    twitch_login=normalize_channel(str(item.get("twitch_login") or "")),
+                    twitch_display_name=str(item.get("twitch_display_name") or "").strip(),
+                    access_token=str(item.get("access_token") or "").strip(),
+                    token_scopes=[
+                        str(scope).strip()
+                        for scope in (item.get("token_scopes") or [])
+                        if str(scope).strip()
+                    ],
+                    game_scope=str(item.get("game_scope") or "").strip(),
+                    page_url=str(item.get("page_url") or "").strip() or None,
+                )
+            )
+        except Exception:
+            continue
+
+    return [
+        item
+        for item in parsed
+        if item.twitch_user_id and item.twitch_login and item.access_token
+    ]
 
 
 def publish_guess(
@@ -135,18 +228,19 @@ def publish_guess(
     user_name: str,
     message: str,
     word: str,
+    message_id: str,
 ) -> None:
-    payload = json.dumps({
+    payload = {
         "channel": channel,
         "user_login": user_login,
         "user_name": user_name,
         "message": message,
         "word": word,
-    }).encode("utf-8")
-
+        "message_id": message_id,
+    }
     request = urllib.request.Request(
         target_url,
-        data=payload,
+        data=json.dumps(payload).encode("utf-8"),
         method="POST",
         headers={
             "Content-Type": "application/json",
@@ -154,7 +248,7 @@ def publish_guess(
         },
     )
 
-    with urllib.request.urlopen(request, timeout=10) as response:
+    with urllib.request.urlopen(request, timeout=15) as response:
         body = response.read().decode("utf-8")
         if response.status not in {200, 202}:
             raise RuntimeError(f"Unexpected response {response.status}: {body}")
@@ -165,195 +259,329 @@ def publish_guess(
             print(f"[worker] skipped '{word}' for #{channel} ({reason})")
             return
 
+        if data.get("duplicate"):
+            print(f"[worker] duplicate '{word}' from @{user_login} for #{channel}")
+            return
+
         resolved_scope = data.get("game_scope") or "active-page-scope"
         print(f"[worker] published '{word}' from @{user_login} to #{channel} / {resolved_scope}")
 
 
-def publisher_loop(publish_queue: "queue.Queue[dict]") -> None:
+def publisher_loop(
+    publish_queue: "queue.Queue[dict]",
+    retry_count: int,
+    retry_delay_seconds: int,
+) -> None:
+    retryable_statuses = {429, 500, 502, 503, 504}
+
     while True:
         payload = publish_queue.get()
         try:
-            publish_guess(**payload)
-        except urllib.error.HTTPError as exc:
-            body = exc.read().decode("utf-8", errors="ignore")
-            print(f"[worker] publish failed with HTTP {exc.code}: {body}")
-        except urllib.error.URLError as exc:
-            print(f"[worker] publish failed: {exc}")
-        except Exception as exc:
-            print(f"[worker] unexpected publish error: {exc}")
+            for attempt in range(1, retry_count + 1):
+                try:
+                    publish_guess(**payload)
+                    break
+                except urllib.error.HTTPError as exc:
+                    body = exc.read().decode("utf-8", errors="ignore")
+                    if exc.code in retryable_statuses and attempt < retry_count:
+                        print(f"[worker] publish retry {attempt}/{retry_count} after HTTP {exc.code}")
+                        time.sleep(retry_delay_seconds * attempt)
+                        continue
+                    print(f"[worker] publish failed with HTTP {exc.code}: {body}")
+                    break
+                except urllib.error.URLError as exc:
+                    if attempt < retry_count:
+                        print(f"[worker] publish retry {attempt}/{retry_count} after URL error: {exc}")
+                        time.sleep(retry_delay_seconds * attempt)
+                        continue
+                    print(f"[worker] publish failed: {exc}")
+                    break
+                except Exception as exc:
+                    if attempt < retry_count:
+                        print(f"[worker] publish retry {attempt}/{retry_count} after error: {exc}")
+                        time.sleep(retry_delay_seconds * attempt)
+                        continue
+                    print(f"[worker] unexpected publish error: {exc}")
+                    break
         finally:
             publish_queue.task_done()
 
 
-def load_active_channels() -> Set[str]:
-    channels_url = (os.getenv("TWITCH_WORKER_CHANNELS_URL") or "").strip()
-    secret = (os.getenv("TWITCH_CHAT_BRIDGE_SECRET") or "").strip()
-    if channels_url:
-        req = urllib.request.Request(
-            channels_url,
-            headers={
-                "Accept": "application/json",
-                "X-Twitch-Bridge-Secret": secret,
-            },
-        )
-        with urllib.request.urlopen(req, timeout=15) as response:
-            body = response.read().decode("utf-8")
-            payload = json.loads(body or "{}")
-            channels = payload.get("channels")
-            if not isinstance(channels, list):
-                return set()
-            return {normalize_channel(str(channel)) for channel in channels if str(channel).strip()}
+def connect_eventsub_session(ws_url: str):
+    return create_connection(ws_url, timeout=20, enable_multithread=True)
 
-    with app.app_context():
-        rows = (
-            TwitchConnection.query
-            .filter_by(is_active=True)
-            .with_entities(TwitchConnection.twitch_login)
-            .all()
+
+def wait_for_welcome(ws) -> Dict[str, Any]:
+    deadline = time.time() + 15
+    while time.time() < deadline:
+        raw_message = ws.recv()
+        if not raw_message:
+            continue
+        frame = json.loads(raw_message)
+        metadata = frame.get("metadata") or {}
+        if metadata.get("message_type") != "session_welcome":
+            continue
+        payload = frame.get("payload") or {}
+        session = payload.get("session") or {}
+        session_id = str(session.get("id") or "").strip()
+        if not session_id:
+            raise RuntimeError("EventSub welcome payload missing session id")
+        return frame
+    raise RuntimeError("Timed out waiting for EventSub session_welcome")
+
+
+def create_chat_subscription(client_id: str, session_id: str, connection: WorkerConnection) -> str:
+    payload = {
+        "type": "channel.chat.message",
+        "version": "1",
+        "condition": {
+            "broadcaster_user_id": connection.twitch_user_id,
+            "user_id": connection.twitch_user_id,
+        },
+        "transport": {
+            "method": "websocket",
+            "session_id": session_id,
+        },
+    }
+    response = http_json_request(
+        EVENTSUB_SUBSCRIPTIONS_URL,
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {connection.access_token}",
+            "Client-Id": client_id,
+        },
+        json_payload=payload,
+        timeout=20,
+    )
+    data = response.get("data")
+    if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+        raise RuntimeError("EventSub subscription response did not contain subscription data")
+
+    subscription_id = str(data[0].get("id") or "").strip()
+    subscription_status = str(data[0].get("status") or "").strip()
+    if subscription_status and subscription_status not in {"enabled", "webhook_callback_verification_pending"}:
+        raise RuntimeError(
+            f"Unexpected EventSub subscription status for @{connection.twitch_login}: {subscription_status}"
         )
-        return {normalize_channel(row[0]) for row in rows if row and row[0]}
+    if not subscription_id:
+        raise RuntimeError("EventSub subscription response missing id")
+    return subscription_id
+
+
+def enqueue_notification(
+    frame: Dict[str, Any],
+    publish_queue: "queue.Queue[dict]",
+    target_url: str,
+    secret: str,
+    command_prefix: str,
+    accept_bare_words: bool,
+    accept_all_messages: bool,
+) -> None:
+    payload = frame.get("payload") or {}
+    event = payload.get("event") or {}
+    subscription = payload.get("subscription") or {}
+
+    if subscription.get("type") != "channel.chat.message":
+        return
+
+    channel = normalize_channel(str(event.get("broadcaster_user_login") or ""))
+    user_login = normalize_channel(str(event.get("chatter_user_login") or ""))
+    user_name = str(event.get("chatter_user_name") or user_login or "chat").strip()
+    message_id = str(event.get("message_id") or "").strip()
+    message_obj = event.get("message") or {}
+    message = str(message_obj.get("text") or "").strip()
+    guess_word = extract_guess_word(
+        message,
+        command_prefix,
+        accept_bare_words,
+        accept_all_messages,
+    )
+    if not channel or not user_login or not guess_word:
+        return
+
+    publish_payload = {
+        "target_url": target_url,
+        "secret": secret,
+        "channel": channel,
+        "user_login": user_login,
+        "user_name": user_name,
+        "message": message,
+        "word": guess_word,
+        "message_id": message_id,
+    }
+    try:
+        publish_queue.put_nowait(publish_payload)
+    except queue.Full:
+        print(
+            f"[worker] publish queue full; dropped {guess_word!r} "
+            f"from @{user_login} for #{channel}"
+        )
+
+
+def connection_signature(connection: WorkerConnection) -> str:
+    return f"{connection.connection_id}:{connection.twitch_user_id}:{connection.twitch_login}"
 
 
 def run_worker() -> None:
-    username = normalize_channel(os.getenv("TWITCH_BOT_USERNAME") or "")
-    oauth_token = normalize_token(os.getenv("TWITCH_OAUTH_TOKEN") or "")
+    client_id = (os.getenv("TWITCH_CLIENT_ID") or "").strip()
     target_url = (os.getenv("TWITCH_BRIDGE_TARGET_URL") or "").strip()
     secret = (os.getenv("TWITCH_CHAT_BRIDGE_SECRET") or "").strip()
+    connections_url = derive_connections_url()
     command_prefix = (os.getenv("TWITCH_CHAT_COMMAND_PREFIX") or "!guess").strip()
     accept_bare_words = env_flag("TWITCH_CHAT_ACCEPT_BARE_WORDS", default=False)
     accept_all_messages = env_flag("TWITCH_CHAT_ACCEPT_ALL_MESSAGES", default=False)
-    refresh_seconds = max(10, int(os.getenv("TWITCH_WORKER_REFRESH_SECONDS", "30")))
-    reconnect_delay_seconds = max(1, int(os.getenv("TWITCH_WORKER_RECONNECT_DELAY_SECONDS", "5")))
-    publish_queue_size = max(100, int(os.getenv("TWITCH_WORKER_PUBLISH_QUEUE_SIZE", str(DEFAULT_PUBLISH_QUEUE_SIZE))))
+    refresh_seconds = DEFAULT_REFRESH_SECONDS
+    reconnect_delay_seconds = DEFAULT_RECONNECT_DELAY_SECONDS
+    publish_queue_size = DEFAULT_PUBLISH_QUEUE_SIZE
+    publish_retry_count = DEFAULT_PUBLISH_RETRY_COUNT
+    publish_retry_delay_seconds = DEFAULT_PUBLISH_RETRY_DELAY_SECONDS
+    keepalive_grace_seconds = DEFAULT_KEEPALIVE_GRACE_SECONDS
 
     missing = [
-        name
-        for name, value in [
-            ("TWITCH_BOT_USERNAME", username),
-            ("TWITCH_OAUTH_TOKEN", oauth_token),
+        key
+        for key, value in [
+            ("TWITCH_CLIENT_ID", client_id),
             ("TWITCH_BRIDGE_TARGET_URL", target_url),
             ("TWITCH_CHAT_BRIDGE_SECRET", secret),
+            ("TWITCH_WORKER_CONNECTIONS_URL", connections_url),
         ]
         if not value
     ]
     if missing:
         raise SystemExit(f"Missing required environment variables: {', '.join(missing)}")
 
-    ssl_context = ssl.create_default_context()
     publish_queue: "queue.Queue[dict]" = queue.Queue(maxsize=publish_queue_size)
     publisher = threading.Thread(
         target=publisher_loop,
-        args=(publish_queue,),
-        name="twitch-publisher",
+        args=(publish_queue, publish_retry_count, publish_retry_delay_seconds),
+        name="twitch-eventsub-publisher",
         daemon=True,
     )
     publisher.start()
 
+    next_ws_url = EVENTSUB_WEBSOCKET_URL
+
     while True:
+        websocket_conn = None
         try:
-            channels = load_active_channels()
-            if not channels:
-                print("[worker] no active Twitch connections yet; waiting...")
+            desired_connections = load_active_connections(connections_url, secret)
+            if not desired_connections:
+                print("[worker] no active EventSub-ready Twitch connections yet; waiting...")
                 time.sleep(refresh_seconds)
                 continue
 
-            print(f"[worker] connecting as @{username}; channels: {', '.join(sorted(channels))}")
-            raw_socket = socket.create_connection((IRC_HOST, IRC_PORT), timeout=15)
-            with ssl_context.wrap_socket(raw_socket, server_hostname=IRC_HOST) as sock:
-                sock.settimeout(60)
-                send_irc_line(sock, "CAP REQ :twitch.tv/tags twitch.tv/commands")
-                send_irc_line(sock, f"PASS {oauth_token}")
-                send_irc_line(sock, f"NICK {username}")
-                for channel in sorted(channels):
-                    send_irc_line(sock, f"JOIN #{channel}")
+            print(
+                "[worker] connecting to EventSub for channels: "
+                + ", ".join(sorted(connection.twitch_login for connection in desired_connections))
+            )
+            websocket_conn = connect_eventsub_session(next_ws_url)
+            welcome_frame = wait_for_welcome(websocket_conn)
+            session = (welcome_frame.get("payload") or {}).get("session") or {}
+            session_id = str(session.get("id") or "").strip()
+            keepalive_timeout_seconds = int(session.get("keepalive_timeout_seconds") or 10)
+            websocket_conn.settimeout(max(10, keepalive_timeout_seconds + keepalive_grace_seconds))
+            next_ws_url = EVENTSUB_WEBSOCKET_URL
 
-                joined_channels = set(channels)
-                last_refresh_at = time.time()
-                authenticated = False
-                buffer = ""
+            subscribed_keys: List[str] = []
+            for connection in desired_connections:
+                try:
+                    subscription_id = create_chat_subscription(client_id, session_id, connection)
+                    subscribed_keys.append(connection_signature(connection))
+                    print(
+                        f"[worker] subscribed #{connection.twitch_login} "
+                        f"(subscription {subscription_id})"
+                    )
+                except urllib.error.HTTPError as exc:
+                    body = exc.read().decode("utf-8", errors="ignore")
+                    print(f"[worker] subscription failed for @{connection.twitch_login}: HTTP {exc.code} {body}")
+                except Exception as exc:
+                    print(f"[worker] subscription failed for @{connection.twitch_login}: {exc}")
 
-                while True:
-                    chunk = sock.recv(4096)
-                    if not chunk:
-                        if not authenticated:
-                            raise ConnectionError("Twitch IRC closed the connection before authentication completed.")
-                        raise ConnectionError("Twitch IRC connection closed.")
+            if not subscribed_keys:
+                raise RuntimeError("No EventSub subscriptions could be created for active connections")
 
-                    buffer += chunk.decode("utf-8", errors="ignore")
-                    while "\r\n" in buffer:
-                        line, buffer = buffer.split("\r\n", 1)
-                        if not line:
-                            continue
+            desired_signature = sorted(connection_signature(item) for item in desired_connections)
+            last_refresh_at = time.time()
+            last_message_at = time.time()
 
-                        if " NOTICE * :Login authentication failed" in line:
-                            raise ConnectionError("Twitch IRC login failed. Regenerate the shared bot token with chat:read.")
-                        if " NOTICE * :Improperly formatted auth" in line:
-                            raise ConnectionError("Twitch IRC rejected the PASS/NICK authentication format.")
-                        if line.startswith(":tmi.twitch.tv 001 "):
-                            authenticated = True
+            while True:
+                try:
+                    raw_message = websocket_conn.recv()
+                except WebSocketTimeoutException:
+                    if time.time() - last_message_at > (keepalive_timeout_seconds + keepalive_grace_seconds):
+                        raise ConnectionError("EventSub keepalive timeout")
+                    raw_message = None
 
-                        if line.startswith("PING "):
-                            send_irc_line(sock, line.replace("PING", "PONG", 1))
-                            continue
+                if raw_message:
+                    last_message_at = time.time()
+                    frame = json.loads(raw_message)
+                    metadata = frame.get("metadata") or {}
+                    message_type = str(metadata.get("message_type") or "").strip()
 
-                        match = PRIVMSG_RE.match(line)
-                        if not match:
-                            continue
-
-                        channel = normalize_channel(match.group("channel") or "")
-                        tags = parse_tags(match.group("tags") or "")
-                        user_login = match.group("prefix").split("!", 1)[0].strip().lower()
-                        user_name = (tags.get("display-name") or user_login or "chat").strip()
-                        message = match.group("message").strip()
-                        guess_word = extract_guess_word(
-                            message,
+                    if message_type == "session_keepalive":
+                        pass
+                    elif message_type == "notification":
+                        enqueue_notification(
+                            frame,
+                            publish_queue,
+                            target_url,
+                            secret,
                             command_prefix,
                             accept_bare_words,
                             accept_all_messages,
                         )
-                        if not guess_word:
-                            continue
+                    elif message_type == "session_reconnect":
+                        session_payload = (frame.get("payload") or {}).get("session") or {}
+                        reconnect_url = str(session_payload.get("reconnect_url") or "").strip()
+                        if reconnect_url:
+                            raise EventSubReconnect(reconnect_url)
+                        raise ConnectionError("EventSub requested reconnect without reconnect_url")
+                    elif message_type == "revocation":
+                        subscription = (frame.get("payload") or {}).get("subscription") or {}
+                        print(
+                            "[worker] subscription revoked: "
+                            f"{subscription.get('type')} / {subscription.get('status')}"
+                        )
+                        raise ConnectionError("EventSub subscription revoked")
 
-                        payload = {
-                            "target_url": target_url,
-                            "secret": secret,
-                            "channel": channel,
-                            "user_login": user_login,
-                            "user_name": user_name,
-                            "message": message,
-                            "word": guess_word,
-                        }
-                        try:
-                            publish_queue.put_nowait(payload)
-                        except queue.Full:
-                            print(
-                                f"[worker] publish queue full; dropped {guess_word!r} "
-                                f"from @{user_login} for #{channel}"
-                            )
+                if time.time() - last_refresh_at < refresh_seconds:
+                    continue
 
-                    if time.time() - last_refresh_at < refresh_seconds:
-                        continue
-
-                    latest_channels = load_active_channels()
-                    added_channels = sorted(latest_channels - joined_channels)
-                    removed_channels = sorted(joined_channels - latest_channels)
-                    for channel in added_channels:
-                        send_irc_line(sock, f"JOIN #{channel}")
-                        print(f"[worker] joined #{channel}")
-                    for channel in removed_channels:
-                        send_irc_line(sock, f"PART #{channel}")
-                        print(f"[worker] left #{channel}")
-
-                    joined_channels = set(latest_channels)
-                    last_refresh_at = time.time()
+                latest_connections = load_active_connections(connections_url, secret)
+                latest_signature = sorted(connection_signature(item) for item in latest_connections)
+                if latest_signature != desired_signature:
+                    print("[worker] active Twitch connection set changed; rebuilding EventSub session...")
+                    break
+                last_refresh_at = time.time()
 
         except KeyboardInterrupt:
             print("\n[worker] stopped by user")
             return
-        except Exception as exc:
+        except EventSubReconnect as exc:
+            print("[worker] EventSub requested reconnect; switching session...")
+            next_ws_url = exc.reconnect_url
+        except (WebSocketConnectionClosedException, ConnectionError) as exc:
             print(f"[worker] connection error: {exc}")
             print(f"[worker] reconnecting in {reconnect_delay_seconds}s...")
             time.sleep(reconnect_delay_seconds)
+            next_ws_url = EVENTSUB_WEBSOCKET_URL
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="ignore")
+            print(f"[worker] HTTP error: {exc.code} {body}")
+            print(f"[worker] reconnecting in {reconnect_delay_seconds}s...")
+            time.sleep(reconnect_delay_seconds)
+            next_ws_url = EVENTSUB_WEBSOCKET_URL
+        except Exception as exc:
+            print(f"[worker] unexpected error: {exc}")
+            print(f"[worker] reconnecting in {reconnect_delay_seconds}s...")
+            time.sleep(reconnect_delay_seconds)
+            next_ws_url = EVENTSUB_WEBSOCKET_URL
+        finally:
+            if websocket_conn is not None:
+                try:
+                    websocket_conn.close()
+                except Exception:
+                    pass
 
 
 if __name__ == "__main__":

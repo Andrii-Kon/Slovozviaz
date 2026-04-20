@@ -8,3 +8,4 @@ pymysql
 pymorphy3
 pymorphy3-dicts-uk
 tzdata
+websocket-client
