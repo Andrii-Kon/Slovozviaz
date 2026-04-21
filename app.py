@@ -1028,6 +1028,24 @@ def _resolve_secret_word_for_twitch_game_scope(game_scope: str) -> str:
     return ""
 
 
+def _resolve_secret_word_for_twitch_event(game_scope: str, created_at: Optional[datetime]) -> str:
+    normalized_scope = _normalize_twitch_game_scope(game_scope)
+    if not normalized_scope:
+        return ""
+
+    if normalized_scope == "daily:current":
+        if created_at is None:
+            return _normalize_word(guess_secret_word_for_date(_today_in_kyiv()))
+
+        event_dt = created_at
+        if event_dt.tzinfo is None:
+            event_dt = event_dt.replace(tzinfo=ZoneInfo("UTC"))
+        event_date_kyiv = event_dt.astimezone(KYIV_TZ).date()
+        return _normalize_word(guess_secret_word_for_date(event_date_kyiv))
+
+    return _resolve_secret_word_for_twitch_game_scope(normalized_scope)
+
+
 def _load_twitch_chat_solver_leaderboard(channel: str, limit: int) -> List[Dict[str, Any]]:
     if not channel:
         return []
@@ -1057,13 +1075,18 @@ def _load_twitch_chat_solver_leaderboard(channel: str, limit: int) -> List[Dict[
         if not game_scope or not chatter_login or not guessed_word:
             continue
 
-        secret_word = scope_secret_cache.get(game_scope)
+        secret_cache_key = game_scope
+        if game_scope == "daily:current" and row.created_at is not None:
+            event_dt = row.created_at
+            if event_dt.tzinfo is None:
+                event_dt = event_dt.replace(tzinfo=ZoneInfo("UTC"))
+            event_date_kyiv = event_dt.astimezone(KYIV_TZ).date().isoformat()
+            secret_cache_key = f"daily:{event_date_kyiv}"
+
+        secret_word = scope_secret_cache.get(secret_cache_key)
         if secret_word is None:
-            if game_scope == "daily:current":
-                secret_word = _normalize_word(guess_secret_word_for_date(_today_in_kyiv()))
-            else:
-                secret_word = _resolve_secret_word_for_twitch_game_scope(game_scope)
-            scope_secret_cache[game_scope] = secret_word
+            secret_word = _resolve_secret_word_for_twitch_event(game_scope, row.created_at)
+            scope_secret_cache[secret_cache_key] = secret_word
 
         if not secret_word or guessed_word != secret_word:
             continue

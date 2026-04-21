@@ -419,7 +419,159 @@ def enqueue_notification(
 
 
 def connection_signature(connection: WorkerConnection) -> str:
-    return f"{connection.connection_id}:{connection.twitch_user_id}:{connection.twitch_login}"
+    return (
+        f"{connection.connection_id}:{connection.twitch_user_id}:"
+        f"{connection.twitch_login}:{connection.access_token}"
+    )
+
+
+class EventSubConnectionWorker(threading.Thread):
+    def __init__(
+        self,
+        connection: WorkerConnection,
+        client_id: str,
+        target_url: str,
+        secret: str,
+        command_prefix: str,
+        accept_bare_words: bool,
+        accept_all_messages: bool,
+        reconnect_delay_seconds: int,
+        keepalive_grace_seconds: int,
+        publish_queue: "queue.Queue[dict]",
+    ) -> None:
+        super().__init__(
+            name=f"twitch-eventsub-{connection.twitch_login}",
+            daemon=True,
+        )
+        self.connection = connection
+        self.client_id = client_id
+        self.target_url = target_url
+        self.secret = secret
+        self.command_prefix = command_prefix
+        self.accept_bare_words = accept_bare_words
+        self.accept_all_messages = accept_all_messages
+        self.reconnect_delay_seconds = reconnect_delay_seconds
+        self.keepalive_grace_seconds = keepalive_grace_seconds
+        self.publish_queue = publish_queue
+        self.stop_event = threading.Event()
+
+    def stop(self) -> None:
+        self.stop_event.set()
+
+    def _sleep_or_stop(self, seconds: int) -> bool:
+        return self.stop_event.wait(max(0, seconds))
+
+    def run(self) -> None:
+        next_ws_url = EVENTSUB_WEBSOCKET_URL
+
+        while not self.stop_event.is_set():
+            websocket_conn = None
+            try:
+                print(f"[worker] connecting to EventSub for #{self.connection.twitch_login}")
+                websocket_conn = connect_eventsub_session(next_ws_url)
+                welcome_frame = wait_for_welcome(websocket_conn)
+                session = (welcome_frame.get("payload") or {}).get("session") or {}
+                session_id = str(session.get("id") or "").strip()
+                keepalive_timeout_seconds = int(session.get("keepalive_timeout_seconds") or 10)
+                websocket_conn.settimeout(
+                    max(10, keepalive_timeout_seconds + self.keepalive_grace_seconds)
+                )
+                next_ws_url = EVENTSUB_WEBSOCKET_URL
+
+                subscription_id = create_chat_subscription(
+                    self.client_id,
+                    session_id,
+                    self.connection,
+                )
+                print(
+                    f"[worker] subscribed #{self.connection.twitch_login} "
+                    f"(subscription {subscription_id})"
+                )
+
+                last_message_at = time.time()
+                while not self.stop_event.is_set():
+                    try:
+                        raw_message = websocket_conn.recv()
+                    except WebSocketTimeoutException:
+                        if time.time() - last_message_at > (
+                            keepalive_timeout_seconds + self.keepalive_grace_seconds
+                        ):
+                            raise ConnectionError("EventSub keepalive timeout")
+                        raw_message = None
+
+                    if not raw_message:
+                        continue
+
+                    last_message_at = time.time()
+                    frame = json.loads(raw_message)
+                    metadata = frame.get("metadata") or {}
+                    message_type = str(metadata.get("message_type") or "").strip()
+
+                    if message_type == "session_keepalive":
+                        continue
+
+                    if message_type == "notification":
+                        enqueue_notification(
+                            frame,
+                            self.publish_queue,
+                            self.target_url,
+                            self.secret,
+                            self.command_prefix,
+                            self.accept_bare_words,
+                            self.accept_all_messages,
+                        )
+                        continue
+
+                    if message_type == "session_reconnect":
+                        session_payload = (frame.get("payload") or {}).get("session") or {}
+                        reconnect_url = str(session_payload.get("reconnect_url") or "").strip()
+                        if reconnect_url:
+                            raise EventSubReconnect(reconnect_url)
+                        raise ConnectionError("EventSub requested reconnect without reconnect_url")
+
+                    if message_type == "revocation":
+                        subscription = (frame.get("payload") or {}).get("subscription") or {}
+                        print(
+                            "[worker] subscription revoked for "
+                            f"#{self.connection.twitch_login}: "
+                            f"{subscription.get('type')} / {subscription.get('status')}"
+                        )
+                        raise ConnectionError("EventSub subscription revoked")
+
+            except EventSubReconnect as exc:
+                print(f"[worker] EventSub requested reconnect for #{self.connection.twitch_login}")
+                next_ws_url = exc.reconnect_url
+                continue
+            except KeyboardInterrupt:
+                return
+            except (WebSocketConnectionClosedException, ConnectionError) as exc:
+                print(f"[worker] connection error for #{self.connection.twitch_login}: {exc}")
+            except urllib.error.HTTPError as exc:
+                body = exc.read().decode("utf-8", errors="ignore")
+                print(
+                    f"[worker] HTTP error for #{self.connection.twitch_login}: "
+                    f"{exc.code} {body}"
+                )
+            except Exception as exc:
+                print(f"[worker] unexpected error for #{self.connection.twitch_login}: {exc}")
+            finally:
+                if websocket_conn is not None:
+                    try:
+                        websocket_conn.close()
+                    except Exception:
+                        pass
+
+            if self.stop_event.is_set():
+                break
+
+            print(
+                f"[worker] reconnecting #{self.connection.twitch_login} "
+                f"in {self.reconnect_delay_seconds}s..."
+            )
+            stopped = self._sleep_or_stop(self.reconnect_delay_seconds)
+            if stopped:
+                break
+            next_ws_url = EVENTSUB_WEBSOCKET_URL
 
 
 def run_worker() -> None:
@@ -458,130 +610,70 @@ def run_worker() -> None:
         daemon=True,
     )
     publisher.start()
+    active_workers: Dict[int, EventSubConnectionWorker] = {}
+    active_signatures: Dict[int, str] = {}
+    reported_no_connections = False
 
-    next_ws_url = EVENTSUB_WEBSOCKET_URL
-
-    while True:
-        websocket_conn = None
-        try:
+    try:
+        while True:
             desired_connections = load_active_connections(connections_url, secret)
-            if not desired_connections:
-                print("[worker] no active EventSub-ready Twitch connections yet; waiting...")
-                time.sleep(refresh_seconds)
-                continue
+            desired_by_id = {
+                connection.connection_id: connection
+                for connection in desired_connections
+            }
 
-            print(
-                "[worker] connecting to EventSub for channels: "
-                + ", ".join(sorted(connection.twitch_login for connection in desired_connections))
-            )
-            websocket_conn = connect_eventsub_session(next_ws_url)
-            welcome_frame = wait_for_welcome(websocket_conn)
-            session = (welcome_frame.get("payload") or {}).get("session") or {}
-            session_id = str(session.get("id") or "").strip()
-            keepalive_timeout_seconds = int(session.get("keepalive_timeout_seconds") or 10)
-            websocket_conn.settimeout(max(10, keepalive_timeout_seconds + keepalive_grace_seconds))
-            next_ws_url = EVENTSUB_WEBSOCKET_URL
+            if not desired_by_id:
+                if not reported_no_connections:
+                    print("[worker] no active EventSub-ready Twitch connections yet; waiting...")
+                    reported_no_connections = True
+            else:
+                reported_no_connections = False
 
-            subscribed_keys: List[str] = []
-            for connection in desired_connections:
-                try:
-                    subscription_id = create_chat_subscription(client_id, session_id, connection)
-                    subscribed_keys.append(connection_signature(connection))
-                    print(
-                        f"[worker] subscribed #{connection.twitch_login} "
-                        f"(subscription {subscription_id})"
-                    )
-                except urllib.error.HTTPError as exc:
-                    body = exc.read().decode("utf-8", errors="ignore")
-                    print(f"[worker] subscription failed for @{connection.twitch_login}: HTTP {exc.code} {body}")
-                except Exception as exc:
-                    print(f"[worker] subscription failed for @{connection.twitch_login}: {exc}")
+            removed_ids = set(active_workers) - set(desired_by_id)
+            for connection_id in sorted(removed_ids):
+                worker = active_workers.pop(connection_id)
+                active_signatures.pop(connection_id, None)
+                print(f"[worker] stopping EventSub session for #{worker.connection.twitch_login}")
+                worker.stop()
+                worker.join(timeout=5)
 
-            if not subscribed_keys:
-                raise RuntimeError("No EventSub subscriptions could be created for active connections")
+            for connection_id, connection in desired_by_id.items():
+                desired_signature = connection_signature(connection)
+                current_worker = active_workers.get(connection_id)
+                current_signature = active_signatures.get(connection_id)
 
-            desired_signature = sorted(connection_signature(item) for item in desired_connections)
-            last_refresh_at = time.time()
-            last_message_at = time.time()
-
-            while True:
-                try:
-                    raw_message = websocket_conn.recv()
-                except WebSocketTimeoutException:
-                    if time.time() - last_message_at > (keepalive_timeout_seconds + keepalive_grace_seconds):
-                        raise ConnectionError("EventSub keepalive timeout")
-                    raw_message = None
-
-                if raw_message:
-                    last_message_at = time.time()
-                    frame = json.loads(raw_message)
-                    metadata = frame.get("metadata") or {}
-                    message_type = str(metadata.get("message_type") or "").strip()
-
-                    if message_type == "session_keepalive":
-                        pass
-                    elif message_type == "notification":
-                        enqueue_notification(
-                            frame,
-                            publish_queue,
-                            target_url,
-                            secret,
-                            command_prefix,
-                            accept_bare_words,
-                            accept_all_messages,
-                        )
-                    elif message_type == "session_reconnect":
-                        session_payload = (frame.get("payload") or {}).get("session") or {}
-                        reconnect_url = str(session_payload.get("reconnect_url") or "").strip()
-                        if reconnect_url:
-                            raise EventSubReconnect(reconnect_url)
-                        raise ConnectionError("EventSub requested reconnect without reconnect_url")
-                    elif message_type == "revocation":
-                        subscription = (frame.get("payload") or {}).get("subscription") or {}
-                        print(
-                            "[worker] subscription revoked: "
-                            f"{subscription.get('type')} / {subscription.get('status')}"
-                        )
-                        raise ConnectionError("EventSub subscription revoked")
-
-                if time.time() - last_refresh_at < refresh_seconds:
+                if current_worker and current_signature == desired_signature and current_worker.is_alive():
                     continue
 
-                latest_connections = load_active_connections(connections_url, secret)
-                latest_signature = sorted(connection_signature(item) for item in latest_connections)
-                if latest_signature != desired_signature:
-                    print("[worker] active Twitch connection set changed; rebuilding EventSub session...")
-                    break
-                last_refresh_at = time.time()
+                if current_worker:
+                    print(f"[worker] restarting EventSub session for #{current_worker.connection.twitch_login}")
+                    current_worker.stop()
+                    current_worker.join(timeout=5)
 
-        except KeyboardInterrupt:
-            print("\n[worker] stopped by user")
-            return
-        except EventSubReconnect as exc:
-            print("[worker] EventSub requested reconnect; switching session...")
-            next_ws_url = exc.reconnect_url
-        except (WebSocketConnectionClosedException, ConnectionError) as exc:
-            print(f"[worker] connection error: {exc}")
-            print(f"[worker] reconnecting in {reconnect_delay_seconds}s...")
-            time.sleep(reconnect_delay_seconds)
-            next_ws_url = EVENTSUB_WEBSOCKET_URL
-        except urllib.error.HTTPError as exc:
-            body = exc.read().decode("utf-8", errors="ignore")
-            print(f"[worker] HTTP error: {exc.code} {body}")
-            print(f"[worker] reconnecting in {reconnect_delay_seconds}s...")
-            time.sleep(reconnect_delay_seconds)
-            next_ws_url = EVENTSUB_WEBSOCKET_URL
-        except Exception as exc:
-            print(f"[worker] unexpected error: {exc}")
-            print(f"[worker] reconnecting in {reconnect_delay_seconds}s...")
-            time.sleep(reconnect_delay_seconds)
-            next_ws_url = EVENTSUB_WEBSOCKET_URL
-        finally:
-            if websocket_conn is not None:
-                try:
-                    websocket_conn.close()
-                except Exception:
-                    pass
+                worker = EventSubConnectionWorker(
+                    connection=connection,
+                    client_id=client_id,
+                    target_url=target_url,
+                    secret=secret,
+                    command_prefix=command_prefix,
+                    accept_bare_words=accept_bare_words,
+                    accept_all_messages=accept_all_messages,
+                    reconnect_delay_seconds=reconnect_delay_seconds,
+                    keepalive_grace_seconds=keepalive_grace_seconds,
+                    publish_queue=publish_queue,
+                )
+                active_workers[connection_id] = worker
+                active_signatures[connection_id] = desired_signature
+                worker.start()
+
+            time.sleep(refresh_seconds)
+    except KeyboardInterrupt:
+        print("\n[worker] stopped by user")
+    finally:
+        for worker in active_workers.values():
+            worker.stop()
+        for worker in active_workers.values():
+            worker.join(timeout=5)
 
 
 if __name__ == "__main__":
