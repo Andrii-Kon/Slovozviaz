@@ -6,8 +6,7 @@ import {
     fetchTwitchConnectionStatus,
     disconnectTwitchConnection,
     registerTwitchChatTarget,
-    fetchTwitchChatEvents,
-    fetchTwitchChatSolvers
+    fetchTwitchChatEvents
 } from "./api.js?v=20260420-2";
 import { renderGuesses, createGuessItem } from "./ui.js?v=20260415-1";
 
@@ -66,6 +65,19 @@ const twitchConnectionState = {
     connected: false,
     connection: null,
     connectUrl: null
+};
+
+const TWITCH_LEADERBOARD_REFRESH_MS = 30000;
+const TWITCH_INLINE_LEADERBOARD_LIMIT = 10;
+const TWITCH_SIDEBAR_LEADERBOARD_LIMIT = 10;
+const TWITCH_LEADERBOARD_STORAGE_EVENT = "slovozviaz:game-state-saved";
+const TWITCH_LEADERBOARD_LOG_STORAGE_KEY = "slovozviaz:twitch-leaderboard-log:v1";
+const twitchLeaderboardState = {
+    channel: null,
+    solvers: [],
+    isLoading: false,
+    lastLoadedAt: 0,
+    refreshTimerId: null
 };
 
 function setButtonTextPreservingIcon(button, label) {
@@ -545,6 +557,21 @@ function saveGameState() {
     const storageKey = getCurrentGameStateKey();
     if (!storageKey) return;
 
+    const hasProgressToSave = (
+        gameState.guesses.length > 0
+        || gameState.hints.length > 0
+        || gameState.guessCount > 0
+        || gameState.hintCount > 0
+        || didWin
+        || didGiveUp
+        || Boolean(lastWord)
+        || Boolean(giveUpWord)
+    );
+    if (!hasProgressToSave) return;
+
+    const twitchChannel = normalizeTwitchChannel(
+        twitchConnectionState.connection?.twitch_login || twitchChatState.channel || ""
+    );
     const state = {
         guesses: gameState.guesses,
         hints: gameState.hints,
@@ -555,12 +582,32 @@ function saveGameState() {
         lastWord,
         didWin,
         didGiveUp,
-        giveUpWord
+        giveUpWord,
+        twitchChannel: twitchChannel || null,
+        updatedAt: Date.now()
     };
     try {
         localStorage.setItem(storageKey, JSON.stringify(state));
+        dispatchTwitchLeaderboardStorageChanged(storageKey);
     } catch (e) {
         console.error("Failed to save game state to localStorage:", e);
+    }
+}
+
+function dispatchTwitchLeaderboardStorageChanged(storageKey = null) {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(new CustomEvent(TWITCH_LEADERBOARD_STORAGE_EVENT, {
+        detail: { storageKey }
+    }));
+}
+
+function clearStoredGameState(storageKey) {
+    if (!storageKey) return;
+    try {
+        localStorage.removeItem(storageKey);
+        dispatchTwitchLeaderboardStorageChanged(storageKey);
+    } catch (err) {
+        console.warn("Cannot remove game state from localStorage:", err);
     }
 }
 
@@ -616,6 +663,30 @@ function showInitialInfoBlocks() {
 
     try {
         const state = JSON.parse(savedState);
+        if (currentCustomGameId && (state?.didWin || state?.didGiveUp)) {
+            const winningGuess = findStoredTwitchWinningGuess(state);
+            if (winningGuess) {
+                upsertTwitchLeaderboardSolve({
+                    channel: state.twitchChannel || state.twitch_channel || "",
+                    gameKey: deriveGameKeyFromStoredGameStateKey(storageKey),
+                    userLogin: winningGuess.submittedByLogin || "",
+                    userName: winningGuess.submittedByName || winningGuess.submittedBy || "",
+                    solvedAt: parseStoredTimestamp(winningGuess.createdAt)
+                        || parseStoredTimestamp(state.updatedAt)
+                        || getStoredGameSolvedAt(storageKey, state, winningGuess)
+                });
+            }
+            clearStoredGameState(storageKey);
+            resetRuntimeGameState();
+            resetUIForActiveGame();
+            if (guessCountElem) guessCountElem.textContent = "0";
+            updateHintCountDisplay();
+            renderCurrentGuesses();
+            if (howToPlayBlock) howToPlayBlock.style.display = "";
+            if (privacyPolicyBlock) privacyPolicyBlock.style.display = "";
+            return;
+        }
+
         gameState.guesses = enrichEntriesWithRankingData(hydrateStoredEntries(state.guesses));
         gameState.hints = enrichEntriesWithRankingData(hydrateStoredEntries(state.hints));
         gameState.guessCount = state.guessCount || 0;
@@ -648,11 +719,7 @@ function showInitialInfoBlocks() {
         }
         } catch (e) {
             console.error("Failed to parse or apply saved game state:", e);
-            try {
-                localStorage.removeItem(storageKey);
-            } catch (storageErr) {
-                console.warn("Cannot remove broken game state from localStorage:", storageErr);
-            }
+            clearStoredGameState(storageKey);
             resetUIForActiveGame();
             if (howToPlayBlock) howToPlayBlock.style.display = "";
             if (privacyPolicyBlock) privacyPolicyBlock.style.display = "";
@@ -731,6 +798,10 @@ function endGameAsWin() {
     didWin = true;
     didGiveUp = false;
     showWinMessageUI();
+    if (currentCustomGameId) {
+        clearStoredGameState(getCurrentGameStateKey());
+        return;
+    }
     saveGameState();
 }
 
@@ -740,6 +811,10 @@ function endGameAsGiveUp(secretWord) {
     didWin = false;
     giveUpWord = secretWord;
     showLoseMessageUI(secretWord);
+    if (currentCustomGameId) {
+        clearStoredGameState(getCurrentGameStateKey());
+        return;
+    }
     saveGameState();
 }
 
@@ -791,11 +866,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     const twitchDisconnectButton = document.getElementById("twitchDisconnectButton");
     const twitchChatToggleRow = document.getElementById("twitchChatToggleRow");
     const twitchChatToggle = document.getElementById("twitchChatToggle");
-    const twitchWinnersButton = document.getElementById("twitchWinnersButton");
-    const twitchWinnersModal = document.getElementById("twitchWinnersModal");
-    const closeTwitchWinnersModal = document.getElementById("closeTwitchWinnersModal");
-    const twitchWinnersTitle = document.getElementById("twitchWinnersTitle");
-    const twitchWinnersList = document.getElementById("twitchWinnersList");
+    const twitchLeaderboardInline = document.getElementById("twitchLeaderboardInline");
+    const twitchLeaderboardInlineTitle = document.getElementById("twitchLeaderboardInlineTitle");
+    const twitchLeaderboardInlineList = document.getElementById("twitchLeaderboardInlineList");
+    const twitchLeaderboardSidebar = document.getElementById("twitchLeaderboardSidebar");
+    const twitchLeaderboardSidebarTitle = document.getElementById("twitchLeaderboardSidebarTitle");
+    const twitchLeaderboardSidebarList = document.getElementById("twitchLeaderboardSidebarList");
     // const readMoreBtn = document.getElementById("readMoreBtn"); // Закоментовано, якщо не використовується
 
     const authorshipBtn = document.getElementById('authorshipBtn');
@@ -990,70 +1066,516 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
-    function renderTwitchWinnersList(solvers, channel) {
-        if (!twitchWinnersList) return;
+    function getTwitchLeaderboardChannel() {
+        return twitchConnectionState.connection?.twitch_login || twitchChatState.channel || null;
+    }
 
-        twitchWinnersList.innerHTML = "";
-        if (twitchWinnersTitle) {
-            twitchWinnersTitle.textContent = channel
-                ? `Хто відгадував слова в #${channel}`
-                : "Хто відгадував слова";
+    function getTwitchLeaderboardTitle(channel) {
+        if (!channel) {
+            return "Лідери чату";
+        }
+        return `Лідери ${channel}`;
+    }
+
+    function getTwitchLeaderboardViews() {
+        return [
+            {
+                container: twitchLeaderboardInline,
+                title: twitchLeaderboardInlineTitle,
+                list: twitchLeaderboardInlineList,
+                limit: TWITCH_INLINE_LEADERBOARD_LIMIT
+            },
+            {
+                container: twitchLeaderboardSidebar,
+                title: twitchLeaderboardSidebarTitle,
+                list: twitchLeaderboardSidebarList,
+                limit: TWITCH_SIDEBAR_LEADERBOARD_LIMIT
+            }
+        ];
+    }
+
+    function getCurrentTwitchLeaderboardGameKey() {
+        if (currentCustomGameId) {
+            return `custom:${currentCustomGameId}`;
+        }
+        if (currentGameDate) {
+            return `date:${currentGameDate}`;
+        }
+        return "";
+    }
+
+    function isStoredGameStateKey(storageKey) {
+        return typeof storageKey === "string" && storageKey.startsWith("gameState_");
+    }
+
+    function isTwitchLeaderboardTrackedStorageKey(storageKey) {
+        return storageKey === TWITCH_LEADERBOARD_LOG_STORAGE_KEY || isStoredGameStateKey(storageKey);
+    }
+
+    function normalizeStoredWinnerLabel(value) {
+        return typeof value === "string" ? value.replace(/^@+/, "").trim() : "";
+    }
+
+    function parseStoredTimestamp(value) {
+        const numericValue = Number(value);
+        if (Number.isFinite(numericValue) && numericValue > 0) {
+            return numericValue;
         }
 
-        if (!Array.isArray(solvers) || solvers.length === 0) {
-            twitchWinnersList.innerHTML = '<p class="twitchWinnersEmpty">Ще ніхто не відгадав слово.</p>';
-            return;
+        if (typeof value === "string") {
+            const parsedValue = Date.parse(value);
+            if (Number.isFinite(parsedValue) && parsedValue > 0) {
+                return parsedValue;
+            }
         }
 
-        solvers.forEach((solver, index) => {
-            const row = document.createElement("div");
-            row.className = "twitchWinnerRow";
+        return 0;
+    }
 
-            const rank = document.createElement("span");
-            rank.className = "twitchWinnerPlace";
-            rank.textContent = `${index + 1}.`;
+    function getStoredGameSolvedAt(storageKey, state, winningGuess) {
+        const explicitTimestamp = parseStoredTimestamp(winningGuess?.createdAt)
+            || parseStoredTimestamp(state?.updatedAt);
+        if (explicitTimestamp > 0) {
+            return explicitTimestamp;
+        }
 
-            const name = document.createElement("span");
-            name.className = "twitchWinnerName";
-            name.textContent = solver?.user_name || solver?.user_login || "чатер";
+        const dailyMatch = /^gameState_(\d{4}-\d{2}-\d{2})$/.exec(storageKey || "");
+        if (!dailyMatch) {
+            return 0;
+        }
 
-            const count = document.createElement("span");
-            count.className = "twitchWinnerCount";
-            const solvedCount = Number.isFinite(Number(solver?.solved_count)) ? Number(solver.solved_count) : 0;
-            count.textContent = solvedCount === 1 ? "1 слово" : `${solvedCount} слів`;
+        const parsedDate = Date.parse(`${dailyMatch[1]}T23:59:59`);
+        return Number.isFinite(parsedDate) ? parsedDate : 0;
+    }
 
-            row.append(rank, name, count);
-            twitchWinnersList.appendChild(row);
+    function deriveGameKeyFromStoredGameStateKey(storageKey) {
+        const dailyMatch = /^gameState_(\d{4}-\d{2}-\d{2})$/.exec(storageKey || "");
+        if (dailyMatch) {
+            return `date:${dailyMatch[1]}`;
+        }
+
+        const customMatch = /^gameState_custom_(.+)$/.exec(storageKey || "");
+        if (customMatch) {
+            return `custom:${customMatch[1].trim().toLowerCase()}`;
+        }
+
+        return "";
+    }
+
+    function findStoredTwitchWinningGuess(state) {
+        if (!state || !Array.isArray(state.guesses)) {
+            return null;
+        }
+
+        return state.guesses.find(entry => {
+            if (!entry || entry.error || Number(entry.rank) !== 1) {
+                return false;
+            }
+
+            return entry.source === "twitch"
+                || Boolean(entry.submittedByLogin || entry.submittedByName || entry.submittedBy);
+        }) || null;
+    }
+
+    function isCustomTwitchLeaderboardGameKey(gameKey) {
+        return typeof gameKey === "string" && gameKey.startsWith("custom:");
+    }
+
+    function getTwitchLeaderboardEntryId(entry) {
+        const channel = normalizeTwitchChannel(entry?.channel || "");
+        const gameKey = (entry?.gameKey || "").trim().toLowerCase();
+        const userKey = normalizeTwitchChannel(entry?.userLogin || "")
+            || normalizeTwitchChannel(entry?.userName || "");
+        if (!gameKey || !userKey) {
+            return "";
+        }
+
+        if (isCustomTwitchLeaderboardGameKey(gameKey)) {
+            const solvedAt = parseStoredTimestamp(entry?.solvedAt);
+            if (solvedAt > 0) {
+                return `${channel}|${gameKey}|${userKey}|${solvedAt}`;
+            }
+        }
+
+        return `${channel}|${gameKey}|${userKey}`;
+    }
+
+    function normalizeTwitchLeaderboardEntry(entry) {
+        if (!entry || typeof entry !== "object") {
+            return null;
+        }
+
+        const gameKey = (entry.gameKey || "").trim().toLowerCase();
+        const userLogin = normalizeTwitchChannel(entry.userLogin || "");
+        const userName = normalizeStoredWinnerLabel(entry.userName) || userLogin || "";
+        if (!gameKey || (!userLogin && !userName)) {
+            return null;
+        }
+
+        return {
+            channel: normalizeTwitchChannel(entry.channel || ""),
+            gameKey,
+            userLogin,
+            userName,
+            solvedAt: parseStoredTimestamp(entry.solvedAt)
+        };
+    }
+
+    function readTwitchLeaderboardLogEntries() {
+        try {
+            const raw = localStorage.getItem(TWITCH_LEADERBOARD_LOG_STORAGE_KEY);
+            if (!raw) {
+                return [];
+            }
+
+            const parsed = JSON.parse(raw);
+            if (!Array.isArray(parsed)) {
+                return [];
+            }
+
+            return parsed
+                .map(normalizeTwitchLeaderboardEntry)
+                .filter(Boolean);
+        } catch (err) {
+            console.warn("Cannot read Twitch leaderboard log from localStorage:", err);
+            return [];
+        }
+    }
+
+    function writeTwitchLeaderboardLogEntries(entries) {
+        try {
+            localStorage.setItem(TWITCH_LEADERBOARD_LOG_STORAGE_KEY, JSON.stringify(entries));
+            dispatchTwitchLeaderboardStorageChanged(TWITCH_LEADERBOARD_LOG_STORAGE_KEY);
+        } catch (err) {
+            console.warn("Cannot write Twitch leaderboard log to localStorage:", err);
+        }
+    }
+
+    function upsertTwitchLeaderboardSolve(entry) {
+        const normalizedEntry = normalizeTwitchLeaderboardEntry(entry);
+        if (!normalizedEntry) {
+            return false;
+        }
+
+        const entryId = getTwitchLeaderboardEntryId(normalizedEntry);
+        if (!entryId) {
+            return false;
+        }
+
+        const entries = readTwitchLeaderboardLogEntries();
+        const existingIndex = entries.findIndex(item => getTwitchLeaderboardEntryId(item) === entryId);
+        if (existingIndex >= 0) {
+            const existingEntry = entries[existingIndex];
+            entries[existingIndex] = {
+                ...existingEntry,
+                channel: normalizedEntry.channel || existingEntry.channel,
+                userLogin: normalizedEntry.userLogin || existingEntry.userLogin,
+                userName: normalizedEntry.userName || existingEntry.userName,
+                solvedAt: Math.max(existingEntry.solvedAt || 0, normalizedEntry.solvedAt || 0)
+            };
+            writeTwitchLeaderboardLogEntries(entries);
+            return true;
+        }
+
+        entries.push(normalizedEntry);
+        writeTwitchLeaderboardLogEntries(entries);
+        return true;
+    }
+
+    function syncLegacyTwitchLeaderboardLogFromGameStates() {
+        const entries = readTwitchLeaderboardLogEntries();
+        const existingIds = new Set(entries.map(getTwitchLeaderboardEntryId).filter(Boolean));
+        let didChange = false;
+
+        for (let index = 0; index < localStorage.length; index++) {
+            const storageKey = localStorage.key(index);
+            if (!isStoredGameStateKey(storageKey)) {
+                continue;
+            }
+
+            let state = null;
+            try {
+                const rawState = localStorage.getItem(storageKey);
+                state = rawState ? JSON.parse(rawState) : null;
+            } catch (err) {
+                console.warn("Cannot parse stored game state for Twitch leaderboard migration:", err);
+                continue;
+            }
+
+            if (!state || typeof state !== "object") {
+                continue;
+            }
+
+            const winningGuess = findStoredTwitchWinningGuess(state);
+            if (!winningGuess) {
+                continue;
+            }
+
+            const normalizedEntry = normalizeTwitchLeaderboardEntry({
+                channel: state.twitchChannel || state.twitch_channel || "",
+                gameKey: deriveGameKeyFromStoredGameStateKey(storageKey),
+                userLogin: winningGuess.submittedByLogin || "",
+                userName: winningGuess.submittedByName || winningGuess.submittedBy || "",
+                solvedAt: parseStoredTimestamp(winningGuess.createdAt)
+                    || parseStoredTimestamp(state.updatedAt)
+                    || getStoredGameSolvedAt(storageKey, state, winningGuess)
+            });
+            if (!normalizedEntry) {
+                continue;
+            }
+
+            const entryId = getTwitchLeaderboardEntryId(normalizedEntry);
+            if (!entryId || existingIds.has(entryId)) {
+                continue;
+            }
+
+            existingIds.add(entryId);
+            entries.push(normalizedEntry);
+            didChange = true;
+        }
+
+        if (didChange) {
+            writeTwitchLeaderboardLogEntries(entries);
+        }
+    }
+
+    function getTwitchLeaderboardSolversFromStorage(channel) {
+        const normalizedChannel = normalizeTwitchChannel(channel);
+        syncLegacyTwitchLeaderboardLogFromGameStates();
+        const solverMap = new Map();
+
+        for (const entry of readTwitchLeaderboardLogEntries()) {
+            const entryChannel = normalizeTwitchChannel(entry.channel || "");
+            if (normalizedChannel && entryChannel && entryChannel !== normalizedChannel) {
+                continue;
+            }
+
+            const userLogin = normalizeTwitchChannel(entry.userLogin || "");
+            const userName = normalizeStoredWinnerLabel(entry.userName) || userLogin || "чатер";
+            const solverKey = userLogin || normalizeTwitchChannel(userName);
+            if (!solverKey) {
+                continue;
+            }
+
+            const solvedAtTs = parseStoredTimestamp(entry.solvedAt);
+            const existingSolver = solverMap.get(solverKey);
+            if (existingSolver) {
+                existingSolver.solved_count += 1;
+                if (userLogin && !existingSolver.user_login) {
+                    existingSolver.user_login = userLogin;
+                }
+                if (userName) {
+                    existingSolver.user_name = userName;
+                }
+                existingSolver.last_solved_at_ts = Math.max(existingSolver.last_solved_at_ts, solvedAtTs);
+                continue;
+            }
+
+            solverMap.set(solverKey, {
+                user_login: userLogin || solverKey,
+                user_name: userName,
+                solved_count: 1,
+                last_solved_at_ts: solvedAtTs
+            });
+        }
+
+        return Array.from(solverMap.values())
+            .sort((left, right) => {
+                if (right.solved_count !== left.solved_count) {
+                    return right.solved_count - left.solved_count;
+                }
+                if (right.last_solved_at_ts !== left.last_solved_at_ts) {
+                    return right.last_solved_at_ts - left.last_solved_at_ts;
+                }
+                return left.user_login.localeCompare(right.user_login, "uk");
+            })
+            .map(item => ({
+                user_login: item.user_login,
+                user_name: item.user_name,
+                solved_count: item.solved_count
+            }));
+    }
+
+    function recordCurrentTwitchSolveForLeaderboard(guessEntry) {
+        const channel = getTwitchLeaderboardChannel();
+        const gameKey = getCurrentTwitchLeaderboardGameKey();
+        if (!channel || !gameKey || !guessEntry) {
+            return false;
+        }
+
+        return upsertTwitchLeaderboardSolve({
+            channel,
+            gameKey,
+            userLogin: guessEntry.submittedByLogin || "",
+            userName: guessEntry.submittedByName || guessEntry.submittedBy || "",
+            solvedAt: guessEntry.createdAt || Date.now()
         });
     }
 
-    async function openTwitchWinnersModal() {
-        const channel = twitchConnectionState.connection?.twitch_login || twitchChatState.channel || null;
-        if (!channel) return;
+    function formatUkrainianWordCount(count) {
+        const safeCount = Number.isFinite(Number(count)) ? Math.max(0, Math.trunc(Number(count))) : 0;
+        const lastTwoDigits = safeCount % 100;
+        const lastDigit = safeCount % 10;
+        if (lastTwoDigits >= 11 && lastTwoDigits <= 14) {
+            return `${safeCount} слів`;
+        }
+        if (lastDigit === 1) {
+            return `${safeCount} слово`;
+        }
+        if (lastDigit >= 2 && lastDigit <= 4) {
+            return `${safeCount} слова`;
+        }
+        return `${safeCount} слів`;
+    }
 
-        if (twitchWinnersTitle) {
-            twitchWinnersTitle.textContent = `Хто відгадував слова в #${channel}`;
+    function createTwitchWinnerRow(solver, index) {
+        const row = document.createElement("div");
+        row.className = "twitchWinnerRow";
+
+        const rank = document.createElement("span");
+        rank.className = "twitchWinnerPlace";
+        rank.textContent = `${index + 1}.`;
+
+        const name = document.createElement("span");
+        name.className = "twitchWinnerName";
+        name.textContent = solver?.user_name || solver?.user_login || "чатер";
+
+        const count = document.createElement("span");
+        count.className = "twitchWinnerCount";
+        const solvedCount = Number.isFinite(Number(solver?.solved_count)) ? Number(solver.solved_count) : 0;
+        count.textContent = formatUkrainianWordCount(solvedCount);
+
+        row.append(rank, name, count);
+        return row;
+    }
+
+    function renderTwitchWinnersListInto(listElem, titleElem, solvers, channel, options = {}) {
+        const {
+            limit = null,
+            emptyText = "Ще ніхто не відгадав слово."
+        } = options;
+
+        if (titleElem) {
+            titleElem.textContent = getTwitchLeaderboardTitle(channel);
         }
-        if (twitchWinnersList) {
-            twitchWinnersList.innerHTML = '<p class="twitchWinnersLoading">Завантаження рейтингу…</p>';
+        if (!listElem) return;
+
+        listElem.innerHTML = "";
+        const visibleSolvers = Number.isFinite(limit) ? solvers.slice(0, limit) : solvers;
+
+        if (!Array.isArray(visibleSolvers) || visibleSolvers.length === 0) {
+            listElem.innerHTML = `<p class="twitchWinnersEmpty">${emptyText}</p>`;
+            return;
         }
-        if (twitchWinnersModal) {
-            twitchWinnersModal.classList.remove("hidden");
+
+        visibleSolvers.forEach((solver, index) => {
+            listElem.appendChild(createTwitchWinnerRow(solver, index));
+        });
+    }
+
+    function renderTwitchLeaderboardStatus(message, channel, options = {}) {
+        const { statusClass = "twitchWinnersLoading" } = options;
+        getTwitchLeaderboardViews().forEach(view => {
+            if (view.title) {
+                view.title.textContent = getTwitchLeaderboardTitle(channel);
+            }
+            if (view.list) {
+                view.list.innerHTML = `<p class="${statusClass}">${message}</p>`;
+            }
+        });
+    }
+
+    function renderTwitchLeaderboard(solvers, channel) {
+        getTwitchLeaderboardViews().forEach(view => {
+            renderTwitchWinnersListInto(
+                view.list,
+                view.title,
+                solvers,
+                channel,
+                {
+                    limit: view.limit
+                }
+            );
+        });
+    }
+
+    function updateTwitchLeaderboardVisibility() {
+        const shouldShow = Boolean(twitchConnectionState.connected && getTwitchLeaderboardChannel());
+        if (twitchLeaderboardInline) {
+            twitchLeaderboardInline.classList.toggle("hidden", !shouldShow);
+        }
+        if (twitchLeaderboardSidebar) {
+            twitchLeaderboardSidebar.classList.toggle("hidden", !shouldShow);
+        }
+    }
+
+    function stopTwitchLeaderboardRefreshLoop() {
+        if (twitchLeaderboardState.refreshTimerId) {
+            window.clearInterval(twitchLeaderboardState.refreshTimerId);
+            twitchLeaderboardState.refreshTimerId = null;
+        }
+    }
+
+    async function refreshTwitchLeaderboard(options = {}) {
+        const {
+            force = false,
+            showLoading = false
+        } = options;
+
+        const channel = getTwitchLeaderboardChannel();
+        updateTwitchLeaderboardVisibility();
+
+        if (!channel || !twitchConnectionState.connected) {
+            twitchLeaderboardState.channel = null;
+            twitchLeaderboardState.solvers = [];
+            twitchLeaderboardState.lastLoadedAt = 0;
+            return;
+        }
+
+        if (twitchLeaderboardState.isLoading && !force) return;
+
+        const channelChanged = twitchLeaderboardState.channel !== channel;
+        if (
+            !force
+            && !channelChanged
+            && twitchLeaderboardState.lastLoadedAt
+            && (Date.now() - twitchLeaderboardState.lastLoadedAt) < 8000
+        ) {
+            return;
+        }
+
+        twitchLeaderboardState.isLoading = true;
+        if (showLoading && (channelChanged || twitchLeaderboardState.solvers.length === 0)) {
+            renderTwitchLeaderboardStatus("Завантаження рейтингу…", channel);
         }
 
         try {
-            const payload = await fetchTwitchChatSolvers(channel, 50);
-            if (!payload.ok) {
-                throw new Error(payload?.data?.error || `HTTP ${payload.status}`);
-            }
-
-            renderTwitchWinnersList(payload?.data?.solvers || [], channel);
+            twitchLeaderboardState.channel = channel;
+            twitchLeaderboardState.solvers = getTwitchLeaderboardSolversFromStorage(channel);
+            twitchLeaderboardState.lastLoadedAt = Date.now();
+            renderTwitchLeaderboard(twitchLeaderboardState.solvers, channel);
         } catch (err) {
-            console.error("[Error] Failed to load Twitch solvers:", err);
-            if (twitchWinnersList) {
-                twitchWinnersList.innerHTML = '<p class="twitchWinnersEmpty">Не вдалося завантажити рейтинг.</p>';
+            console.error("[Error] Failed to build Twitch leaderboard from localStorage:", err);
+            if (twitchLeaderboardState.solvers.length === 0 || channelChanged) {
+                renderTwitchLeaderboardStatus("Не вдалося завантажити рейтинг.", channel, {
+                    statusClass: "twitchWinnersEmpty"
+                });
             }
+        } finally {
+            twitchLeaderboardState.isLoading = false;
         }
+    }
+
+    function restartTwitchLeaderboardRefreshLoop() {
+        stopTwitchLeaderboardRefreshLoop();
+        if (!twitchConnectionState.connected || !getTwitchLeaderboardChannel()) return;
+
+        refreshTwitchLeaderboard({
+            showLoading: twitchLeaderboardState.solvers.length === 0
+        });
+        twitchLeaderboardState.refreshTimerId = window.setInterval(() => {
+            refreshTwitchLeaderboard();
+        }, TWITCH_LEADERBOARD_REFRESH_MS);
     }
 
     function stopTwitchChatMode() {
@@ -1084,9 +1606,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (twitchChatToggleRow && !twitchConnectionState.connected) {
             twitchChatToggleRow.classList.add("hidden");
         }
-        if (twitchWinnersButton && !twitchConnectionState.connected) {
-            twitchWinnersButton.classList.add("hidden");
-        }
         setTwitchChatLastEvent("");
         updateTwitchConnectPanel();
     }
@@ -1104,7 +1623,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (twitchDisconnectButton) twitchDisconnectButton.classList.remove("hidden");
             if (twitchHeaderControls) twitchHeaderControls.classList.remove("hidden");
             if (twitchInlineControls) twitchInlineControls.classList.remove("hidden");
-            if (twitchWinnersButton) twitchWinnersButton.classList.remove("hidden");
             if (twitchChatToggleRow) twitchChatToggleRow.classList.remove("hidden");
             if (twitchInlineStreamer) twitchInlineStreamer.textContent = connection.twitch_login;
             if (twitchChatToggle) {
@@ -1134,7 +1652,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                 twitchInlineControls.classList.remove("live", "connected", "error");
                 twitchInlineControls.removeAttribute("title");
             }
-            if (twitchWinnersButton) twitchWinnersButton.classList.add("hidden");
             if (twitchChatToggleRow) twitchChatToggleRow.classList.add("hidden");
             if (twitchChatToggle) {
                 twitchChatToggle.checked = false;
@@ -1151,7 +1668,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             twitchInlineControls.classList.remove("live", "connected", "error");
             twitchInlineControls.removeAttribute("title");
         }
-        if (twitchWinnersButton) twitchWinnersButton.classList.add("hidden");
         if (twitchChatToggleRow) twitchChatToggleRow.classList.add("hidden");
         if (twitchChatToggle) {
             twitchChatToggle.checked = false;
@@ -1176,6 +1692,12 @@ document.addEventListener("DOMContentLoaded", async () => {
             console.error("[Error] Failed to load Twitch connection state:", err);
         } finally {
             updateTwitchConnectPanel();
+            updateTwitchLeaderboardVisibility();
+            if (twitchConnectionState.connected) {
+                restartTwitchLeaderboardRefreshLoop();
+            } else {
+                stopTwitchLeaderboardRefreshLoop();
+            }
         }
     }
 
@@ -1308,7 +1830,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             error: data.error || false,
             errorMessage: data.errorMessage,
             source: isTwitchSource ? "twitch" : "manual",
-            submittedBy: isTwitchSource ? formatTwitchChatterLabel(chatterName, chatterLogin) : null
+            submittedBy: isTwitchSource ? formatTwitchChatterLabel(chatterName, chatterLogin) : null,
+            submittedByLogin: isTwitchSource ? (normalizeTwitchChannel(chatterLogin) || null) : null,
+            submittedByName: isTwitchSource ? ((chatterName || chatterLogin || "").trim() || null) : null,
+            createdAt: new Date().toISOString()
         }));
 
         if (isTwitchSource) {
@@ -1318,8 +1843,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (!data.error) {
             if (data.rank < bestRank) bestRank = data.rank;
             if (data.rank === 1) {
-                if (isTwitchSource && twitchWinnersModal && !twitchWinnersModal.classList.contains("hidden")) {
-                    await openTwitchWinnersModal();
+                if (isTwitchSource) {
+                    recordCurrentTwitchSolveForLeaderboard(gameState.guesses[gameState.guesses.length - 1]);
                 }
                 renderCurrentGuesses();
                 endGameAsWin();
@@ -1831,6 +2356,11 @@ document.addEventListener("DOMContentLoaded", async () => {
                 twitchConnectionState.connection = null;
                 stopTwitchChatMode();
                 updateTwitchConnectPanel();
+                stopTwitchLeaderboardRefreshLoop();
+                updateTwitchLeaderboardVisibility();
+                twitchLeaderboardState.channel = null;
+                twitchLeaderboardState.solvers = [];
+                twitchLeaderboardState.lastLoadedAt = 0;
             } catch (err) {
                 console.error("[Error] Failed to disconnect Twitch:", err);
                 alert("Не вдалося відключити Twitch.");
@@ -1838,23 +2368,20 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    if (twitchWinnersButton) {
-        twitchWinnersButton.addEventListener("click", async () => {
-            await openTwitchWinnersModal();
-        });
-    }
+    window.addEventListener(TWITCH_LEADERBOARD_STORAGE_EVENT, event => {
+        const storageKey = event?.detail?.storageKey;
+        if (storageKey && !isTwitchLeaderboardTrackedStorageKey(storageKey)) {
+            return;
+        }
+        refreshTwitchLeaderboard({ force: true });
+    });
 
-    if (closeTwitchWinnersModal) {
-        closeTwitchWinnersModal.addEventListener("click", () => {
-            if (twitchWinnersModal) twitchWinnersModal.classList.add("hidden");
-        });
-    }
-
-    if (twitchWinnersModal) {
-        twitchWinnersModal.addEventListener("click", e => {
-            if (e.target === twitchWinnersModal) twitchWinnersModal.classList.add("hidden");
-        });
-    }
+    window.addEventListener("storage", event => {
+        if (event.key && !isTwitchLeaderboardTrackedStorageKey(event.key)) {
+            return;
+        }
+        refreshTwitchLeaderboard({ force: true });
+    });
 
     if (menuButton && dropdownMenu) {
         menuButton.setAttribute("aria-haspopup", "menu");
@@ -1879,6 +2406,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             window.clearInterval(twitchChatState.targetHeartbeatId);
             twitchChatState.targetHeartbeatId = null;
         }
+        stopTwitchLeaderboardRefreshLoop();
     });
 
     if (shareButton) {

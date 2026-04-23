@@ -21,6 +21,12 @@ body {
     line-height: 1.5;
 }
 
+.pageShell {
+    width: 100%;
+    margin: 0 auto;
+    position: relative;
+}
+
 /* ====================
    Верхня панель (header)
    ==================== */
@@ -333,6 +339,123 @@ h1 {
 .twitchWinnersLoading {
     margin: 6px 0 0;
     color: rgba(255, 255, 255, 0.7);
+    text-align: center;
+}
+
+.twitchLeaderboardSidebar {
+    display: none;
+    width: 100%;
+}
+
+.twitchLeaderboardPanel {
+    position: relative;
+    background: linear-gradient(180deg, rgba(38, 38, 38, 0.98), rgba(29, 29, 29, 0.97));
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 15px;
+    margin-bottom: 20px;
+    text-align: left;
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.18);
+    backdrop-filter: blur(8px);
+}
+
+.twitchLeaderboardPanel::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+}
+
+.twitchLeaderboardInline {
+    display: none !important;
+}
+
+.twitchLeaderboardPanelHeader {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.twitchLeaderboardPanelCopy {
+    min-width: 0;
+    width: 100%;
+    text-align: center;
+}
+
+.twitchLeaderboardEyebrow {
+    margin: 0 0 4px 0;
+    color: rgba(143, 192, 255, 0.72);
+    font-size: 0.7em;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.twitchLeaderboardPanelTitle {
+    margin: 0;
+    color: rgba(255, 255, 255, 0.96);
+    font-size: 1.04em;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+}
+
+.twitchLeaderboardPanel .twitchWinnersList {
+    margin-top: 0;
+    gap: 8px;
+    scrollbar-gutter: stable;
+}
+
+.twitchWinnersListCompact {
+    max-height: min(40vh, 320px);
+    overflow: auto;
+    padding-right: 2px;
+}
+
+.twitchWinnersListSidebar {
+    max-height: calc(100vh - 176px);
+    overflow: auto;
+    padding-right: 0;
+    width: 100%;
+}
+
+.twitchLeaderboardPanel .twitchWinnersListSidebar {
+    scrollbar-gutter: auto;
+}
+
+.twitchLeaderboardPanel .twitchWinnerRow {
+    grid-template-columns: 2.4em minmax(0, 1fr) auto;
+    padding: 11px 12px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.035);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+}
+
+.twitchLeaderboardPanel .twitchWinnerRow:nth-child(1) {
+    background:
+        linear-gradient(135deg, rgba(255, 196, 77, 0.16), rgba(255, 255, 255, 0.045)),
+        rgba(255, 255, 255, 0.035);
+    border-color: rgba(255, 196, 77, 0.28);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.055),
+        0 8px 22px rgba(255, 196, 77, 0.06);
+}
+
+.twitchLeaderboardPanel .twitchWinnerRow:nth-child(2),
+.twitchLeaderboardPanel .twitchWinnerRow:nth-child(3) {
+    background: linear-gradient(135deg, rgba(143, 192, 255, 0.1), rgba(255, 255, 255, 0.035));
+}
+
+.twitchLeaderboardPanel .twitchWinnerRow:nth-child(1) .twitchWinnerPlace {
+    color: #ffd166;
+}
+
+.twitchLeaderboardPanel .twitchWinnerRow:nth-child(2) .twitchWinnerPlace,
+.twitchLeaderboardPanel .twitchWinnerRow:nth-child(3) .twitchWinnerPlace {
+    color: rgba(143, 192, 255, 0.82);
 }
 
 
@@ -1564,8 +1687,137 @@ h1 {
         font-size: 0.92vw;
     }
 
+    .twitchLeaderboardPanel {
+        padding: 1.04vw;
+        border-radius: 0.97vw;
+    }
+
+    .twitchLeaderboardPanelHeader {
+        margin-bottom: 0.83vw;
+        gap: 0.83vw;
+    }
+
+    .twitchLeaderboardEyebrow {
+        margin-bottom: 0.28vw;
+        font-size: 0.69vw;
+    }
+
+    .twitchLeaderboardPanelTitle {
+        font-size: 1vw;
+    }
+
+    .twitchLeaderboardPanel .twitchWinnerRow {
+        padding: 0.76vw 0.83vw;
+        border-radius: 0.69vw;
+    }
+
     .close {
         font-size: 1.94vw;
+    }
+}
+
+@media (min-width: 1024px) {
+    .twitchLeaderboardSidebar {
+        display: block;
+        position: fixed;
+        top: 78px;
+        left: calc(50% + 283px);
+        width: min(340px, calc(50vw - 301px));
+        z-index: 35;
+    }
+
+    .twitchLeaderboardPanelDesktop {
+        width: 100%;
+        max-height: calc(100vh - 128px);
+        padding: 16px;
+        border-radius: 18px;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .twitchLeaderboardSidebar .twitchLeaderboardPanelHeader {
+        margin-bottom: 14px;
+        gap: 10px;
+    }
+
+    .twitchLeaderboardSidebar .twitchLeaderboardEyebrow {
+        font-size: 0.72em;
+        margin-bottom: 4px;
+    }
+
+    .twitchLeaderboardSidebar .twitchLeaderboardPanelTitle {
+        font-size: 1.1em;
+    }
+
+    .twitchLeaderboardSidebar .twitchWinnersListSidebar {
+        flex: 1 1 auto;
+        min-height: 0;
+        max-height: none;
+        width: 100%;
+    }
+
+    .twitchLeaderboardSidebar .twitchWinnerRow {
+        padding: 12px 14px;
+        border-radius: 12px;
+        gap: 10px;
+        width: 100%;
+    }
+
+    .twitchLeaderboardSidebar .twitchWinnerPlace,
+    .twitchLeaderboardSidebar .twitchWinnerCount,
+    .twitchLeaderboardSidebar .twitchWinnerName {
+        font-size: 0.96em;
+    }
+}
+
+@media (max-width: 1023px) {
+    .twitchLeaderboardSidebar {
+        display: none !important;
+    }
+}
+
+@media (min-width: 1440px) {
+    .twitchLeaderboardSidebar {
+        top: 5.42vw;
+        left: calc(50% + 17.9vw + 1.25vw);
+        width: calc(29.6vw - 2.5vw);
+    }
+
+    .twitchLeaderboardPanelDesktop {
+        max-height: calc(100vh - 9.72vw);
+        padding: 1.25vw;
+        border-radius: 1.39vw;
+    }
+
+    .twitchLeaderboardSidebar .twitchLeaderboardPanelHeader {
+        margin-bottom: 1.04vw;
+        gap: 0.83vw;
+    }
+
+    .twitchLeaderboardSidebar .twitchLeaderboardEyebrow {
+        font-size: 0.74vw;
+    }
+
+    .twitchLeaderboardSidebar .twitchLeaderboardPanelTitle {
+        font-size: 1.14vw;
+    }
+
+    .twitchLeaderboardSidebar .twitchWinnersListSidebar {
+        max-height: none;
+    }
+
+    .twitchLeaderboardSidebar .twitchWinnerRow {
+        padding: 0.9vw 1.04vw;
+        border-radius: 0.9vw;
+        gap: 0.69vw;
+        width: 100%;
+    }
+
+    .twitchLeaderboardSidebar .twitchWinnerPlace,
+    .twitchLeaderboardSidebar .twitchWinnerCount,
+    .twitchLeaderboardSidebar .twitchWinnerName {
+        font-size: 0.98vw;
     }
 }
 
@@ -1620,6 +1872,16 @@ h1 {
     .dev-archive-logout,
     .dev-archive-save {
         width: 100%;
+    }
+    .twitchLeaderboardPanel {
+        padding: 12px;
+        border-radius: 12px;
+    }
+    .twitchLeaderboardPanelHeader {
+        gap: 10px;
+    }
+    .twitchLeaderboardPanelTitle {
+        font-size: 0.98em;
     }
     #authorshipContent {
         font-size: 0.95em;

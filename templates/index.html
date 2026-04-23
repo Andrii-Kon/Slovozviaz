@@ -28,11 +28,12 @@
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
 
     <!-- Основні стилі -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260420-2') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260423-13') }}">
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/favicon.png') }}">
 </head>
 <body>
 
+<div class="pageShell">
 <div class="container" data-twitch-oauth-enabled="{{ 'true' if twitch_oauth_enabled else 'false' }}">
     <h1>Словозв'яз</h1>
 
@@ -62,9 +63,6 @@
             <div id="twitchInlineControls" class="twitchInlineControls hidden" aria-live="polite">
                 <span id="twitchInlineStreamer" class="twitchInlineStreamer">espero_n</span>
             </div>
-            <button id="twitchWinnersButton" class="twitchHeaderIconButton hidden" type="button" aria-label="Показати тих, хто відгадав слово" title="Хто відгадав слово">
-                <span aria-hidden="true">🏆</span>
-            </button>
             <label id="twitchChatToggleRow" class="twitchChatSwitch hidden" for="twitchChatToggle" aria-label="Увімкнути чат Twitch для цієї гри">
                 <input type="checkbox" id="twitchChatToggle">
                 <span class="twitchChatSwitchTrack" aria-hidden="true"></span>
@@ -118,6 +116,18 @@
         </div>
     </div>
 
+    <section id="twitchLeaderboardInline" class="twitchLeaderboardPanel twitchLeaderboardInline hidden" aria-live="polite">
+        <div class="twitchLeaderboardPanelHeader">
+            <div class="twitchLeaderboardPanelCopy">
+                <p class="twitchLeaderboardEyebrow">Twitch leaderboard</p>
+                <h2 id="twitchLeaderboardInlineTitle" class="twitchLeaderboardPanelTitle">Лідери чату</h2>
+            </div>
+        </div>
+        <div id="twitchLeaderboardInlineList" class="twitchWinnersList twitchWinnersListCompact">
+            <p class="twitchWinnersEmpty">Ще ніхто не відгадав слово.</p>
+        </div>
+    </section>
+
     <!-- Інструкція «Як грати?» -->
     <div id="howToPlayBlock" class="howToPlayBlock">
         <h2>Як грати?</h2>
@@ -128,7 +138,7 @@
         </p>
         <details>
             <summary>Як визначається порядок слів?</summary>
-            <p>Слова сортуються за схожістю до секретного за допомогою векторного аналізу: секретне слово отримує ранг 1, а інші – залежно від ступеня подібності, обчисленої за допомогою косинусної міри.</p>
+            <p>Гра використовує алгоритм, навчений на великій кількості текстів, щоб оцінити, наскільки слова близькі до секретного. Близькість залежить не лише від прямого значення, а й від того, в яких контекстах ці слова часто вживаються. Тому різні слова з однієї теми можуть бути дуже близько, а синоніми іноді опиняються далеко.</p>
         </details>
         <details>
             <summary>Як попросити підказку?</summary>
@@ -144,6 +154,20 @@
     <!-- Список усіх спроб -->
     <div id="guessesContainer"></div>
 
+</div>
+<aside id="twitchLeaderboardSidebar" class="twitchLeaderboardSidebar hidden" aria-live="polite">
+    <section class="twitchLeaderboardPanel twitchLeaderboardPanelDesktop">
+        <div class="twitchLeaderboardPanelHeader">
+            <div class="twitchLeaderboardPanelCopy">
+                <p class="twitchLeaderboardEyebrow">Twitch leaderboard</p>
+                <h2 id="twitchLeaderboardSidebarTitle" class="twitchLeaderboardPanelTitle">Лідери чату</h2>
+            </div>
+        </div>
+        <div id="twitchLeaderboardSidebarList" class="twitchWinnersList twitchWinnersListSidebar">
+            <p class="twitchWinnersEmpty">Ще ніхто не відгадав слово.</p>
+        </div>
+    </section>
+</aside>
 </div>
 
 <!-- Модалка: налаштування -->
@@ -270,18 +294,7 @@
     </div>
 </div>
 
-<!-- Модалка: рейтинг Twitch-переможців -->
-<div id="twitchWinnersModal" class="modal hidden">
-    <div class="modal-content">
-        <span id="closeTwitchWinnersModal" class="close">×</span>
-        <h2 id="twitchWinnersTitle">Хто відгадував слова</h2>
-        <div id="twitchWinnersList" class="twitchWinnersList">
-            <p class="twitchWinnersEmpty">Ще ніхто не відгадав слово.</p>
-        </div>
-    </div>
-</div>
-
 <!-- Основний скрипт -->
-<script type="module" src="{{ url_for('static', filename='js/main.js', v='20260420-2') }}"></script>
+<script type="module" src="{{ url_for('static', filename='js/main.js', v='20260423-9') }}"></script>
 </body>
 </html>
