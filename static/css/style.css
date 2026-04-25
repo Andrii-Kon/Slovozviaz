@@ -320,6 +320,24 @@ h1 {
     min-width: 1.8em;
 }
 
+.twitchWinnerNameWrap {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+}
+
+.twitchWinnerNameLabel {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.twitchWinnerNameLabel--crowned {
+    overflow: visible;
+}
+
 .twitchWinnerName {
     color: rgba(255, 255, 255, 0.94);
     font-weight: 620;
@@ -327,6 +345,75 @@ h1 {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    flex: 1 1 auto;
+}
+
+.twitchWinnerCrown {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.56em;
+    height: 1.56em;
+    flex-shrink: 0;
+    color: #ffd166;
+    transform: translateY(-2px);
+    filter:
+        drop-shadow(0 3px 7px rgba(255, 190, 62, 0.26))
+        drop-shadow(0 0 12px rgba(255, 209, 102, 0.14));
+}
+
+.twitchWinnerNameLabel--crowned .twitchWinnerCrown {
+    position: absolute;
+    right: calc(100% + 6px);
+    top: 50%;
+    transform: translateY(calc(-50% - 2px));
+}
+
+.twitchWinnerCrown::before {
+    content: "";
+    position: absolute;
+    inset: -32%;
+    border-radius: 999px;
+    background:
+        radial-gradient(circle, rgba(255, 222, 128, 0.34) 0%, rgba(255, 195, 79, 0.18) 38%, rgba(255, 180, 52, 0.08) 58%, rgba(255, 180, 52, 0) 78%);
+    filter: blur(10px);
+    pointer-events: none;
+}
+
+.twitchWinnerCrown svg {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    height: 100%;
+    display: block;
+    overflow: visible;
+}
+
+.twitchWinnerCrownShadow {
+    fill: rgba(110, 70, 8, 0.34);
+}
+
+.twitchWinnerCrownBody {
+    fill: #f0b53a;
+}
+
+.twitchWinnerCrownHighlight {
+    fill: #ffe59a;
+}
+
+.twitchWinnerCrownBase {
+    fill: #cf8f19;
+}
+
+.twitchWinnerCrownJewel {
+    fill: #8fc0ff;
+    stroke: rgba(255, 255, 255, 0.28);
+    stroke-width: 0.8;
+}
+
+.twitchWinnerCrownSpark {
+    fill: rgba(255, 246, 219, 0.96);
 }
 
 .twitchWinnerCount {
@@ -373,6 +460,7 @@ h1 {
 }
 
 .twitchLeaderboardPanelHeader {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -383,6 +471,7 @@ h1 {
 .twitchLeaderboardPanelCopy {
     min-width: 0;
     width: 100%;
+    padding-inline: 18px 36px;
     text-align: center;
 }
 
@@ -401,6 +490,86 @@ h1 {
     font-size: 1.04em;
     line-height: 1.2;
     letter-spacing: -0.01em;
+}
+
+.twitchLeaderboardClearButton {
+    appearance: none;
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    --twitch-clear-icon-body: rgba(244, 245, 248, 0.97);
+    --twitch-clear-icon-band: rgba(122, 171, 239, 0.96);
+    --twitch-clear-icon-edge: rgba(116, 133, 169, 0.96);
+    --twitch-clear-icon-highlight: rgba(255, 255, 255, 0.28);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 30px;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    background: rgba(255, 255, 255, 0.024);
+    color: rgba(233, 239, 250, 0.76);
+    border-radius: 11px;
+    cursor: pointer;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035), 0 6px 16px rgba(0, 0, 0, 0.12);
+    transition: transform 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+
+.twitchLeaderboardClearIcon {
+    width: 23px;
+    height: 19px;
+    overflow: visible;
+}
+
+.twitchLeaderboardClearShape {
+    fill: var(--twitch-clear-icon-body);
+    stroke: rgba(255, 255, 255, 0.18);
+    stroke-width: 0.6;
+    stroke-linejoin: round;
+}
+
+.twitchLeaderboardClearBand {
+    fill: var(--twitch-clear-icon-band);
+}
+
+.twitchLeaderboardClearEdge {
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke: var(--twitch-clear-icon-edge);
+    stroke-width: 1.2;
+}
+
+.twitchLeaderboardClearHighlight {
+    fill: none;
+    stroke-linecap: round;
+    stroke: var(--twitch-clear-icon-highlight);
+    stroke-width: 0.8;
+}
+
+.twitchLeaderboardClearButton:hover {
+    --twitch-clear-icon-body: rgba(250, 251, 254, 0.99);
+    --twitch-clear-icon-band: rgba(141, 189, 255, 0.99);
+    --twitch-clear-icon-edge: rgba(131, 149, 186, 0.98);
+    --twitch-clear-icon-highlight: rgba(255, 255, 255, 0.38);
+    transform: translateY(-1px);
+    background: rgba(255, 255, 255, 0.042);
+    border-color: rgba(143, 192, 255, 0.14);
+    color: rgba(242, 246, 255, 0.94);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 8px 18px rgba(0, 0, 0, 0.16);
+}
+
+.twitchLeaderboardClearButton:focus-visible {
+    outline: none;
+    border-color: rgba(143, 192, 255, 0.72);
+    box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    color: rgba(243, 247, 255, 0.94);
+}
+
+.twitchLeaderboardClearButton:disabled {
+    cursor: default;
+    opacity: 0.35;
 }
 
 .twitchLeaderboardPanel .twitchWinnersList {
@@ -450,6 +619,10 @@ h1 {
 }
 
 .twitchLeaderboardPanel .twitchWinnerRow:nth-child(1) .twitchWinnerPlace {
+    color: #ffd166;
+}
+
+.twitchLeaderboardPanel .twitchWinnerRow:nth-child(1) .twitchWinnerCrown {
     color: #ffd166;
 }
 
@@ -631,8 +804,40 @@ h1 {
     min-height: 44px;
 }
 .dropdown-menu .menu-item .menu-icon {
-    font-size: 1.1em;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.15em;
+    height: 1.15em;
     line-height: 1;
+    flex-shrink: 0;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.dropdown-menu .menu-item .menu-icon svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.menuIconHint {
+    color: #ffd36b !important;
+}
+
+.menuIconSettings {
+    color: #cfc2ff !important;
+}
+
+.menuIconGiveUp {
+    color: #ff7d93 !important;
+}
+
+.menuIconArchive {
+    color: #8dc9ff !important;
+}
+
+.menuIconCreate {
+    color: #9fe27b !important;
 }
 .dropdown-menu .menu-item:hover {
     background-color: #4a4a4a !important;
@@ -1317,6 +1522,64 @@ h1 {
     margin: 0 5px;
 }
 
+#twitchLeaderboardDialogModal .modal-content {
+    max-width: 520px;
+    padding: 24px 22px 20px;
+}
+
+#twitchLeaderboardDialogModal h2 {
+    margin-bottom: 12px;
+    padding-right: 28px;
+    text-align: left;
+}
+
+.twitchLeaderboardDialogClose {
+    appearance: none;
+    background: none;
+    border: none;
+}
+
+.twitchLeaderboardDialogMessage {
+    margin: 0;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 0.98em;
+    line-height: 1.6;
+}
+
+.twitchLeaderboardDialogActions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 22px;
+}
+
+.twitchLeaderboardDialogSecondary {
+    appearance: none;
+    min-height: 44px;
+    padding: 10px 15px;
+    border-radius: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.045);
+    color: rgba(255, 255, 255, 0.92);
+    font-weight: bold;
+    font-size: 0.95em;
+    cursor: pointer;
+    transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+}
+
+.twitchLeaderboardDialogSecondary:hover {
+    transform: translateY(-1px);
+    background: rgba(255, 255, 255, 0.075);
+    border-color: rgba(255, 255, 255, 0.22);
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.16);
+}
+
+.twitchLeaderboardDialogSecondary:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.18);
+}
+
 /* Модалка "Налаштування" */
 #settingsModal .modal-content {
     max-width: 680px;
@@ -1750,6 +2013,16 @@ h1 {
         font-size: 1.1em;
     }
 
+    .twitchLeaderboardSidebar .twitchLeaderboardClearButton {
+        width: 32px;
+        height: 30px;
+    }
+
+    .twitchLeaderboardSidebar .twitchLeaderboardClearIcon {
+        width: 23px;
+        height: 19px;
+    }
+
     .twitchLeaderboardSidebar .twitchWinnersListSidebar {
         flex: 1 1 auto;
         min-height: 0;
@@ -1803,6 +2076,17 @@ h1 {
         font-size: 1.14vw;
     }
 
+    .twitchLeaderboardSidebar .twitchLeaderboardClearButton {
+        width: 2.08vw;
+        height: 1.94vw;
+        border-radius: 0.76vw;
+    }
+
+    .twitchLeaderboardSidebar .twitchLeaderboardClearIcon {
+        width: 1.52vw;
+        height: 1.26vw;
+    }
+
     .twitchLeaderboardSidebar .twitchWinnersListSidebar {
         max-height: none;
     }
@@ -1831,6 +2115,15 @@ h1 {
         padding: 8px 10px;
         font-size: 0.9em;
         min-width: 60px;
+    }
+
+    .twitchLeaderboardDialogActions {
+        flex-direction: column-reverse;
+    }
+
+    .twitchLeaderboardDialogActions .btn-wide,
+    .twitchLeaderboardDialogSecondary {
+        width: 100%;
     }
 
     .menu-button {
