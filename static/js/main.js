@@ -894,7 +894,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     const twitchChannelFromUrl = normalizeTwitchChannel(urlParams.get("twitch_channel"));
     twitchConnectionState.oauthEnabled = pageContainer?.dataset?.twitchOauthEnabled === "true";
 
-    if (randomGameBtn) randomGameBtn.textContent = "🔀 Випадкова";
+    if (randomGameBtn) {
+        const randomGameLabel = randomGameBtn.querySelector(".randomGameLabel");
+        if (randomGameLabel) randomGameLabel.textContent = "Випадкова";
+        else randomGameBtn.textContent = "Випадкова";
+    }
     loadSettings();
     applySettingsToForm();
 
@@ -2482,13 +2486,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         previousGamesBtn.addEventListener("click", async () => {
             if (previousGamesModal) previousGamesModal.classList.remove("hidden");
             closeDropdownMenu();
-            if (previousGamesList) previousGamesList.innerHTML = "<p>Завантаження архіву...</p>";
+            if (previousGamesList) previousGamesList.innerHTML = '<p class="previousGamesState">Завантаження архіву...</p>';
             try {
                 const filtered = await fetchArchiveDates();
 
                 if (previousGamesList) {
                     if (filtered.length === 0) {
-                        previousGamesList.innerHTML = "<p>Архівних ігор не знайдено.</p>";
+                        previousGamesList.innerHTML = '<p class="previousGamesState">Архівних ігор не знайдено.</p>';
                     } else {
                         const parts = new Array(filtered.length);
                         for (let i = 0; i < filtered.length; i++) {
@@ -2499,26 +2503,36 @@ document.addEventListener("DOMContentLoaded", async () => {
                             const month = monthFmt.format(dateObj).replace('.', '');
                             const day = dateObj.getDate();
 
-                            // 👇 новий блок: дістаємо локальний стан
+                            // Дістаємо локальний стан гри.
                             let statusLabel = "";
+                            let statusClass = "";
                             try {
                                 const saved = localStorage.getItem(`gameState_${dateStr}`);
                                 if (saved) {
                                     const state = JSON.parse(saved);
                                     if (state.didWin) {
                                         statusLabel = "Відгадав";
+                                        statusClass = "archive-right--solved";
                                     } else if (state.didGiveUp) {
                                         statusLabel = "Здався";
+                                        statusClass = "archive-right--gave-up";
                                     }
                                 }
                             } catch (e) {
                                 console.warn("Cannot parse game state for", dateStr, e);
                             }
 
+                            const statusMarkup = statusLabel
+                                ? `<span class="archive-right ${statusClass}">${statusLabel}</span>`
+                                : "";
+
                             parts[i] =
-                                `<button class="archive-button" data-date="${dateStr}">
-      <span class="archive-left">#${gameNumber}&nbsp;&nbsp;${weekday}, ${day} ${month}</span>
-      <span class="archive-right">${statusLabel}</span>
+                                `<button class="archive-button" data-date="${dateStr}" aria-label="Відкрити гру #${gameNumber}, ${weekday}, ${day} ${month}">
+      <span class="archive-left">
+          <span class="archive-number">#${gameNumber}</span>
+          <span class="archive-date">${weekday}, ${day} ${month}</span>
+      </span>
+      <span class="archive-action">${statusMarkup}<span class="archive-chevron" aria-hidden="true"></span></span>
    </button>`;
                         }
                         previousGamesList.innerHTML = parts.join("");
@@ -2533,7 +2547,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 }
             } catch (err) {
                 console.error("[Error] Failed to fetch archive list:", err);
-                if (previousGamesList) previousGamesList.innerHTML = "<p>Помилка завантаження архіву.</p>";
+                if (previousGamesList) previousGamesList.innerHTML = '<p class="previousGamesState previousGamesStateError">Помилка завантаження архіву.</p>';
             }
         });
     }

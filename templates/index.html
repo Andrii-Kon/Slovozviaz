@@ -28,7 +28,7 @@
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
 
     <!-- Основні стилі -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260425-18') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260425-22') }}">
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/favicon.png') }}">
 </head>
 <body>
@@ -74,7 +74,13 @@
     <div class="input-section">
         <input type="text" id="guessInput" placeholder="Введіть слово" autocomplete="off" enterkeyhint="send">
         <div class="menu-container">
-            <button class="menu-button" id="menuButton" aria-label="Меню гри">⋮</button>
+            <button class="menu-button" id="menuButton" aria-label="Меню гри">
+                <svg class="menuButtonIcon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <circle cx="12" cy="5.5" r="1.85" fill="currentColor"/>
+                    <circle cx="12" cy="12" r="1.85" fill="currentColor"/>
+                    <circle cx="12" cy="18.5" r="1.85" fill="currentColor"/>
+                </svg>
+            </button>
             <div class="dropdown-menu hidden" id="dropdownMenu">
                 <button class="menu-item" id="hintButton">
                     <span class="menu-icon menuIconHint" aria-hidden="true">
@@ -294,11 +300,19 @@
 
 <!-- Модалка: попередні ігри -->
 <div id="previousGamesModal" class="modal hidden">
-    <div class="modal-content">
-        <span id="closePreviousGamesModal" class="close">×</span>
-        <h2>Виберіть попередню гру</h2>
+    <div class="modal-content previousGamesContent">
+        <button id="closePreviousGamesModal" class="close" type="button" aria-label="Закрити">×</button>
+        <div class="previousGamesHeader">
+            <p class="modalEyebrow">Архів ігор</p>
+            <h2>Попередні ігри</h2>
+        </div>
         <div id="randomGameContainer">
-            <button id="randomGameBtn">Випадкова</button>
+            <button id="randomGameBtn" type="button">
+                <svg class="randomGameIcon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path fill="currentColor" d="M16.7 3.9h3.85v3.85h-1.5V6.46l-3.23 3.23a4.83 4.83 0 0 1-6.84 0L3.72 4.43l1.06-1.06 5.26 5.26a3.33 3.33 0 0 0 4.72 0L18 5.4h-1.3V3.9Zm-7.72 10.4a4.83 4.83 0 0 1 6.84 0L19.05 17.54v-1.29h1.5v3.85H16.7v-1.5H18l-3.24-3.24a3.33 3.33 0 0 0-4.72 0l-5.26 5.26-1.06-1.06 5.26-5.26Z"/>
+                </svg>
+                <span class="randomGameLabel">Випадкова</span>
+            </button>
         </div>
         <div id="previousGamesList"></div>
     </div>

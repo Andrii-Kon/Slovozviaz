@@ -679,11 +679,8 @@ h1 {
     background-color: #262626;
     border: 1px solid rgba(255, 255, 255, 0.1);
     color: rgba(255, 255, 255, 0.76);
-    font-size: 1.38em;
-    font-weight: 700;
     cursor: pointer;
     padding: 0;
-    line-height: 1;
     width: 44px;
     min-width: 44px;
     min-height: 44px;
@@ -694,10 +691,22 @@ h1 {
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
     transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
+.menuButtonIcon {
+    width: 18px;
+    height: 18px;
+    display: block;
+    pointer-events: none;
+}
 .menu-button:hover {
     background-color: #2e2e2e;
     border-color: rgba(255, 255, 255, 0.16);
     color: rgba(255, 255, 255, 0.92);
+}
+.menu-button[aria-expanded="true"] {
+    background-color: #2f3339;
+    border-color: rgba(33, 150, 243, 0.28);
+    color: rgba(255, 255, 255, 0.96);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 0 0 1px rgba(33, 150, 243, 0.08);
 }
 .menu-button:focus-visible {
     outline: none;
@@ -1147,9 +1156,12 @@ h1 {
 }
 
 .close {
+    appearance: none;
     position: absolute;
     top: 10px;
     right: 10px;
+    border: 0;
+    background: transparent;
     font-size: 28px;
     font-weight: bold;
     line-height: 1;
@@ -1465,43 +1477,213 @@ h1 {
 /* (спеціальних перевизначень не потрібно) */
 
 /* Модалка "Попередні ігри" */
-#randomGameContainer {
-    text-align: center;
-    margin-bottom: 1rem;
+#previousGamesModal .previousGamesContent {
+    max-width: 500px;
+    max-height: min(86vh, 740px);
+    padding: 18px 18px 16px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    background: linear-gradient(180deg, rgba(42, 42, 42, 0.99), rgba(31, 31, 31, 0.99));
+    border-color: rgba(255, 255, 255, 0.12);
+    box-shadow: 0 22px 58px rgba(0, 0, 0, 0.44);
 }
+
+.previousGamesHeader {
+    padding: 0 36px 0;
+    text-align: center;
+}
+
+.modalEyebrow {
+    margin: 0 0 3px;
+    color: rgba(143, 192, 255, 0.76);
+    font-size: 0.72em;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+
+.previousGamesHeader h2 {
+    margin-bottom: 14px;
+    color: rgba(255, 255, 255, 0.97);
+}
+
+#randomGameContainer {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 13px;
+}
+
+#previousGamesModal #randomGameBtn {
+    gap: 8px;
+    min-width: 156px;
+    min-height: 40px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, rgba(33, 150, 243, 0.16), rgba(255, 255, 255, 0.045));
+    border: 1px solid rgba(143, 192, 255, 0.24);
+    color: rgba(234, 244, 255, 0.96);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045), 0 8px 20px rgba(0, 0, 0, 0.16);
+}
+
+#previousGamesModal #randomGameBtn:hover {
+    background: linear-gradient(135deg, rgba(33, 150, 243, 0.24), rgba(255, 255, 255, 0.06));
+    border-color: rgba(143, 192, 255, 0.38);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.055), 0 10px 22px rgba(0, 0, 0, 0.18);
+}
+
+#previousGamesModal #randomGameBtn:focus-visible {
+    border-color: rgba(143, 192, 255, 0.72);
+}
+
+.randomGameIcon {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+}
+
+#previousGamesList {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 2px 7px 2px 0;
+    scrollbar-gutter: stable;
+    scrollbar-color: rgba(255, 255, 255, 0.26) rgba(255, 255, 255, 0.035);
+    scrollbar-width: thin;
+}
+
+#previousGamesList::-webkit-scrollbar {
+    width: 8px;
+}
+
+#previousGamesList::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.035);
+    border-radius: 999px;
+}
+
+#previousGamesList::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.26);
+    border: 2px solid rgba(35, 35, 35, 0.98);
+    border-radius: 999px;
+    background-clip: padding-box;
+}
+
+#previousGamesList::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(143, 192, 255, 0.45);
+}
+
 #previousGamesList button {
     width: 100%;
-    background-color: #2196f3;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.065), rgba(255, 255, 255, 0.035));
     color: #fff;
-    border: none;
-    padding: 12px 15px;
-    margin: 6px 0;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 8px 12px;
+    margin: 0;
     border-radius: 8px;
     font-size: 1em;
     display: flex;
     justify-content: space-between; /* ліва і права частина */
     align-items: center;
-    transition: background-color 0.2s ease;
+    gap: 12px;
+    transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.16s ease, box-shadow 0.2s ease;
     min-height: 44px;
+    line-height: 1.25;
     text-align: left; /* для лівого тексту */
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
 }
 
 #previousGamesList button:hover {
-    background-color: #1976d2;
+    background: linear-gradient(135deg, rgba(33, 150, 243, 0.18), rgba(255, 255, 255, 0.055));
+    border-color: rgba(33, 150, 243, 0.34);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 10px 22px rgba(0, 0, 0, 0.18);
+    transform: translateY(-1px);
     cursor: pointer;
 }
 
+#previousGamesList button:focus-visible {
+    outline: none;
+    border-color: rgba(143, 192, 255, 0.78);
+    box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
 #previousGamesList .archive-left {
-    flex: 1;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+#previousGamesList .archive-number {
+    color: #8fc0ff;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    min-width: 3.8em;
+}
+
+#previousGamesList .archive-date {
+    min-width: 0;
+    color: rgba(255, 255, 255, 0.9);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#previousGamesList .archive-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
 }
 
 #previousGamesList .archive-right {
-    font-style: italic;
-    font-weight: 600;          /* напівжирний */
-    font-size: 0.95em;         /* трохи менший */
-    opacity: 0.95;
-    margin-left: 10px;
-    font-family: "Inter", "Roboto", "Segoe UI", sans-serif; /* сучасний вигляд */
+    font-style: normal;
+    font-weight: 760;
+    font-size: 0.84em;
+    line-height: 1;
+    padding: 0;
+    font-family: "Inter", "Roboto", "Segoe UI", sans-serif;
+    white-space: nowrap;
+}
+
+#previousGamesList .archive-right--solved {
+    color: #9fdb95;
+}
+
+#previousGamesList .archive-right--gave-up {
+    color: #f0a09a;
+}
+
+#previousGamesList .archive-chevron {
+    width: 8px;
+    height: 8px;
+    margin-right: 3px;
+    border-right: 2px solid rgba(255, 255, 255, 0.45);
+    border-bottom: 2px solid rgba(255, 255, 255, 0.45);
+    transform: rotate(-45deg);
+    transition: border-color 0.2s ease, transform 0.16s ease;
+}
+
+#previousGamesList button:hover .archive-chevron {
+    border-color: rgba(143, 192, 255, 0.9);
+    transform: translateX(2px) rotate(-45deg);
+}
+
+.previousGamesState {
+    margin: 2px 0 0;
+    padding: 18px 14px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.72);
+    text-align: center;
+}
+
+.previousGamesStateError {
+    color: #ffb3ad;
+    border-color: rgba(244, 67, 54, 0.24);
 }
 
 .game-status-label {
@@ -1734,12 +1916,16 @@ h1 {
     }
 
     .menu-button {
-        font-size: 1.56vw;
         padding: 0;
         width: 3.06vw;
         min-width: 3.06vw;
         min-height: 3.06vw;
         border-radius: 0.35vw;
+    }
+
+    .menuButtonIcon {
+        width: 1.18vw;
+        height: 1.18vw;
     }
 
     .btn-wide,
@@ -2127,8 +2313,12 @@ h1 {
     }
 
     .menu-button {
-        font-size: 1.5em;
         padding: 0 8px;
+    }
+
+    .menuButtonIcon {
+        width: 17px;
+        height: 17px;
     }
 
     /* Компактніші елементи списку */
