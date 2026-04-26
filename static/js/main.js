@@ -7,8 +7,8 @@ import {
     disconnectTwitchConnection,
     registerTwitchChatTarget,
     fetchTwitchChatEvents
-} from "./api.js?v=20260420-2";
-import { renderGuesses, createGuessItem } from "./ui.js?v=20260415-1";
+} from "./api.js?v=20260426-13";
+import { renderGuesses, createGuessItem } from "./ui.js?v=20260426-13";
 
 const weekdayFmt = new Intl.DateTimeFormat('uk-UA', { weekday: 'short' });
 const monthFmt = new Intl.DateTimeFormat('uk-UA', { month: 'short' });
@@ -68,8 +68,8 @@ const twitchConnectionState = {
 };
 
 const TWITCH_LEADERBOARD_REFRESH_MS = 30000;
-const TWITCH_INLINE_LEADERBOARD_LIMIT = 10;
-const TWITCH_SIDEBAR_LEADERBOARD_LIMIT = 10;
+const TWITCH_INLINE_LEADERBOARD_LIMIT = 8;
+const TWITCH_SIDEBAR_LEADERBOARD_LIMIT = 8;
 const TWITCH_LEADERBOARD_STORAGE_EVENT = "slovozviaz:game-state-saved";
 const TWITCH_LEADERBOARD_LOG_STORAGE_KEY = "slovozviaz:twitch-leaderboard-log:v1";
 const TWITCH_LEADERBOARD_RESET_STORAGE_KEY = "slovozviaz:twitch-leaderboard-reset:v1";
@@ -1634,6 +1634,92 @@ document.addEventListener("DOMContentLoaded", async () => {
         return `${safeCount} слів`;
     }
 
+    const TWITCH_WINNER_BADGES = {
+        "sosollya": {
+            className: "twitchWinnerBadge--monkey",
+            label: "Мавпа",
+            svg: `
+                <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+                    <path class="badgeMonkeyTail" d="M21.4 27.75h5.1c1.65 0 2.55-.92 2.55-2.55v-6.85c0-1.48-.9-2.4-2.22-2.4-1.18 0-2.05.78-2.05 1.82 0 .88.62 1.48 1.5 1.48.45 0 .84-.14 1.16-.42"/>
+                    <path class="badgeMonkeyBody" d="M12.05 13.35c4.65-.95 8.98 2.1 10.15 7.05.72 3.04.1 5.82-1.45 7.55H10.3c-2.85-1.33-3.62-4.62-2.2-7.72.88-1.92 1.92-4.58 3.95-6.88Z"/>
+                    <path class="badgeMonkeyBelly" d="M17.85 16.55c2.65 1.42 3.92 6.72 1.18 11.4h-5.45c-.42-4.2.56-8.95 4.27-11.4Z"/>
+                    <path class="badgeMonkeyFoot" d="M10.65 27.95H3.55c.76-2.02 2.55-3.18 5.48-3.72"/>
+                    <path class="badgeMonkeyArm" d="M12.5 15.95c-2.18 2.14-2.92 5.96-2.2 12M18.6 17.4c-4.88.56-6.86 3.66-5.55 10.55"/>
+                    <path class="badgeMonkeyEar" d="M7.05 10.9c-1.78.18-3.06-1-3.06-2.78s1.28-3.02 3.06-2.78c1.2.16 2.05 1.34 2.05 2.78s-.85 2.66-2.05 2.78Z"/>
+                    <path class="badgeMonkeyEar" d="M24.92 10.9c1.78.18 3.06-1 3.06-2.78s-1.28-3.02-3.06-2.78c-1.2.16-2.05 1.34-2.05 2.78s.85 2.66 2.05 2.78Z"/>
+                    <path class="badgeMonkeyHead" d="M7.05 8.15c0-4.72 3.58-7.35 8.95-7.35s8.95 2.63 8.95 7.35c0 5.12-3.85 8.76-8.95 8.76s-8.95-3.64-8.95-8.76Z"/>
+                    <path class="badgeMonkeyFace" d="M10.1 7.85c0-2.78 2.18-4.58 4.86-3.24.42.2.68.5 1.04.5s.62-.3 1.04-.5c2.68-1.34 4.86.46 4.86 3.24v3.02c0 2.74-2.42 4.68-5.9 4.68s-5.9-1.94-5.9-4.68Z"/>
+                    <path class="badgeMonkeySnout" d="M12.25 11.28h7.5v2.15c0 1.42-1.55 2.45-3.75 2.45s-3.75-1.03-3.75-2.45Z"/>
+                    <circle class="badgeMonkeyEyeDot" cx="13.05" cy="8.15" r=".92"/>
+                    <circle class="badgeMonkeyEyeDot" cx="18.95" cy="8.15" r=".92"/>
+                    <path class="badgeMonkeyNose" d="M14.62 11.45h2.76M16 11.45v1.65"/>
+                    <path class="badgeMonkeyMouth" d="M13.85 14.02h4.3"/>
+                </svg>
+            `
+        },
+        "trypzz1": {
+            className: "twitchWinnerBadge--clown",
+            label: "Клоун",
+            svg: `
+                <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+                    <path class="badgeClownHair" d="M6.6 14.2C4.2 13.2 3 10.9 3.65 8.65c.25-.9.82-1.62 1.55-2.1-.08-1.42.95-2.65 2.42-2.65.44 0 .85.1 1.22.32.56-.9 1.54-1.44 2.68-1.44 1.02 0 1.92.42 2.5 1.14L11.8 14.8Z"/>
+                    <path class="badgeClownHair" d="M25.4 14.2c2.4-1 3.6-3.3 2.95-5.55-.25-.9-.82-1.62-1.55-2.1.08-1.42-.95-2.65-2.42-2.65-.44 0-.85.1-1.22.32-.56-.9-1.54-1.44-2.68-1.44-1.02 0-1.92.42-2.5 1.14l2.22 10.88Z"/>
+                    <circle class="badgeClownFace" cx="16" cy="16" r="12.25"/>
+                    <ellipse class="badgeClownCheek" cx="9.9" cy="17.1" rx="3.25" ry="2.35"/>
+                    <ellipse class="badgeClownCheek" cx="22.1" cy="17.1" rx="3.25" ry="2.35"/>
+                    <path class="badgeClownBrow" d="M10.75 8.15c1.12-1.68 2.78-1.68 3.9-.08M17.35 8.07c1.12-1.6 2.78-1.6 3.9.08"/>
+                    <ellipse class="badgeClownEyeRing" cx="11.35" cy="13.35" rx="2.55" ry="4.35"/>
+                    <ellipse class="badgeClownEyeRing" cx="20.65" cy="13.35" rx="2.55" ry="4.35"/>
+                    <ellipse class="badgeClownEyeWhite" cx="11.35" cy="13.35" rx="1.68" ry="3.12"/>
+                    <ellipse class="badgeClownEyeWhite" cx="20.65" cy="13.35" rx="1.68" ry="3.12"/>
+                    <ellipse class="badgeClownPupil" cx="11.35" cy="13.35" rx=".78" ry="2.18"/>
+                    <ellipse class="badgeClownPupil" cx="20.65" cy="13.35" rx=".78" ry="2.18"/>
+                    <circle class="badgeClownNose" cx="16" cy="17.1" r="2.05"/>
+                    <path class="badgeClownMouthBack" d="M9 20 Q16 22 23 20 Q24 19.71 24 21 C24 27 8 27 8 21 Q8 19.71 9 20 Z"/>
+                    <path class="badgeClownTeeth" d="M10.5 21 Q16 22.5 21.5 21 Q22.5 20.79 22.5 22 C22.5 25.5 9.5 25.5 9.5 22 Q9.5 20.79 10.5 21 Z"/>
+                </svg>
+            `
+        },
+        "1ntrcptr": {
+            className: "twitchWinnerBadge--bmw",
+            label: "BMW",
+            svg: `
+                <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+                    <circle class="badgeBmwChrome" cx="16" cy="16" r="14.2"/>
+                    <circle class="badgeBmwOuter" cx="16" cy="16" r="13.2"/>
+                    <circle class="badgeBmwInnerRing" cx="16" cy="16" r="8.25"/>
+                    <path class="badgeBmwBlue" d="M16 7.75v8.25H7.75A8.25 8.25 0 0 1 16 7.75Z"/>
+                    <path class="badgeBmwWhite" d="M16 7.75A8.25 8.25 0 0 1 24.25 16H16Z"/>
+                    <path class="badgeBmwWhite" d="M16 16v8.25A8.25 8.25 0 0 1 7.75 16Z"/>
+                    <path class="badgeBmwBlue" d="M24.25 16A8.25 8.25 0 0 1 16 24.25V16Z"/>
+                    <path class="badgeBmwCross" d="M16 7.75v16.5M7.75 16h16.5"/>
+                    <circle class="badgeBmwCore" cx="16" cy="16" r="8.25"/>
+                    <text class="badgeBmwLetter" x="6.95" y="10.55">B</text>
+                    <text class="badgeBmwLetter" x="14.2" y="7.15">M</text>
+                    <text class="badgeBmwLetter" x="21.45" y="10.55">W</text>
+                </svg>
+            `
+        },
+        "espero_n": {
+            className: "twitchWinnerBadge--developer",
+            label: "Розробник",
+            svg: `
+                <svg viewBox="0 0 28 20" aria-hidden="true" focusable="false">
+                    <rect class="badgeDevScreen" x="1.35" y="2.25" width="25.3" height="15.5" rx="4"/>
+                    <path class="badgeDevGlyph" d="M10.2 6.65 6.8 10l3.4 3.35M17.8 6.65 21.2 10l-3.4 3.35"/>
+                    <path class="badgeDevSlash" d="M15.25 5.8 12.75 14.2"/>
+                    <path class="badgeDevNoise" d="M4.7 4.8h2.1M21.2 15.2h1.9"/>
+                </svg>
+            `
+        }
+    };
+
+    function getTwitchWinnerBadgeConfig(solver) {
+        const userLogin = normalizeTwitchChannel(solver?.user_login || "");
+        const userName = normalizeTwitchChannel(solver?.user_name || "");
+        return TWITCH_WINNER_BADGES[userLogin] || TWITCH_WINNER_BADGES[userName] || null;
+    }
+
     function createTwitchWinnerRow(solver, index) {
         const row = document.createElement("div");
         row.className = "twitchWinnerRow";
@@ -1664,6 +1750,16 @@ document.addEventListener("DOMContentLoaded", async () => {
                 </svg>
             `;
             nameLabel.appendChild(crown);
+        }
+
+        const badgeConfig = getTwitchWinnerBadgeConfig(solver);
+        if (badgeConfig && index !== 0) {
+            const badge = document.createElement("span");
+            badge.className = `twitchWinnerBadge ${badgeConfig.className}`;
+            badge.innerHTML = badgeConfig.svg;
+            badge.setAttribute("aria-label", badgeConfig.label);
+            badge.setAttribute("title", badgeConfig.label);
+            nameLabel.appendChild(badge);
         }
 
         const name = document.createElement("span");

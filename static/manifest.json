@@ -4,6 +4,7 @@
   "description": "Вгадайте секретне слово українською! Кожна спроба покаже, наскільки близьке ваше слово до цілі.",
   "id": "/",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#1e1e1e",
   "theme_color": "#1f1f1f",
