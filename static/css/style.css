@@ -585,6 +585,71 @@ h1 {
     stroke-width: 1.1;
 }
 
+.twitchWinnerBadge--smiley,
+.twitchWinnerBadge--baby {
+    width: 1.9em;
+    height: 1.9em;
+}
+
+.twitchWinnerBadge--rune {
+    width: 1.9em;
+    height: 1.9em;
+}
+
+.badgeRuneStone {
+    fill: #312218;
+    stroke: #1a120c;
+    stroke-width: 0.55;
+    stroke-linejoin: round;
+}
+
+.badgeRuneEdge {
+    fill: none;
+    stroke: #6b4a25;
+    stroke-width: 0.55;
+    stroke-linejoin: round;
+    opacity: 0.55;
+}
+
+.badgeRuneCrack {
+    fill: none;
+    stroke: rgba(20, 12, 6, 0.55);
+    stroke-width: 0.45;
+    stroke-linecap: round;
+}
+
+.badgeRuneShadow {
+    fill: none;
+    stroke: #14090a;
+    stroke-width: 3.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    opacity: 0.85;
+}
+
+.badgeRuneEngrave {
+    fill: none;
+    stroke: #c9912f;
+    stroke-width: 2.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.badgeRuneHighlight {
+    fill: none;
+    stroke: #f7d273;
+    stroke-width: 0.85;
+    stroke-linecap: round;
+    opacity: 0.85;
+}
+
+.twitchWinnerBadgeImage {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+}
+
 .twitchWinnerCrown {
     position: relative;
     display: inline-flex;

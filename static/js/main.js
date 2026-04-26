@@ -1711,6 +1711,30 @@ document.addEventListener("DOMContentLoaded", async () => {
                     <path class="badgeDevNoise" d="M4.7 4.8h2.1M21.2 15.2h1.9"/>
                 </svg>
             `
+        },
+        "9imon41kk": {
+            className: "twitchWinnerBadge--smiley",
+            label: "Смайл",
+            svg: `<img src="/static/images/badges/9imon41kk.png" alt="" class="twitchWinnerBadgeImage" loading="lazy" decoding="async">`
+        },
+        "artem_sernikov": {
+            className: "twitchWinnerBadge--baby",
+            label: "Малюк",
+            svg: `<img src="/static/images/badges/artem_sernikov.png" alt="" class="twitchWinnerBadgeImage" loading="lazy" decoding="async">`
+        },
+        "loftrindr": {
+            className: "twitchWinnerBadge--rune",
+            label: "Руна Кано",
+            svg: `
+                <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+                    <path class="badgeRuneStone" d="M16 1.6 L22 2.6 L27.4 5.5 L30.2 10.4 L30.5 16.4 L29 22 L25.5 26.6 L20.5 29.4 L14.5 30.3 L9 28.7 L4.5 25.2 L2 20.4 L1.5 14.6 L3.6 9 L7.5 4.7 L13.2 2.1 Z"/>
+                    <path class="badgeRuneEdge" d="M16 1.6 L22 2.6 L27.4 5.5 L30.2 10.4 L30.5 16.4 L29 22 L25.5 26.6 L20.5 29.4 L14.5 30.3 L9 28.7 L4.5 25.2 L2 20.4 L1.5 14.6 L3.6 9 L7.5 4.7 L13.2 2.1 Z"/>
+                    <path class="badgeRuneCrack" d="M6 8 L9.5 11 M24 22 L27 25.5 M11 26 L13 23.5 M22 6 L20 8.5"/>
+                    <path class="badgeRuneShadow" d="M22.5 7 L11 16 L22.5 25"/>
+                    <path class="badgeRuneEngrave" d="M22 7.6 L10.4 16 L22 24.4"/>
+                    <path class="badgeRuneHighlight" d="M21.5 8.4 L11.4 16"/>
+                </svg>
+            `
         }
     };
 
@@ -1735,6 +1759,21 @@ document.addEventListener("DOMContentLoaded", async () => {
         nameLabel.className = "twitchWinnerNameLabel";
         nameWrap.appendChild(nameLabel);
 
+        const badgeConfig = getTwitchWinnerBadgeConfig(solver);
+        if (badgeConfig) {
+            const badge = document.createElement("span");
+            badge.className = `twitchWinnerBadge ${badgeConfig.className}`;
+            badge.innerHTML = badgeConfig.svg;
+            badge.setAttribute("aria-label", badgeConfig.label);
+            badge.setAttribute("title", badgeConfig.label);
+            nameLabel.appendChild(badge);
+        }
+
+        const name = document.createElement("span");
+        name.className = "twitchWinnerName";
+        name.textContent = solver?.user_name || solver?.user_login || "чатер";
+        nameLabel.appendChild(name);
+
         if (index === 0) {
             nameLabel.classList.add("twitchWinnerNameLabel--crowned");
             const crown = document.createElement("span");
@@ -1751,21 +1790,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             `;
             nameLabel.appendChild(crown);
         }
-
-        const badgeConfig = getTwitchWinnerBadgeConfig(solver);
-        if (badgeConfig && index !== 0) {
-            const badge = document.createElement("span");
-            badge.className = `twitchWinnerBadge ${badgeConfig.className}`;
-            badge.innerHTML = badgeConfig.svg;
-            badge.setAttribute("aria-label", badgeConfig.label);
-            badge.setAttribute("title", badgeConfig.label);
-            nameLabel.appendChild(badge);
-        }
-
-        const name = document.createElement("span");
-        name.className = "twitchWinnerName";
-        name.textContent = solver?.user_name || solver?.user_login || "чатер";
-        nameLabel.appendChild(name);
 
         const count = document.createElement("span");
         count.className = "twitchWinnerCount";
