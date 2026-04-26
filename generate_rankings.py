@@ -1,3 +1,4 @@
+import argparse
 import bz2
 import json
 import os
@@ -163,6 +164,7 @@ def generate_rankings(
     definitions,
     words,
     resources: Optional[EmbeddingResources] = None,
+    output_path: Optional[str] = None,
 ):
     """
     Будує рейтинг схожості слів зі списку `words` до `target_word`
@@ -180,7 +182,11 @@ def generate_rankings(
     print(f"[{target_date}] Обробка слова: {target_word}")
     ranked_words = _rank_words(target_word, resources)
 
-    filename = os.path.join(PRECOMPUTED_DIR, f"{target_date}.json")
+    filename = output_path or os.path.join(PRECOMPUTED_DIR, f"{target_date}.json")
+    output_dir = os.path.dirname(filename)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+
     with open(filename, "w", encoding="utf-8") as f:
         json.dump(ranked_words, f, ensure_ascii=False, indent=2)
 
@@ -188,16 +194,104 @@ def generate_rankings(
     return ranked_words
 
 
-if __name__ == "__main__":
+def _read_nonempty_lines(path: str) -> List[str]:
+    with open(path, "r", encoding="utf-8") as f:
+        return [line.strip() for line in f if line.strip()]
+
+
+def _parse_iso_date(value: str) -> date:
+    try:
+        return date.fromisoformat(value)
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(
+            f"Некоректна дата '{value}'. Формат має бути YYYY-MM-DD."
+        ) from e
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Генерує рейтинги семантичної схожості на основі "
+            "локальної GloVe-моделі. Без аргументів працює пакетно "
+            "для всіх слів із data/daily_words.txt."
+        )
+    )
+    parser.add_argument(
+        "--word",
+        type=str,
+        help="Згенерувати рейтинг для одного довільного слова.",
+    )
+    parser.add_argument(
+        "--date",
+        type=_parse_iso_date,
+        help="Дата для імені файлу у режимі --word (формат: YYYY-MM-DD).",
+    )
+    parser.add_argument(
+        "--output",
+        type=str,
+        help=(
+            "Явний шлях до JSON-файлу в режимі --word. "
+            "Якщо не вказано, використовується precomputed/<date>.json."
+        ),
+    )
+    parser.add_argument(
+        "--wordlist",
+        type=str,
+        default="data/wordlist.txt",
+        help="Шлях до wordlist (за замовчуванням: data/wordlist.txt).",
+    )
+    parser.add_argument(
+        "--daily-words",
+        type=str,
+        default="data/daily_words.txt",
+        help="Шлях до daily_words для пакетного режиму.",
+    )
+    parser.add_argument(
+        "--model-path",
+        type=str,
+        default=None,
+        help=(
+            "Шлях до векторної моделі. "
+            "За замовчуванням береться LOCAL_EMBEDDINGS_PATH або models/..."
+        ),
+    )
+    return parser
+
+
+def _run_single_word_mode(args: argparse.Namespace) -> None:
+    word = args.word.strip() if args.word else ""
+    if not word:
+        raise SystemExit("Помилка: передано порожнє значення для --word.")
+
+    words = _read_nonempty_lines(args.wordlist)
+    target_date = args.date or date.today()
+    output_path = _normalize_path(args.output) if args.output else None
+
+    resources = load_embedding_resources(
+        words=words,
+        daily_words=[word],
+        model_path=args.model_path,
+    )
+
+    generate_rankings(
+        target_word=word,
+        target_date=target_date,
+        definitions=None,
+        words=words,
+        resources=resources,
+        output_path=output_path,
+    )
+
+
+def _run_batch_mode(args: argparse.Namespace) -> None:
     ensure_precomputed_dir()
-
-    with open("data/daily_words.txt", "r", encoding="utf-8") as f:
-        daily_words = [line.strip() for line in f if line.strip()]
-
-    with open("data/wordlist.txt", "r", encoding="utf-8") as f:
-        words = [line.strip() for line in f if line.strip()]
-
-    resources = load_embedding_resources(words=words, daily_words=daily_words)
+    daily_words = _read_nonempty_lines(args.daily_words)
+    words = _read_nonempty_lines(args.wordlist)
+    resources = load_embedding_resources(
+        words=words,
+        daily_words=daily_words,
+        model_path=args.model_path,
+    )
 
     for i, target_word in enumerate(daily_words):
         day = BASE_DATE + timedelta(days=i)
@@ -211,3 +305,13 @@ if __name__ == "__main__":
             generate_rankings(target_word, day, definitions=None, words=words, resources=resources)
         except Exception as e:
             print(f"[ERR ] Не вдалося згенерувати рейтинг для '{target_word}' ({day}): {e}")
+
+
+if __name__ == "__main__":
+    parser = _build_parser()
+    args = parser.parse_args()
+
+    if args.word is not None:
+        _run_single_word_mode(args)
+    else:
+        _run_batch_mode(args)

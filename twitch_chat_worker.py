@@ -61,6 +61,7 @@ DEFAULT_KEEPALIVE_GRACE_SECONDS = max(5, int(os.getenv("TWITCH_EVENTSUB_KEEPALIV
 @dataclass(frozen=True)
 class WorkerConnection:
     connection_id: int
+    source_url: str
     twitch_user_id: str
     twitch_login: str
     twitch_display_name: str
@@ -141,6 +142,11 @@ def derive_connections_url() -> str:
     return ""
 
 
+def parse_url_list(raw_value: str) -> List[str]:
+    parts = [part.strip() for part in raw_value.replace("\n", ",").split(",")]
+    return [part for part in parts if part]
+
+
 def http_json_request(
     url: str,
     method: str = "GET",
@@ -160,7 +166,7 @@ def http_json_request(
         return json.loads(body or "{}")
 
 
-def load_active_connections(connections_url: str, secret: str) -> List[WorkerConnection]:
+def load_active_connections_from_source(connections_url: str, secret: str) -> List[WorkerConnection]:
     req = urllib.request.Request(
         connections_url,
         headers={
@@ -197,6 +203,7 @@ def load_active_connections(connections_url: str, secret: str) -> List[WorkerCon
             parsed.append(
                 WorkerConnection(
                     connection_id=int(item.get("connection_id")),
+                    source_url=connections_url,
                     twitch_user_id=str(item.get("twitch_user_id") or "").strip(),
                     twitch_login=normalize_channel(str(item.get("twitch_login") or "")),
                     twitch_display_name=str(item.get("twitch_display_name") or "").strip(),
@@ -218,6 +225,27 @@ def load_active_connections(connections_url: str, secret: str) -> List[WorkerCon
         for item in parsed
         if item.twitch_user_id and item.twitch_login and item.access_token
     ]
+
+
+def load_active_connections(connections_urls: List[str], secret: str) -> List[WorkerConnection]:
+    combined: List[WorkerConnection] = []
+    seen_keys: set[str] = set()
+
+    for connections_url in connections_urls:
+        try:
+            source_connections = load_active_connections_from_source(connections_url, secret)
+        except Exception as exc:
+            print(f"[worker] failed to load connections from {connections_url}: {exc}")
+            continue
+
+        for connection in source_connections:
+            dedupe_key = connection.twitch_user_id or f"{connection.source_url}:{connection.connection_id}"
+            if dedupe_key in seen_keys:
+                continue
+            seen_keys.add(dedupe_key)
+            combined.append(connection)
+
+    return combined
 
 
 def publish_guess(
@@ -277,32 +305,45 @@ def publisher_loop(
     while True:
         payload = publish_queue.get()
         try:
-            for attempt in range(1, retry_count + 1):
-                try:
-                    publish_guess(**payload)
-                    break
-                except urllib.error.HTTPError as exc:
-                    body = exc.read().decode("utf-8", errors="ignore")
-                    if exc.code in retryable_statuses and attempt < retry_count:
-                        print(f"[worker] publish retry {attempt}/{retry_count} after HTTP {exc.code}")
-                        time.sleep(retry_delay_seconds * attempt)
-                        continue
-                    print(f"[worker] publish failed with HTTP {exc.code}: {body}")
-                    break
-                except urllib.error.URLError as exc:
-                    if attempt < retry_count:
-                        print(f"[worker] publish retry {attempt}/{retry_count} after URL error: {exc}")
-                        time.sleep(retry_delay_seconds * attempt)
-                        continue
-                    print(f"[worker] publish failed: {exc}")
-                    break
-                except Exception as exc:
-                    if attempt < retry_count:
-                        print(f"[worker] publish retry {attempt}/{retry_count} after error: {exc}")
-                        time.sleep(retry_delay_seconds * attempt)
-                        continue
-                    print(f"[worker] unexpected publish error: {exc}")
-                    break
+            target_urls = payload.pop("target_urls")
+            for target_url in target_urls:
+                target_payload = dict(payload)
+                target_payload["target_url"] = target_url
+                for attempt in range(1, retry_count + 1):
+                    try:
+                        publish_guess(**target_payload)
+                        break
+                    except urllib.error.HTTPError as exc:
+                        body = exc.read().decode("utf-8", errors="ignore")
+                        if exc.code in retryable_statuses and attempt < retry_count:
+                            print(
+                                f"[worker] publish retry {attempt}/{retry_count} "
+                                f"for {target_url} after HTTP {exc.code}"
+                            )
+                            time.sleep(retry_delay_seconds * attempt)
+                            continue
+                        print(f"[worker] publish failed for {target_url} with HTTP {exc.code}: {body}")
+                        break
+                    except urllib.error.URLError as exc:
+                        if attempt < retry_count:
+                            print(
+                                f"[worker] publish retry {attempt}/{retry_count} "
+                                f"for {target_url} after URL error: {exc}"
+                            )
+                            time.sleep(retry_delay_seconds * attempt)
+                            continue
+                        print(f"[worker] publish failed for {target_url}: {exc}")
+                        break
+                    except Exception as exc:
+                        if attempt < retry_count:
+                            print(
+                                f"[worker] publish retry {attempt}/{retry_count} "
+                                f"for {target_url} after error: {exc}"
+                            )
+                            time.sleep(retry_delay_seconds * attempt)
+                            continue
+                        print(f"[worker] unexpected publish error for {target_url}: {exc}")
+                        break
         finally:
             publish_queue.task_done()
 
@@ -371,7 +412,7 @@ def create_chat_subscription(client_id: str, session_id: str, connection: Worker
 def enqueue_notification(
     frame: Dict[str, Any],
     publish_queue: "queue.Queue[dict]",
-    target_url: str,
+    target_urls: List[str],
     secret: str,
     command_prefix: str,
     accept_bare_words: bool,
@@ -400,7 +441,7 @@ def enqueue_notification(
         return
 
     publish_payload = {
-        "target_url": target_url,
+        "target_urls": target_urls,
         "secret": secret,
         "channel": channel,
         "user_login": user_login,
@@ -420,7 +461,7 @@ def enqueue_notification(
 
 def connection_signature(connection: WorkerConnection) -> str:
     return (
-        f"{connection.connection_id}:{connection.twitch_user_id}:"
+        f"{connection.source_url}:{connection.connection_id}:{connection.twitch_user_id}:"
         f"{connection.twitch_login}:{connection.access_token}"
     )
 
@@ -430,7 +471,7 @@ class EventSubConnectionWorker(threading.Thread):
         self,
         connection: WorkerConnection,
         client_id: str,
-        target_url: str,
+        target_urls: List[str],
         secret: str,
         command_prefix: str,
         accept_bare_words: bool,
@@ -445,7 +486,7 @@ class EventSubConnectionWorker(threading.Thread):
         )
         self.connection = connection
         self.client_id = client_id
-        self.target_url = target_url
+        self.target_urls = target_urls
         self.secret = secret
         self.command_prefix = command_prefix
         self.accept_bare_words = accept_bare_words
@@ -514,7 +555,7 @@ class EventSubConnectionWorker(threading.Thread):
                         enqueue_notification(
                             frame,
                             self.publish_queue,
-                            self.target_url,
+                            self.target_urls,
                             self.secret,
                             self.command_prefix,
                             self.accept_bare_words,
@@ -576,9 +617,11 @@ class EventSubConnectionWorker(threading.Thread):
 
 def run_worker() -> None:
     client_id = (os.getenv("TWITCH_CLIENT_ID") or "").strip()
-    target_url = (os.getenv("TWITCH_BRIDGE_TARGET_URL") or "").strip()
+    raw_target_url = (os.getenv("TWITCH_BRIDGE_TARGET_URL") or "").strip()
     secret = (os.getenv("TWITCH_CHAT_BRIDGE_SECRET") or "").strip()
     connections_url = derive_connections_url()
+    target_urls = parse_url_list(raw_target_url)
+    connections_urls = parse_url_list(connections_url)
     command_prefix = (os.getenv("TWITCH_CHAT_COMMAND_PREFIX") or "!guess").strip()
     accept_bare_words = env_flag("TWITCH_CHAT_ACCEPT_BARE_WORDS", default=False)
     accept_all_messages = env_flag("TWITCH_CHAT_ACCEPT_ALL_MESSAGES", default=False)
@@ -593,9 +636,9 @@ def run_worker() -> None:
         key
         for key, value in [
             ("TWITCH_CLIENT_ID", client_id),
-            ("TWITCH_BRIDGE_TARGET_URL", target_url),
+            ("TWITCH_BRIDGE_TARGET_URL", ", ".join(target_urls)),
             ("TWITCH_CHAT_BRIDGE_SECRET", secret),
-            ("TWITCH_WORKER_CONNECTIONS_URL", connections_url),
+            ("TWITCH_WORKER_CONNECTIONS_URL", ", ".join(connections_urls)),
         ]
         if not value
     ]
@@ -610,15 +653,15 @@ def run_worker() -> None:
         daemon=True,
     )
     publisher.start()
-    active_workers: Dict[int, EventSubConnectionWorker] = {}
-    active_signatures: Dict[int, str] = {}
+    active_workers: Dict[str, EventSubConnectionWorker] = {}
+    active_signatures: Dict[str, str] = {}
     reported_no_connections = False
 
     try:
         while True:
-            desired_connections = load_active_connections(connections_url, secret)
+            desired_connections = load_active_connections(connections_urls, secret)
             desired_by_id = {
-                connection.connection_id: connection
+                (connection.twitch_user_id or f"{connection.source_url}:{connection.connection_id}"): connection
                 for connection in desired_connections
             }
 
@@ -653,7 +696,7 @@ def run_worker() -> None:
                 worker = EventSubConnectionWorker(
                     connection=connection,
                     client_id=client_id,
-                    target_url=target_url,
+                    target_urls=target_urls,
                     secret=secret,
                     command_prefix=command_prefix,
                     accept_bare_words=accept_bare_words,
