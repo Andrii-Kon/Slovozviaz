@@ -28,11 +28,12 @@
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
 
     <!-- Основні стилі -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260420-2') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260425-22') }}">
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/favicon.png') }}">
 </head>
 <body>
 
+<div class="pageShell">
 <div class="container" data-twitch-oauth-enabled="{{ 'true' if twitch_oauth_enabled else 'false' }}">
     <h1>Словозв'яз</h1>
 
@@ -62,9 +63,6 @@
             <div id="twitchInlineControls" class="twitchInlineControls hidden" aria-live="polite">
                 <span id="twitchInlineStreamer" class="twitchInlineStreamer">espero_n</span>
             </div>
-            <button id="twitchWinnersButton" class="twitchHeaderIconButton hidden" type="button" aria-label="Показати тих, хто відгадав слово" title="Хто відгадав слово">
-                <span aria-hidden="true">🏆</span>
-            </button>
             <label id="twitchChatToggleRow" class="twitchChatSwitch hidden" for="twitchChatToggle" aria-label="Увімкнути чат Twitch для цієї гри">
                 <input type="checkbox" id="twitchChatToggle">
                 <span class="twitchChatSwitchTrack" aria-hidden="true"></span>
@@ -76,26 +74,58 @@
     <div class="input-section">
         <input type="text" id="guessInput" placeholder="Введіть слово" autocomplete="off" enterkeyhint="send">
         <div class="menu-container">
-            <button class="menu-button" id="menuButton" aria-label="Меню гри">⋮</button>
+            <button class="menu-button" id="menuButton" aria-label="Меню гри">
+                <svg class="menuButtonIcon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <circle cx="12" cy="5.5" r="1.85" fill="currentColor"/>
+                    <circle cx="12" cy="12" r="1.85" fill="currentColor"/>
+                    <circle cx="12" cy="18.5" r="1.85" fill="currentColor"/>
+                </svg>
+            </button>
             <div class="dropdown-menu hidden" id="dropdownMenu">
                 <button class="menu-item" id="hintButton">
-                    <span class="menu-icon">💡</span>
+                    <span class="menu-icon menuIconHint" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" role="img" focusable="false">
+                            <path fill="currentColor" d="M9 18.25h6v1.5H9zm1 2.25h4V22h-4z"/>
+                            <path fill="currentColor" d="M12 2.5a6.75 6.75 0 0 0-4.24 12c.75.62 1.3 1.4 1.63 2.25h5.22c.33-.85.88-1.63 1.63-2.25A6.75 6.75 0 0 0 12 2.5Zm0 1.5a5.25 5.25 0 0 1 3.3 9.33c-.9.75-1.59 1.65-2.03 2.67h-2.54c-.44-1.02-1.13-1.92-2.03-2.67A5.25 5.25 0 0 1 12 4Z"/>
+                        </svg>
+                    </span>
                     Підказка
                 </button>
                 <button class="menu-item" id="settingsBtn">
-                    <span class="menu-icon">⚙️</span>
+                    <span class="menu-icon menuIconSettings" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" role="img" focusable="false">
+                            <path fill="currentColor" d="M4 7.25h5.5v1.5H4zm10.5 0H20v1.5h-5.5zM4 15.25h1.5v1.5H4zm6.5 0H20v1.5H10.5z"/>
+                            <circle cx="12" cy="8" r="2.5" fill="currentColor"/>
+                            <circle cx="8" cy="16" r="2.5" fill="currentColor"/>
+                        </svg>
+                    </span>
                     Налаштування
                 </button>
                 <button class="menu-item" id="giveUpBtn">
-                    <span class="menu-icon">🚩</span>
+                    <span class="menu-icon menuIconGiveUp" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" role="img" focusable="false">
+                            <path fill="currentColor" d="M7 3a.75.75 0 0 1 .75.75v16.5a.75.75 0 0 1-1.5 0V3.75A.75.75 0 0 1 7 3Zm2.25 1.4a.75.75 0 0 1 .42.13l7 4.1a.75.75 0 0 1 0 1.3l-7 4.1a.75.75 0 0 1-1.12-.65V5.05a.75.75 0 0 1 .7-.65Z"/>
+                        </svg>
+                    </span>
                     Здатися
                 </button>
                 <button class="menu-item" id="previousGamesBtn">
-                    <span class="menu-icon">📅</span>
+                    <span class="menu-icon menuIconArchive" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" role="img" focusable="false">
+                            <path fill="currentColor" d="M7 2.75a.75.75 0 0 1 1.5 0V4h7V2.75a.75.75 0 0 1 1.5 0V4h.75A2.25 2.25 0 0 1 20 6.25v11.5A2.25 2.25 0 0 1 17.75 20H6.25A2.25 2.25 0 0 1 4 17.75V6.25A2.25 2.25 0 0 1 6.25 4H7V2.75Zm11.5 6H5.5v9a.75.75 0 0 0 .75.75h11.5a.75.75 0 0 0 .75-.75v-9Zm-.75-3.25H6.25a.75.75 0 0 0-.75.75v1h13v-1a.75.75 0 0 0-.75-.75ZM8 10.75h2v2H8zm3 0h2v2h-2zm3 0h2v2h-2zm-6 3h2v2H8zm3 0h2v2h-2zm3 0h2v2h-2z"/>
+                        </svg>
+                    </span>
                     Попередні ігри
                 </button>
                 <button class="menu-item" id="createGameBtn">
-                    <span class="menu-icon">🧩</span>
+                    <span class="menu-icon menuIconCreate" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" role="img" focusable="false">
+                            <rect x="4" y="5" width="6" height="6" rx="1.5" fill="currentColor" opacity="0.95"/>
+                            <rect x="12" y="5" width="6" height="6" rx="1.5" fill="currentColor" opacity="0.95"/>
+                            <rect x="4" y="13" width="6" height="6" rx="1.5" fill="currentColor" opacity="0.95"/>
+                            <path fill="currentColor" d="M15.25 13h1.5v3.25H20v1.5h-3.25V21h-1.5v-3.25H12v-1.5h3.25z"/>
+                        </svg>
+                    </span>
                     Створити гру
                 </button>
                 <a class="menu-item hidden" id="twitchConnectButton" href="/auth/twitch/start">
@@ -118,6 +148,34 @@
         </div>
     </div>
 
+    <section id="twitchLeaderboardInline" class="twitchLeaderboardPanel twitchLeaderboardInline hidden" aria-live="polite">
+        <div class="twitchLeaderboardPanelHeader">
+            <div class="twitchLeaderboardPanelCopy">
+                <p class="twitchLeaderboardEyebrow">Twitch leaderboard</p>
+                <h2 id="twitchLeaderboardInlineTitle" class="twitchLeaderboardPanelTitle">Лідери чату</h2>
+            </div>
+            <button
+                id="clearTwitchLeaderboardInlineButton"
+                class="twitchLeaderboardClearButton"
+                type="button"
+                aria-label="Очистити рейтинг"
+                title="Очистити рейтинг"
+            >
+                <svg class="twitchLeaderboardClearIcon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <g transform="rotate(-44 12 12)">
+                        <rect class="twitchLeaderboardClearShape" x="4.85" y="8.65" width="14.3" height="6.7" rx="1.95"/>
+                        <path class="twitchLeaderboardClearBand" d="M15.8 8.65h1.4a1.95 1.95 0 0 1 1.95 1.95v2.8a1.95 1.95 0 0 1-1.95 1.95h-1.4z"/>
+                        <path class="twitchLeaderboardClearEdge" d="M15.15 9.15v5.7"/>
+                        <path class="twitchLeaderboardClearHighlight" d="M6.25 10.2h7.1"/>
+                    </g>
+                </svg>
+            </button>
+        </div>
+        <div id="twitchLeaderboardInlineList" class="twitchWinnersList twitchWinnersListCompact">
+            <p class="twitchWinnersEmpty">Ще ніхто не відгадав слово.</p>
+        </div>
+    </section>
+
     <!-- Інструкція «Як грати?» -->
     <div id="howToPlayBlock" class="howToPlayBlock">
         <h2>Як грати?</h2>
@@ -128,7 +186,7 @@
         </p>
         <details>
             <summary>Як визначається порядок слів?</summary>
-            <p>Слова сортуються за схожістю до секретного за допомогою векторного аналізу: секретне слово отримує ранг 1, а інші – залежно від ступеня подібності, обчисленої за допомогою косинусної міри.</p>
+            <p>Гра використовує алгоритм, навчений на великій кількості текстів, щоб оцінити, наскільки слова близькі до секретного. Близькість залежить не лише від прямого значення, а й від того, в яких контекстах ці слова часто вживаються. Тому різні слова з однієї теми можуть бути дуже близько, а синоніми іноді опиняються далеко.</p>
         </details>
         <details>
             <summary>Як попросити підказку?</summary>
@@ -144,6 +202,36 @@
     <!-- Список усіх спроб -->
     <div id="guessesContainer"></div>
 
+</div>
+<aside id="twitchLeaderboardSidebar" class="twitchLeaderboardSidebar hidden" aria-live="polite">
+    <section class="twitchLeaderboardPanel twitchLeaderboardPanelDesktop">
+        <div class="twitchLeaderboardPanelHeader">
+            <div class="twitchLeaderboardPanelCopy">
+                <p class="twitchLeaderboardEyebrow">Twitch leaderboard</p>
+                <h2 id="twitchLeaderboardSidebarTitle" class="twitchLeaderboardPanelTitle">Лідери чату</h2>
+            </div>
+            <button
+                id="clearTwitchLeaderboardSidebarButton"
+                class="twitchLeaderboardClearButton"
+                type="button"
+                aria-label="Очистити рейтинг"
+                title="Очистити рейтинг"
+            >
+                <svg class="twitchLeaderboardClearIcon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <g transform="rotate(-44 12 12)">
+                        <rect class="twitchLeaderboardClearShape" x="4.85" y="8.65" width="14.3" height="6.7" rx="1.95"/>
+                        <path class="twitchLeaderboardClearBand" d="M15.8 8.65h1.4a1.95 1.95 0 0 1 1.95 1.95v2.8a1.95 1.95 0 0 1-1.95 1.95h-1.4z"/>
+                        <path class="twitchLeaderboardClearEdge" d="M15.15 9.15v5.7"/>
+                        <path class="twitchLeaderboardClearHighlight" d="M6.25 10.2h7.1"/>
+                    </g>
+                </svg>
+            </button>
+        </div>
+        <div id="twitchLeaderboardSidebarList" class="twitchWinnersList twitchWinnersListSidebar">
+            <p class="twitchWinnersEmpty">Ще ніхто не відгадав слово.</p>
+        </div>
+    </section>
+</aside>
 </div>
 
 <!-- Модалка: налаштування -->
@@ -212,11 +300,19 @@
 
 <!-- Модалка: попередні ігри -->
 <div id="previousGamesModal" class="modal hidden">
-    <div class="modal-content">
-        <span id="closePreviousGamesModal" class="close">×</span>
-        <h2>Виберіть попередню гру</h2>
+    <div class="modal-content previousGamesContent">
+        <button id="closePreviousGamesModal" class="close" type="button" aria-label="Закрити">×</button>
+        <div class="previousGamesHeader">
+            <p class="modalEyebrow">Архів ігор</p>
+            <h2>Попередні ігри</h2>
+        </div>
         <div id="randomGameContainer">
-            <button id="randomGameBtn">Випадкова</button>
+            <button id="randomGameBtn" type="button">
+                <svg class="randomGameIcon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path fill="currentColor" d="M16.7 3.9h3.85v3.85h-1.5V6.46l-3.23 3.23a4.83 4.83 0 0 1-6.84 0L3.72 4.43l1.06-1.06 5.26 5.26a3.33 3.33 0 0 0 4.72 0L18 5.4h-1.3V3.9Zm-7.72 10.4a4.83 4.83 0 0 1 6.84 0L19.05 17.54v-1.29h1.5v3.85H16.7v-1.5H18l-3.24-3.24a3.33 3.33 0 0 0-4.72 0l-5.26 5.26-1.06-1.06 5.26-5.26Z"/>
+                </svg>
+                <span class="randomGameLabel">Випадкова</span>
+            </button>
         </div>
         <div id="previousGamesList"></div>
     </div>
@@ -230,6 +326,21 @@
         <div style="margin-top: 20px;">
             <button id="giveUpYesBtn" class="btn-wide" style="margin-right: 10px;">Так</button>
             <button id="giveUpNoBtn" class="btn-wide">Ні</button>
+        </div>
+    </div>
+</div>
+
+<!-- Модалка: Twitch leaderboard -->
+<div id="twitchLeaderboardDialogModal" class="modal hidden" aria-hidden="true">
+    <div class="modal-content twitchLeaderboardDialogContent" role="dialog" aria-modal="true" aria-labelledby="twitchLeaderboardDialogTitle">
+        <button id="closeTwitchLeaderboardDialog" class="close twitchLeaderboardDialogClose" type="button" aria-label="Закрити">×</button>
+        <h2 id="twitchLeaderboardDialogTitle">Очистити рейтинг?</h2>
+        <p id="twitchLeaderboardDialogMessage" class="twitchLeaderboardDialogMessage">
+            Це прибере поточні результати leaderboard, але не видалить самі ігри.
+        </p>
+        <div class="twitchLeaderboardDialogActions">
+            <button id="twitchLeaderboardDialogCancelBtn" class="twitchLeaderboardDialogSecondary" type="button">Скасувати</button>
+            <button id="twitchLeaderboardDialogConfirmBtn" class="btn-wide" type="button">Очистити</button>
         </div>
     </div>
 </div>
@@ -270,18 +381,7 @@
     </div>
 </div>
 
-<!-- Модалка: рейтинг Twitch-переможців -->
-<div id="twitchWinnersModal" class="modal hidden">
-    <div class="modal-content">
-        <span id="closeTwitchWinnersModal" class="close">×</span>
-        <h2 id="twitchWinnersTitle">Хто відгадував слова</h2>
-        <div id="twitchWinnersList" class="twitchWinnersList">
-            <p class="twitchWinnersEmpty">Ще ніхто не відгадав слово.</p>
-        </div>
-    </div>
-</div>
-
 <!-- Основний скрипт -->
-<script type="module" src="{{ url_for('static', filename='js/main.js', v='20260420-2') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/main.js', v='20260425-9') }}"></script>
 </body>
 </html>

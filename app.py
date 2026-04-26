@@ -1,5 +1,5 @@
 # app.py
-from flask import Flask, render_template, jsonify, request, Response, abort, redirect, session, url_for
+from flask import Flask, render_template, jsonify, request, Response, abort, redirect, session, url_for, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime, date, timedelta
 from dotenv import load_dotenv
@@ -483,12 +483,20 @@ def _is_twitch_chat_bridge_enabled() -> bool:
     return bool(TWITCH_CHAT_BRIDGE_SECRET)
 
 
+def _has_real_twitch_oauth_config() -> bool:
+    return bool(TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET and TWITCH_OAUTH_REDIRECT_URI)
+
+
+def _should_use_twitch_mock_oauth() -> bool:
+    return bool(TWITCH_MOCK_ENABLED and not _has_real_twitch_oauth_config())
+
+
 def _is_twitch_oauth_enabled() -> bool:
-    return bool(TWITCH_MOCK_ENABLED or (TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET and TWITCH_OAUTH_REDIRECT_URI))
+    return bool(_should_use_twitch_mock_oauth() or _has_real_twitch_oauth_config())
 
 
 def _is_twitch_worker_ready() -> bool:
-    return bool(TWITCH_MOCK_ENABLED or (TWITCH_CLIENT_ID and _is_twitch_chat_bridge_enabled()))
+    return bool(_should_use_twitch_mock_oauth() or (TWITCH_CLIENT_ID and _is_twitch_chat_bridge_enabled()))
 
 
 def _normalize_twitch_channel(raw_channel: Optional[str]) -> str:
@@ -1017,7 +1025,7 @@ def _resolve_secret_word_for_twitch_game_scope(game_scope: str) -> str:
         return _normalize_word(guess_secret_word_for_date(target_date))
 
     if normalized_scope.startswith("custom:"):
-        game_id = normalize_game_id(normalized_scope[7:])
+        game_id = _normalize_game_id(normalized_scope[7:])
         if not game_id:
             return ""
         try:
@@ -1028,20 +1036,48 @@ def _resolve_secret_word_for_twitch_game_scope(game_scope: str) -> str:
     return ""
 
 
+def _resolve_twitch_event_date_kyiv(created_at: Optional[datetime]) -> date:
+    if created_at is None:
+        return _today_in_kyiv()
+
+    event_dt = created_at
+    if event_dt.tzinfo is None:
+        event_dt = event_dt.replace(tzinfo=ZoneInfo("UTC"))
+    return event_dt.astimezone(KYIV_TZ).date()
+
+
+def _resolve_twitch_game_instance_key(game_scope: str, created_at: Optional[datetime]) -> str:
+    normalized_scope = _normalize_twitch_game_scope(game_scope)
+    if not normalized_scope:
+        return ""
+
+    if normalized_scope == "daily:current":
+        return f"date:{_resolve_twitch_event_date_kyiv(created_at).isoformat()}"
+
+    if normalized_scope.startswith("date:"):
+        raw_date = normalized_scope[5:]
+        try:
+            target_date = datetime.strptime(raw_date, "%Y-%m-%d").date()
+        except ValueError:
+            return ""
+        return f"date:{target_date.isoformat()}"
+
+    if normalized_scope.startswith("custom:"):
+        game_id = _normalize_game_id(normalized_scope[7:])
+        if not game_id:
+            return ""
+        return f"custom:{game_id}"
+
+    return normalized_scope
+
+
 def _resolve_secret_word_for_twitch_event(game_scope: str, created_at: Optional[datetime]) -> str:
     normalized_scope = _normalize_twitch_game_scope(game_scope)
     if not normalized_scope:
         return ""
 
     if normalized_scope == "daily:current":
-        if created_at is None:
-            return _normalize_word(guess_secret_word_for_date(_today_in_kyiv()))
-
-        event_dt = created_at
-        if event_dt.tzinfo is None:
-            event_dt = event_dt.replace(tzinfo=ZoneInfo("UTC"))
-        event_date_kyiv = event_dt.astimezone(KYIV_TZ).date()
-        return _normalize_word(guess_secret_word_for_date(event_date_kyiv))
+        return _normalize_word(guess_secret_word_for_date(_resolve_twitch_event_date_kyiv(created_at)))
 
     return _resolve_secret_word_for_twitch_game_scope(normalized_scope)
 
@@ -1075,23 +1111,19 @@ def _load_twitch_chat_solver_leaderboard(channel: str, limit: int) -> List[Dict[
         if not game_scope or not chatter_login or not guessed_word:
             continue
 
-        secret_cache_key = game_scope
-        if game_scope == "daily:current" and row.created_at is not None:
-            event_dt = row.created_at
-            if event_dt.tzinfo is None:
-                event_dt = event_dt.replace(tzinfo=ZoneInfo("UTC"))
-            event_date_kyiv = event_dt.astimezone(KYIV_TZ).date().isoformat()
-            secret_cache_key = f"daily:{event_date_kyiv}"
+        game_instance_key = _resolve_twitch_game_instance_key(game_scope, row.created_at)
+        if not game_instance_key:
+            continue
 
-        secret_word = scope_secret_cache.get(secret_cache_key)
+        secret_word = scope_secret_cache.get(game_instance_key)
         if secret_word is None:
             secret_word = _resolve_secret_word_for_twitch_event(game_scope, row.created_at)
-            scope_secret_cache[secret_cache_key] = secret_word
+            scope_secret_cache[game_instance_key] = secret_word
 
         if not secret_word or guessed_word != secret_word:
             continue
 
-        solved_key = (game_scope, chatter_login)
+        solved_key = (game_instance_key, chatter_login)
         if solved_key in solved_pairs:
             continue
         solved_pairs.add(solved_key)
@@ -1510,7 +1542,7 @@ def twitch_oauth_start():
     if not _is_twitch_oauth_enabled():
         abort(404)
 
-    if TWITCH_MOCK_ENABLED:
+    if _should_use_twitch_mock_oauth():
         return redirect(url_for("twitch_mock_start", next=request.args.get("next") or request.referrer or "/"))
 
     state = secrets.token_urlsafe(24)
@@ -1564,7 +1596,7 @@ def twitch_oauth_callback():
 
 @app.route("/auth/twitch/mock-start")
 def twitch_mock_start():
-    if not TWITCH_MOCK_ENABLED:
+    if not _should_use_twitch_mock_oauth():
         abort(404)
 
     try:
@@ -1583,13 +1615,14 @@ def twitch_mock_start():
 @app.route("/api/twitch-connection/status")
 def twitch_connection_status():
     connection = _load_current_twitch_connection()
+    use_mock_oauth = _should_use_twitch_mock_oauth()
     response = jsonify({
         "oauth_enabled": _is_twitch_oauth_enabled(),
         "worker_ready": _is_twitch_worker_ready(),
         "connected": bool(connection),
         "connection": _serialize_twitch_connection(connection),
         "connect_url": url_for(
-            "twitch_mock_start" if TWITCH_MOCK_ENABLED else "twitch_oauth_start",
+            "twitch_mock_start" if use_mock_oauth else "twitch_oauth_start",
             next=request.args.get("next") or request.referrer or "/",
         )
         if _is_twitch_oauth_enabled()
@@ -2278,6 +2311,11 @@ def archive_by_date(game_date_str):
 @app.route("/privacy.html")
 def privacy_policy():
     return render_template("privacy.html")
+
+@app.route("/.well-known/assetlinks.json")
+def assetlinks():
+    well_known_dir = os.path.join(app.static_folder or "", ".well-known")
+    return send_from_directory(well_known_dir, "assetlinks.json", mimetype="application/json")
 
 @app.route("/robots.txt")
 def robots_txt():
