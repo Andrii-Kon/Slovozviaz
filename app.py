@@ -1523,6 +1523,40 @@ def _upsert_archived_game_for_date(game_date: date, secret_word: str, ranking: L
         "previous_secret_word": previous_secret_word,
     }
 
+# ── Заглушка для застарілого хоста ─────────────────────────────────────────────
+LEGACY_NOTICE_HOSTS = {
+    "andriikon.pythonanywhere.com",
+    "www.andriikon.pythonanywhere.com",
+}
+
+LEGACY_NOTICE_BYPASS_PREFIXES = (
+    "/static/",
+    "/.well-known/",
+)
+
+LEGACY_NOTICE_BYPASS_PATHS = {
+    "/robots.txt",
+    "/sitemap.xml",
+    "/favicon.ico",
+}
+
+
+@app.before_request
+def _legacy_host_notice():
+    force = _env_flag("LEGACY_NOTICE_FORCE")
+    host = (request.host or "").split(":", 1)[0].lower()
+    if not force and host not in LEGACY_NOTICE_HOSTS:
+        return None
+    path = request.path or "/"
+    if path in LEGACY_NOTICE_BYPASS_PATHS:
+        return None
+    if any(path.startswith(prefix) for prefix in LEGACY_NOTICE_BYPASS_PREFIXES):
+        return None
+    response = Response(render_template("legacy_notice.html"), status=200)
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 # ── Маршрути ───────────────────────────────────────────────────────────────────
 @app.route("/")
 def index():
