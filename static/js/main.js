@@ -303,6 +303,30 @@ function getRankedWordEntry(word) {
     return rankedWordLookup.get(word) || null;
 }
 
+const PAVLIN_PRIVILEGED_LOGIN = "pavll1n";
+
+function isPrivilegedPavlinActor(source, chatterLogin) {
+    if (source === "twitch") {
+        return normalizeTwitchChannel(chatterLogin || "") === PAVLIN_PRIVILEGED_LOGIN;
+    }
+
+    return normalizeTwitchChannel(twitchConnectionState.connection?.twitch_login || "") === PAVLIN_PRIVILEGED_LOGIN;
+}
+
+function shouldSilentlyIgnorePavlin(source, chatterLogin, normalizedInput) {
+    if (normalizedInput !== "павлін") return false;
+    return !isPrivilegedPavlinActor(source, chatterLogin);
+}
+
+function getEntryLookupWord(entry) {
+    return normalizeWord(entry?.lookupWord || entry?.word || "");
+}
+
+function hasGuessedLookupWord(lookupWord) {
+    if (!lookupWord) return false;
+    return getCombinedEntries().some(entry => getEntryLookupWord(entry) === lookupWord);
+}
+
 function enrichEntriesWithRankingData(entries) {
     if (!Array.isArray(entries) || rankedWordLookup.size === 0) return entries;
 
@@ -1727,6 +1751,11 @@ document.addEventListener("DOMContentLoaded", async () => {
             label: "Орел",
             svg: `<img src="/static/images/badges/fedoriv_jr.png" alt="" class="twitchWinnerBadgeImage" loading="lazy" decoding="async">`
         },
+        "pavll1n": {
+            className: "twitchWinnerBadge--smiley",
+            label: "Павлін",
+            svg: `<img src="/static/images/badges/pavll1n.png" alt="" class="twitchWinnerBadgeImage" loading="lazy" decoding="async">`
+        },
         "loftrindr": {
             className: "twitchWinnerBadge--rune",
             label: "Руна Кано",
@@ -2135,21 +2164,46 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (didWin || didGiveUp) return false;
 
         const isTwitchSource = source === "twitch";
-        let word = normalizeWord(rawWord);
-        if (!word) return false;
+        const normalizedInput = normalizeWord(rawWord);
+        if (!normalizedInput) return false;
+        const shouldProxyPavlin = (
+            normalizedInput === "павлін"
+            && isPrivilegedPavlinActor(source, chatterLogin)
+        );
+        if (shouldSilentlyIgnorePavlin(source, chatterLogin, normalizedInput)) {
+            if (!isTwitchSource && guessInput) {
+                guessInput.value = "";
+                guessInput.focus();
+            }
+            return false;
+        }
+        let word = normalizedInput;
+        let lookupWord = normalizedInput;
+        if (shouldProxyPavlin) {
+            // Keep UI text as "павлін", but use "павич" ranking under the hood.
+            lookupWord = "павич";
+        }
 
         hideInitialInfoBlocks();
         await fetchAllowedWords();
 
-        const resolvedGuess = await resolveGuessWord(word);
-        word = resolvedGuess.resolvedWord;
+        const resolvedGuess = await resolveGuessWord(lookupWord);
+        lookupWord = resolvedGuess.resolvedWord;
         if (!word) return false;
+        if (!lookupWord) return false;
+
+        if (shouldProxyPavlin) {
+            word = "павлін";
+            lookupWord = "павич";
+        } else {
+            word = lookupWord;
+        }
 
         if (!isTwitchSource && resolvedGuess.wasChanged && guessInput) {
             guessInput.value = word;
         }
 
-        if (getCombinedEntries().some(entry => entry.word === word)) {
+        if (hasGuessedLookupWord(lookupWord) || getCombinedEntries().some(entry => entry.word === word)) {
             if (isTwitchSource) {
                 setTwitchChatLastEvent(`Пропущено дубль: ${formatTwitchChatterLabel(chatterName, chatterLogin)} -> ${word}`);
             } else if (lastGuessDisplay && lastGuessWrapper) {
@@ -2166,7 +2220,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             return false;
         }
 
-        if (allowedWordsLoaded && !allowedWords.has(word)) {
+        if (allowedWordsLoaded && !allowedWords.has(word) && !shouldProxyPavlin) {
             if (isTwitchSource) {
                 setTwitchChatLastEvent(`Пропущено невідоме слово: ${formatTwitchChatterLabel(chatterName, chatterLogin)} -> ${word}`);
             } else if (lastGuessDisplay && lastGuessWrapper) {
@@ -2182,7 +2236,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             return false;
         }
 
-        const match = getRankedWordEntry(word);
+        const match = getRankedWordEntry(lookupWord);
         const data = match
             ? { rank: match.rank, similarity: match.similarity }
             : { rank: Infinity, error: true, errorMessage: "Цього слова немає у рейтингу цього дня." };
@@ -2192,6 +2246,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         lastWord = word;
         gameState.guesses.push(createGameEntry({
             word,
+            lookupWord,
             rank: data.rank,
             similarity: data.similarity,
             error: data.error || false,

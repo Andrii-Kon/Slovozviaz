@@ -173,6 +173,11 @@ CUSTOM_GAME_TOKEN_SECRET = (
     or os.getenv("SECRET_KEY")
     or "slovozviaz-custom-game-v1"
 ).encode("utf-8")
+LIVE_VECTOR_WORD_FALLBACKS: Dict[str, str] = {
+    # Some accepted dictionary words may be absent in current embeddings.
+    # Use a semantically close substitute to keep custom game creation working.
+    "павлін": "павич",
+}
 TWITCH_CHAT_BRIDGE_SECRET = (os.getenv("TWITCH_CHAT_BRIDGE_SECRET") or "").strip()
 TWITCH_CLIENT_ID = (os.getenv("TWITCH_CLIENT_ID") or "").strip()
 TWITCH_CLIENT_SECRET = (os.getenv("TWITCH_CLIENT_SECRET") or "").strip()
@@ -1343,7 +1348,17 @@ def _load_live_vectors_if_needed() -> Tuple[List[str], Dict[str, int], np.ndarra
 
 def _build_live_ranking(target_word: str) -> List[Dict[str, Any]]:
     words, word_to_index, matrix, norms = _load_live_vectors_if_needed()
-    target_idx = word_to_index.get(target_word)
+    vector_word = target_word
+    target_idx = word_to_index.get(vector_word)
+    if target_idx is None:
+        fallback_word = _normalize_word(LIVE_VECTOR_WORD_FALLBACKS.get(target_word, ""))
+        if fallback_word:
+            fallback_idx = word_to_index.get(fallback_word)
+            if fallback_idx is not None:
+                vector_word = fallback_word
+                target_idx = fallback_idx
+                print(f"[LIVE] Fallback vector for '{target_word}' -> '{vector_word}'")
+
     if target_idx is None:
         raise ValueError(f"Слово '{target_word}' відсутнє у live-векторах.")
 
@@ -1354,14 +1369,31 @@ def _build_live_ranking(target_word: str) -> List[Dict[str, Any]]:
     similarities = (matrix @ target_vector) / (norms * target_norm)
     order = np.argsort(similarities)[::-1]
 
-    return [
+    ranking = [
         {
-            "word": words[idx],
+            "word": (
+                target_word
+                if idx == target_idx and target_word != vector_word
+                else words[idx]
+            ),
             "similarity": float(similarities[idx]),
             "rank": rank,
         }
         for rank, idx in enumerate(order, start=1)
     ]
+    if target_word == "павлін":
+        # Product exception: keep "павлін" as secret word (#1), and force
+        # "павич" to be the closest guess on #2 with 99.9 similarity.
+        ranking = [entry for entry in ranking if entry.get("word") != "павич"]
+        if ranking:
+            ranking[0]["word"] = "павлін"
+            ranking[0]["rank"] = 1
+        for idx in range(1, len(ranking)):
+            ranking[idx]["rank"] = idx + 1
+        ranking.insert(1, {"word": "павич", "similarity": 0.999, "rank": 2})
+        for idx in range(2, len(ranking)):
+            ranking[idx]["rank"] = idx + 1
+    return ranking
 
 
 def _get_live_ranking_cached(target_word: str) -> List[Dict[str, Any]]:
