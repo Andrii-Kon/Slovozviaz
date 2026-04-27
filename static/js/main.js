@@ -7,8 +7,8 @@ import {
     disconnectTwitchConnection,
     registerTwitchChatTarget,
     fetchTwitchChatEvents
-} from "./api.js?v=20260426-13";
-import { renderGuesses, createGuessItem } from "./ui.js?v=20260426-13";
+} from "./api.js?v=20260427-1";
+import { renderGuesses, createGuessItem } from "./ui.js?v=20260427-1";
 
 const weekdayFmt = new Intl.DateTimeFormat('uk-UA', { weekday: 'short' });
 const monthFmt = new Intl.DateTimeFormat('uk-UA', { month: 'short' });
@@ -1721,6 +1721,11 @@ document.addEventListener("DOMContentLoaded", async () => {
             className: "twitchWinnerBadge--baby",
             label: "Малюк",
             svg: `<img src="/static/images/badges/artem_sernikov.png" alt="" class="twitchWinnerBadgeImage" loading="lazy" decoding="async">`
+        },
+        "fedoriv_jr": {
+            className: "twitchWinnerBadge--eagle",
+            label: "Орел",
+            svg: `<img src="/static/images/badges/fedoriv_jr.png" alt="" class="twitchWinnerBadgeImage" loading="lazy" decoding="async">`
         },
         "loftrindr": {
             className: "twitchWinnerBadge--rune",

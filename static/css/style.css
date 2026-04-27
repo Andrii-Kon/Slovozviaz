@@ -586,7 +586,8 @@ h1 {
 }
 
 .twitchWinnerBadge--smiley,
-.twitchWinnerBadge--baby {
+.twitchWinnerBadge--baby,
+.twitchWinnerBadge--eagle {
     width: 1.9em;
     height: 1.9em;
 }
@@ -2392,6 +2393,50 @@ h1 {
         max-width: 47.22vw;
     }
 
+    /* «Попередні ігри»: ширше за загальну модалку — довгі дати/статуси, на QHD не виглядає «пощупати» */
+    #previousGamesModal .previousGamesContent {
+        max-width: min(42vw, 920px);
+        max-height: min(90vh, 920px);
+        padding: clamp(18px, 1.15vw, 28px) clamp(18px, 1.2vw, 28px) clamp(16px, 1vw, 24px);
+    }
+
+    #previousGamesModal .previousGamesHeader {
+        padding: 0 clamp(20px, 2.2vw, 52px) 0;
+    }
+
+    #previousGamesModal .previousGamesHeader h2 {
+        font-size: clamp(1.15rem, 1.05rem + 0.35vw, 1.45rem);
+        margin-bottom: clamp(12px, 1vw, 18px);
+    }
+
+    #previousGamesModal #randomGameBtn {
+        min-width: clamp(156px, 10vw, 200px);
+        min-height: clamp(40px, 2.6vw, 48px);
+        padding: clamp(8px, 0.55vw, 12px) clamp(14px, 1vw, 20px);
+        font-size: clamp(0.98rem, 0.92rem + 0.2vw, 1.08rem);
+    }
+
+    #previousGamesModal .randomGameIcon {
+        width: clamp(18px, 1.15vw, 22px);
+        height: clamp(18px, 1.15vw, 22px);
+    }
+
+    #previousGamesList button {
+        min-height: clamp(44px, 2.6vw, 54px);
+        padding: clamp(8px, 0.55vw, 12px) clamp(12px, 0.95vw, 18px);
+        font-size: clamp(0.98rem, 0.92rem + 0.22vw, 1.1rem);
+        gap: clamp(10px, 0.9vw, 16px);
+        border-radius: clamp(8px, 0.45vw, 11px);
+    }
+
+    #previousGamesList .archive-number {
+        min-width: clamp(3.8em, 4.2em, 4.6em);
+    }
+
+    #previousGamesList .archive-right {
+        font-size: clamp(0.82rem, 0.78rem + 0.15vw, 0.95rem);
+    }
+
     .create-game-shell {
         max-width: min(760px, 45vw);
         padding: 1.18vw 1.04vw 2.22vw;
@@ -2652,6 +2697,14 @@ h1 {
     .twitchLeaderboardSidebar .twitchWinnerCount,
     .twitchLeaderboardSidebar .twitchWinnerName {
         font-size: 0.98vw;
+    }
+}
+
+/* Дуже широкі монітори (2560+): ще один крок ширини */
+@media (min-width: 2200px) {
+    #previousGamesModal .previousGamesContent {
+        max-width: min(48vw, 1080px);
+        max-height: min(90vh, 960px);
     }
 }
 
