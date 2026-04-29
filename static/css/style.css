@@ -1850,9 +1850,10 @@ h1 {
 /* Уніфікуємо зовнішній вигляд елементів у модалці "Найближчі слова" */
 /* (спеціальних перевизначень не потрібно) */
 
-/* Модалка "Попередні ігри" */
+/* Модалка "Попередні ігри" — ширина збігається з .container (max-width: 530px) */
 #previousGamesModal .previousGamesContent {
-    max-width: 500px;
+    width: 100%;
+    max-width: 530px;
     max-height: min(86vh, 740px);
     padding: 18px 18px 16px;
     overflow: hidden;
@@ -2402,9 +2403,9 @@ h1 {
         max-width: 47.22vw;
     }
 
-    /* «Попередні ігри»: ширше за загальну модалку — довгі дати/статуси, на QHD не виглядає «пощупати» */
+    /* «Попередні ігри»: збігається з шириною основного контейнера гри (.container = 35.8vw) */
     #previousGamesModal .previousGamesContent {
-        max-width: min(42vw, 920px);
+        max-width: 35.8vw;
         max-height: min(90vh, 920px);
         padding: clamp(18px, 1.15vw, 28px) clamp(18px, 1.2vw, 28px) clamp(16px, 1vw, 24px);
     }
@@ -2709,10 +2710,9 @@ h1 {
     }
 }
 
-/* Дуже широкі монітори (2560+): ще один крок ширини */
+/* Дуже широкі монітори (2560+): ще один крок висоти; ширина успадковується від 35.8vw */
 @media (min-width: 2200px) {
     #previousGamesModal .previousGamesContent {
-        max-width: min(48vw, 1080px);
         max-height: min(90vh, 960px);
     }
 }
