@@ -73,6 +73,17 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
     }
 
+    copyBtn.textContent = "Копіювати посилання";
+    const resultSubtitle = resultSection.querySelector(".create-game-result-subtitle");
+    if (resultSubtitle) {
+        resultSubtitle.textContent = "Можна одразу почати гру або скопіювати посилання для друзів.";
+    }
+    const tableHeaders = document.querySelectorAll(".create-game-table thead th");
+    if (tableHeaders.length >= 3) {
+        tableHeaders[0].textContent = "Ранг";
+        tableHeaders[2].textContent = "Схожість";
+    }
+
     const showError = (message) => {
         errorEl.textContent = message;
         errorEl.classList.remove("hidden");
@@ -99,16 +110,16 @@ document.addEventListener("DOMContentLoaded", () => {
         hideCopyStatus();
         const url = linkInput.value.trim();
         if (!url) {
-            showCopyStatus("Немає лінка для копіювання.", true);
+            showCopyStatus("Немає посилання для копіювання.", true);
             return;
         }
 
         try {
             const ok = await copyToClipboard(url);
-            showCopyStatus(ok ? "Лінк скопійовано." : "Не вдалося скопіювати лінк.", !ok);
+            showCopyStatus(ok ? "Посилання скопійовано." : "Не вдалося скопіювати посилання.", !ok);
         } catch (error) {
             console.error("[create-game] copy failed:", error);
-            showCopyStatus("Не вдалося скопіювати лінк.", true);
+            showCopyStatus("Не вдалося скопіювати посилання.", true);
         }
     });
 

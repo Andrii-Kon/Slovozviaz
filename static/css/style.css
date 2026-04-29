@@ -1521,35 +1521,52 @@ h1 {
    ==================== */
 .create-game-shell {
     width: 100%;
-    max-width: 660px;
+    max-width: 620px;
     margin: 0 auto;
     padding: 18px 15px 42px;
     text-align: left;
 }
 
 .create-game-panel {
-    background-color: #272727;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 12px;
-    padding: 16px;
-    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.12);
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(180deg, rgba(43, 43, 43, 0.98), rgba(37, 37, 37, 0.98));
+    border: 1px solid rgba(143, 192, 255, 0.18);
+    border-radius: 10px;
+    padding: 18px;
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(33, 150, 243, 0.04);
 }
 
 .create-game-back {
-    color: #2196f3;
+    min-height: 34px;
+    padding: 6px 11px;
+    border-radius: 8px;
+    border: 1px solid rgba(143, 192, 255, 0.2);
+    background: linear-gradient(135deg, rgba(33, 150, 243, 0.1), rgba(255, 255, 255, 0.03));
+    color: rgba(225, 241, 255, 0.94);
     text-decoration: none;
-    font-weight: 600;
+    font-weight: 700;
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    margin-bottom: 14px;
-    transition: color 0.2s ease, transform 0.2s ease;
+    margin-bottom: 16px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .create-game-back:hover {
-    text-decoration: underline;
-    color: #64b5f6;
+    border-color: rgba(143, 192, 255, 0.34);
+    background: linear-gradient(135deg, rgba(33, 150, 243, 0.16), rgba(255, 255, 255, 0.045));
+    color: #ffffff;
+    text-decoration: none;
     transform: translateX(-1px);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.055), 0 8px 18px rgba(0, 0, 0, 0.12);
+}
+
+.create-game-back:focus-visible {
+    outline: none;
+    border-color: rgba(143, 192, 255, 0.62);
+    box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.16);
 }
 
 .create-game-title {
@@ -1557,7 +1574,8 @@ h1 {
     text-align: center;
     font-size: 1.4em;
     letter-spacing: -0.02em;
-    text-shadow: 0 2px 18px rgba(33, 150, 243, 0.12);
+    color: #769dcc;
+    text-shadow: 0 2px 18px rgba(118, 157, 204, 0.18);
 }
 
 .create-game-subtitle {
@@ -1602,9 +1620,9 @@ h1 {
 
 .create-game-input {
     min-height: 44px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 5px;
-    background-color: #2a2a2a;
+    border: 1px solid rgba(143, 192, 255, 0.18);
+    border-radius: 8px;
+    background-color: rgba(42, 42, 42, 0.96);
     color: #fff;
     font-size: 1em;
     padding: 10px 12px;
@@ -1625,14 +1643,21 @@ h1 {
 
 .create-game-submit {
     width: fit-content;
-    min-width: 170px;
+    min-width: 176px;
+    gap: 8px;
+    min-height: 42px;
+    padding: 9px 16px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, rgba(33, 150, 243, 0.18), rgba(255, 255, 255, 0.05));
+    border: 1px solid rgba(143, 192, 255, 0.26);
+    color: rgba(234, 244, 255, 0.98);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 8px 20px rgba(0, 0, 0, 0.16);
 }
 
-.create-game-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    align-items: center;
+.create-game-submit:hover {
+    background: linear-gradient(135deg, rgba(33, 150, 243, 0.26), rgba(255, 255, 255, 0.065));
+    border-color: rgba(143, 192, 255, 0.4);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 10px 22px rgba(0, 0, 0, 0.18);
 }
 
 .create-game-error {
@@ -1642,25 +1667,34 @@ h1 {
 }
 
 .create-game-result {
+    position: relative;
+    overflow: hidden;
     margin-top: 24px;
-    padding: 16px;
-    background-color: #272727;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 18px;
+    background: linear-gradient(180deg, rgba(43, 43, 43, 0.98), rgba(37, 37, 37, 0.98));
+    border: 1px solid rgba(143, 192, 255, 0.16);
     border-radius: 10px;
-    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.12);
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(33, 150, 243, 0.035);
     text-align: left;
 }
 
 .create-game-result-title {
     margin: 0 0 6px 0;
     font-size: 1.2em;
-    color: #2196f3;
+    color: #769dcc;
 }
 
 .create-game-result-subtitle {
-    margin: 0 0 12px 0;
+    margin: 0 0 14px 0;
     color: rgba(255, 255, 255, 0.84);
     font-size: 0.94em;
+}
+
+.create-game-result-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 12px;
 }
 
 .create-game-link-row {
@@ -1671,10 +1705,10 @@ h1 {
 }
 
 .create-game-link-input {
-    flex: 1 1 200px;
+    flex: 1 1 100%;
     min-width: 0;
     min-height: 44px;
-    border-radius: 5px;
+    border-radius: 8px;
     border: 1px solid rgba(255, 255, 255, 0.12);
     background-color: #2a2a2a;
     color: #f5f5f5;
@@ -1691,13 +1725,41 @@ h1 {
         flex: 0 0 auto;
         width: 100%;
     }
-    .create-game-copy-btn {
-        width: 100%;
+    .create-game-result-actions {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+    }
+    .create-game-copy-btn,
+    .create-game-open-link {
+        min-height: 38px;
+        padding: 7px 6px;
+        font-size: clamp(0.78rem, 3.35vw, 0.9rem);
     }
 }
 
-.create-game-copy-btn {
+.create-game-copy-btn,
+.create-game-open-link {
+    width: 100%;
+    min-width: 0;
+    min-height: 42px;
+    padding: 9px 16px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, rgba(33, 150, 243, 0.16), rgba(255, 255, 255, 0.045));
+    border: 1px solid rgba(143, 192, 255, 0.24);
+    color: rgba(234, 244, 255, 0.96);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045), 0 8px 20px rgba(0, 0, 0, 0.16);
     white-space: nowrap;
+    text-decoration: none;
+    font-weight: 800;
+}
+
+.create-game-copy-btn:hover,
+.create-game-open-link:hover {
+    background: linear-gradient(135deg, rgba(33, 150, 243, 0.24), rgba(255, 255, 255, 0.06));
+    border-color: rgba(143, 192, 255, 0.38);
+    color: #ffffff;
+    text-decoration: none;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.055), 0 10px 22px rgba(0, 0, 0, 0.18);
 }
 
 .create-game-copy-status {
@@ -1708,20 +1770,6 @@ h1 {
 
 .create-game-copy-status-error {
     color: #ffb4b4;
-}
-
-.create-game-open-link {
-    display: inline-block;
-    margin-top: 8px;
-    color: #64b5f6;
-    text-decoration: none;
-    font-weight: 600;
-    transition: color 0.2s ease, text-decoration 0.2s ease;
-}
-
-.create-game-open-link:hover {
-    color: #90caf9;
-    text-decoration: underline;
 }
 
 .dev-archive-logout,
@@ -1771,7 +1819,8 @@ h1 {
 
 .create-game-table-wrap {
     max-height: 520px;
-    overflow: auto;
+    overflow-y: auto;
+    overflow-x: hidden;
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 8px;
     background-color: #232323;
@@ -1783,7 +1832,6 @@ h1 {
 
 .create-game-table-wrap::-webkit-scrollbar {
     width: 8px;
-    height: 8px;
 }
 
 .create-game-table-wrap::-webkit-scrollbar-track {
@@ -1804,6 +1852,7 @@ h1 {
 
 .create-game-table {
     width: 100%;
+    table-layout: fixed;
     border-collapse: collapse;
 }
 
@@ -1845,6 +1894,22 @@ h1 {
 
 .create-game-table tbody tr:nth-child(odd) {
     background-color: #222222;
+}
+
+.create-game-table th:first-child,
+.create-game-table td:first-child {
+    width: 24%;
+}
+
+.create-game-table th:nth-child(2),
+.create-game-table td:nth-child(2) {
+    width: 46%;
+}
+
+.create-game-table th:last-child,
+.create-game-table td:last-child {
+    width: 30%;
+    text-align: right;
 }
 
 /* Уніфікуємо зовнішній вигляд елементів у модалці "Найближчі слова" */
@@ -2448,7 +2513,7 @@ h1 {
     }
 
     .create-game-shell {
-        max-width: min(760px, 45vw);
+        max-width: min(620px, 43vw);
         padding: 1.18vw 1.04vw 2.22vw;
     }
 
@@ -2496,11 +2561,12 @@ h1 {
     }
 
     .create-game-submit,
-    .create-game-copy-btn {
+    .create-game-copy-btn,
+    .create-game-open-link {
         min-width: 12.5vw;
     }
 
-    .create-game-actions {
+    .create-game-result-actions {
         gap: 0.69vw;
     }
 
@@ -2768,15 +2834,46 @@ h1 {
     .create-game-link-row {
         flex-direction: column;
     }
-    .create-game-actions {
-        flex-direction: column;
-        align-items: stretch;
+    .create-game-result-actions {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
     }
     .create-game-submit {
         width: 100%;
     }
     .create-game-copy-btn {
         width: 100%;
+        min-height: 38px;
+        padding: 7px 6px;
+        font-size: clamp(0.78rem, 3.35vw, 0.9rem);
+    }
+    .create-game-open-link {
+        width: 100%;
+        min-height: 38px;
+        padding: 7px 6px;
+        font-size: clamp(0.78rem, 3.35vw, 0.9rem);
+    }
+    .create-game-table-wrap {
+        overflow-x: hidden;
+        scrollbar-gutter: auto;
+    }
+    .create-game-table thead th,
+    .create-game-table tbody td {
+        padding: 8px 7px;
+        font-size: 0.86rem;
+        letter-spacing: 0;
+    }
+    .create-game-table th:first-child,
+    .create-game-table td:first-child {
+        width: 21%;
+    }
+    .create-game-table th:nth-child(2),
+    .create-game-table td:nth-child(2) {
+        width: 45%;
+    }
+    .create-game-table th:last-child,
+    .create-game-table td:last-child {
+        width: 34%;
     }
     .dev-archive-logout,
     .dev-archive-save {

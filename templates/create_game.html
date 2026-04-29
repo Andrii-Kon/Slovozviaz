@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Створити гру — Словозв'яз</title>
     <meta name="theme-color" content="#1f1f1f">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260426-15') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260429-10') }}">
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/favicon.png') }}">
 </head>
 <body>
@@ -35,23 +35,26 @@
 
     <section id="createGameResult" class="create-game-result hidden">
         <h2 class="create-game-result-title">Гру створено!</h2>
-        <p class="create-game-result-subtitle">Скопіюйте лінк і надішліть друзям:</p>
+        <p class="create-game-result-subtitle">Можна одразу почати гру або скопіювати посилання для друзів.</p>
+
+        <div class="create-game-result-actions">
+            <a id="openCreatedGameLink" class="btn-wide create-game-open-link" href="#" target="_blank" rel="noopener noreferrer">Грати у створену гру</a>
+            <button type="button" id="copyGameLinkBtn" class="btn-wide create-game-copy-btn">Копіювати посилання</button>
+        </div>
 
         <div class="create-game-link-row">
             <input type="text" id="createGameLinkInput" class="create-game-link-input" readonly>
-            <button type="button" id="copyGameLinkBtn" class="btn-wide create-game-copy-btn">Скопіювати лінк</button>
         </div>
         <p id="copyGameLinkStatus" class="create-game-copy-status hidden"></p>
-        <a id="openCreatedGameLink" class="create-game-open-link" href="#" target="_blank" rel="noopener noreferrer">Відкрити створену гру</a>
 
         <h3 class="create-game-table-title">Перші 500 слів рейтингу</h3>
         <div class="create-game-table-wrap">
             <table class="create-game-table">
                 <thead>
                     <tr>
-                        <th>Прокс.</th>
+                        <th>Ранг</th>
                         <th>Слово</th>
-                        <th>Similarity</th>
+                        <th>Схожість</th>
                     </tr>
                 </thead>
                 <tbody id="createGameTopWordsBody"></tbody>
@@ -60,6 +63,6 @@
     </section>
 </div>
 
-<script type="module" src="{{ url_for('static', filename='js/create_game.js', v='20260425-25') }}"></script>
+<script type="module" src="{{ url_for('static', filename='js/create_game.js', v='20260429-2') }}"></script>
 </body>
 </html>
