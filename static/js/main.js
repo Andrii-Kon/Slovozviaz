@@ -1756,6 +1756,11 @@ document.addEventListener("DOMContentLoaded", async () => {
             label: "Павлін",
             svg: `<img src="/static/images/badges/pavll1n.png" alt="" class="twitchWinnerBadgeImage" loading="lazy" decoding="async">`
         },
+        "janetty_y": {
+            className: "twitchWinnerBadge--janetty_y",
+            label: "Janetty_y",
+            svg: `<img src="/static/images/badges/janetty_y.png" alt="" class="twitchWinnerBadgeImage" loading="lazy" decoding="async">`
+        },
         "loftrindr": {
             className: "twitchWinnerBadge--rune",
             label: "Руна Кано",
@@ -2020,7 +2025,19 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (twitchHeaderControls) twitchHeaderControls.classList.remove("hidden");
             if (twitchInlineControls) twitchInlineControls.classList.remove("hidden");
             if (twitchChatToggleRow) twitchChatToggleRow.classList.remove("hidden");
-            if (twitchInlineStreamer) twitchInlineStreamer.textContent = connection.twitch_login;
+            if (twitchInlineStreamer) {
+                twitchInlineStreamer.textContent = "";
+                const streamerBadge = getTwitchWinnerBadgeConfig({ user_login: connection.twitch_login });
+                if (streamerBadge) {
+                    const badge = document.createElement("span");
+                    badge.className = `twitchInlineStreamerBadge twitchWinnerBadge ${streamerBadge.className}`;
+                    badge.innerHTML = streamerBadge.svg;
+                    badge.setAttribute("aria-label", streamerBadge.label);
+                    badge.setAttribute("title", streamerBadge.label);
+                    twitchInlineStreamer.appendChild(badge);
+                }
+                twitchInlineStreamer.appendChild(document.createTextNode(connection.twitch_login));
+            }
             if (twitchChatToggle) {
                 twitchChatToggle.checked = activeForConnectedChannel;
                 twitchChatToggle.disabled = false;

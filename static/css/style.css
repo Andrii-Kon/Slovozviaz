@@ -222,6 +222,11 @@ h1 {
     align-self: center;
     line-height: 1;
     margin-top: -1px;
+    gap: 0.35em;
+}
+
+.twitchInlineStreamerBadge {
+    font-size: 1em;
 }
 
 .twitchInlineControls.connected .twitchInlineStreamer {
@@ -587,7 +592,8 @@ h1 {
 
 .twitchWinnerBadge--smiley,
 .twitchWinnerBadge--baby,
-.twitchWinnerBadge--eagle {
+.twitchWinnerBadge--eagle,
+.twitchWinnerBadge--janetty_y {
     width: 1.9em;
     height: 1.9em;
 }
