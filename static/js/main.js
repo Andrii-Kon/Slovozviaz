@@ -1836,6 +1836,11 @@ document.addEventListener("DOMContentLoaded", async () => {
             label: "Otolich",
             svg: `<img src="/static/images/badges/otolich.png" alt="" class="twitchWinnerBadgeImage" loading="lazy" decoding="async">`
         },
+        "h1bikii": {
+            className: "twitchWinnerBadge--h1bikii",
+            label: "H1bikii",
+            svg: `<img src="/static/images/badges/h1bikii.png" alt="" class="twitchWinnerBadgeImage" loading="lazy" decoding="async">`
+        },
         "loftrindr": {
             className: "twitchWinnerBadge--rune",
             label: "Руна Кано",
