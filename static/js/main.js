@@ -1836,6 +1836,16 @@ document.addEventListener("DOMContentLoaded", async () => {
             label: "Otolich",
             svg: `<img src="/static/images/badges/otolich.png" alt="" class="twitchWinnerBadgeImage" loading="lazy" decoding="async">`
         },
+        "did_mykhailo_69": {
+            className: "twitchWinnerBadge--did_mykhailo_69",
+            label: "Did_Mykhailo_69",
+            svg: `<img src="/static/images/badges/did_mykhailo_69.png" alt="" class="twitchWinnerBadgeImage" loading="lazy" decoding="async">`
+        },
+        "jeynonch": {
+            className: "twitchWinnerBadge--jeynonch",
+            label: "Jeynonch",
+            svg: `<img src="/static/images/badges/jeynonch.png" alt="" class="twitchWinnerBadgeImage" loading="lazy" decoding="async">`
+        },
         "h1bikii": {
             className: "twitchWinnerBadge--h1bikii",
             label: "H1bikii",
