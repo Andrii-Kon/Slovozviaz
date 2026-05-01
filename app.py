@@ -1561,6 +1561,8 @@ LEGACY_NOTICE_HOSTS = {
     "www.andriikon.pythonanywhere.com",
 }
 
+LEGACY_REDIRECT_BASE_URL = os.getenv("LEGACY_REDIRECT_BASE_URL", "https://slovozviaz.com").rstrip("/")
+
 LEGACY_NOTICE_BYPASS_PREFIXES = (
     "/static/",
     "/.well-known/",
@@ -1584,9 +1586,10 @@ def _legacy_host_notice():
         return None
     if any(path.startswith(prefix) for prefix in LEGACY_NOTICE_BYPASS_PREFIXES):
         return None
-    response = Response(render_template("legacy_notice.html"), status=200)
-    response.headers["Cache-Control"] = "no-store"
-    return response
+    target = f"{LEGACY_REDIRECT_BASE_URL}{path}"
+    if request.query_string:
+        target = f"{target}?{request.query_string.decode('utf-8', 'ignore')}"
+    return redirect(target, code=301)
 
 
 # ── Маршрути ───────────────────────────────────────────────────────────────────
