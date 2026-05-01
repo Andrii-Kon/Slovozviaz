@@ -36,6 +36,8 @@ app.config["SECRET_KEY"] = (
     or "slovozviaz-dev-secret"
 )
 
+ADSENSE_PUBLISHER_ID = "pub-9092678831575255"
+
 KYIV_TZ = ZoneInfo("Europe/Kyiv")
 
 
@@ -2390,6 +2392,13 @@ def assetlinks():
 def robots_txt():
     sitemap_url = request.url_root.rstrip('/') + '/sitemap.xml'
     return Response(f"User-agent: *\nAllow: /\n\nSitemap: {sitemap_url}", mimetype='text/plain')
+
+@app.route("/ads.txt")
+def ads_txt():
+    return Response(
+        f"google.com, {ADSENSE_PUBLISHER_ID}, DIRECT, f08c47fec0942fa0\n",
+        mimetype="text/plain",
+    )
 
 @app.route("/sitemap.xml")
 def sitemap_xml():
