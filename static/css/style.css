@@ -611,6 +611,7 @@ h1 {
 .twitchWinnerBadge--otolich,
 .twitchWinnerBadge--h1bikii,
 .twitchWinnerBadge--did_mykhailo_69,
+.twitchWinnerBadge--espero_n,
 .twitchWinnerBadge--nad1ch,
 .twitchWinnerBadge--jeynonch {
     width: 1.9em;
@@ -1115,8 +1116,8 @@ h1 {
     background-color: #3a3a3a;
     border-radius: 8px;
     padding: 8px;
-    min-width: 200px;
-    max-width: min(280px, calc(100vw - 24px));
+    min-width: 220px;
+    max-width: min(300px, calc(100vw - 24px));
     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
     border: 1px solid rgba(255, 255, 255, 0.08);
     z-index: 1000;
@@ -1180,6 +1181,11 @@ h1 {
 .menuIconCreate {
     color: #9fe27b !important;
 }
+
+.menuIconSupport {
+    color: #7ad7ff !important;
+}
+
 .dropdown-menu .menu-item:hover {
     background-color: #4a4a4a !important;
     color: #fff !important;
@@ -1191,6 +1197,7 @@ h1 {
 .dropdown-menu button#previousGamesBtn,
 .dropdown-menu button#giveUpBtn,
 .dropdown-menu button#createGameBtn,
+.dropdown-menu button#supportProjectBtn,
 .dropdown-menu #twitchConnectButton,
 .dropdown-menu #twitchDisconnectButton,
 .dropdown-menu button#authorshipBtn {
@@ -2325,6 +2332,117 @@ h1 {
     font-size: 0.9em;
 }
 
+/* Модалка "Підтримка" */
+#supportModal .supportModalContent {
+    max-width: 560px;
+    padding: 22px 24px;
+    max-height: 85vh;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+    scrollbar-color: rgba(255, 255, 255, 0.26) rgba(255, 255, 255, 0.035);
+    scrollbar-width: thin;
+    text-align: left;
+}
+
+#supportModal .supportModalContent::-webkit-scrollbar {
+    width: 8px;
+}
+
+#supportModal .supportModalContent::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.035);
+    border-radius: 999px;
+}
+
+#supportModal .supportModalContent::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.26);
+    border: 2px solid rgba(42, 42, 42, 0.98);
+    border-radius: 999px;
+    background-clip: padding-box;
+}
+
+#supportModal .supportModalContent::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(143, 192, 255, 0.45);
+}
+
+.supportModalClose {
+    appearance: none;
+    background: none;
+    border: none;
+}
+
+.supportContent {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-top: 12px;
+}
+
+.supportContent p {
+    margin: 0;
+    color: rgba(255, 255, 255, 0.84);
+    font-size: 0.98em;
+    line-height: 1.62;
+}
+
+.supportIconOffer {
+    padding: 12px 14px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.035);
+    border: 1px solid rgba(143, 192, 255, 0.14);
+}
+
+.supportIconOffer strong {
+    display: block;
+    margin-bottom: 6px;
+    color: rgba(255, 255, 255, 0.94);
+}
+
+.supportIconOffer p + p {
+    margin-top: 8px;
+}
+
+.supportIconOffer a {
+    color: #8fc0ff;
+    text-decoration: none;
+}
+
+.supportIconOffer a:hover,
+.supportIconOffer a:focus {
+    color: #b8d8ff;
+    text-decoration: underline;
+}
+
+.supportIconExample {
+    margin: 12px 0 0;
+}
+
+.supportIconExample img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 211, 122, 0.18);
+    box-shadow: 0 14px 30px rgba(0, 0, 0, 0.24);
+}
+
+.supportIconExample figcaption {
+    margin-top: 8px;
+    color: rgba(255, 255, 255, 0.64);
+    font-size: 0.88em;
+    line-height: 1.45;
+}
+
+.supportPrimaryLink {
+    width: fit-content;
+    min-width: 190px;
+    text-decoration: none;
+}
+
+.supportPrimaryLink:hover,
+.supportPrimaryLink:focus {
+    text-decoration: none;
+}
+
 /* ====================
    Медіа-запити
    ==================== */
@@ -2463,9 +2581,9 @@ h1 {
     }
 
     .dropdown-menu {
-        min-width: 13.89vw;
+        min-width: 15.28vw;
         padding: 0.56vw;
-        max-width: min(19.44vw, calc(100vw - 1.67vw));
+        max-width: min(20.83vw, calc(100vw - 1.67vw));
     }
 
     .dropdown-menu .menu-item {
@@ -2533,7 +2651,8 @@ h1 {
     .howToPlayBlock p,
     .congratsBlock p,
     #closestWordsList,
-    #authorshipContent {
+    #authorshipContent,
+    .supportContent p {
         font-size: 1.06vw;
     }
 
@@ -2565,6 +2684,21 @@ h1 {
     #settingsModal .modal-content {
         max-width: 47.22vw;
         padding: 1.39vw;
+    }
+
+    #supportModal .supportModalContent {
+        max-width: 38.89vw;
+        padding: 1.53vw 1.67vw;
+    }
+
+    .supportContent {
+        gap: 0.97vw;
+        margin-top: 0.83vw;
+    }
+
+    .supportIconOffer {
+        padding: 0.83vw 0.97vw;
+        border-radius: 0.56vw;
     }
 
     .settings-section {

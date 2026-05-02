@@ -33,7 +33,7 @@
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
 
     <!-- Основні стилі -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260501-9') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260502-3') }}">
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/favicon.png') }}">
 </head>
 <body>
@@ -132,6 +132,14 @@
                         </svg>
                     </span>
                     Створити гру
+                </button>
+                <button class="menu-item" id="supportProjectBtn" type="button">
+                    <span class="menu-icon menuIconSupport" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" role="img" focusable="false">
+                            <path fill="currentColor" d="M12 21.1 10.55 19.8C5.4 15.15 2 12.1 2 8.35A5.35 5.35 0 0 1 7.4 3c1.76 0 3.45.82 4.6 2.1A6.15 6.15 0 0 1 16.6 3 5.35 5.35 0 0 1 22 8.35c0 3.75-3.4 6.8-8.55 11.45L12 21.1Zm0-3.05.18-.16C16.94 13.6 20 10.84 20 8.35A3.35 3.35 0 0 0 16.6 5c-1.36 0-2.68.88-3.14 2.1h-2.92C10.08 5.88 8.76 5 7.4 5A3.35 3.35 0 0 0 4 8.35c0 2.49 3.06 5.25 7.82 9.54l.18.16Z"/>
+                        </svg>
+                    </span>
+                    Підтримати проєкт
                 </button>
                 <a class="menu-item hidden" id="twitchConnectButton" href="/auth/twitch/start">
                     <span class="menu-icon twitchMenuIcon" aria-hidden="true">
@@ -386,7 +394,40 @@
     </div>
 </div>
 
+<!-- Модалка: підтримка проєкту -->
+<div id="supportModal" class="modal hidden">
+    <div class="modal-content supportModalContent">
+        <button id="closeSupportModal" class="close supportModalClose" type="button" aria-label="Закрити">×</button>
+        <h2>Підтримати проєкт</h2>
+        <div class="supportContent">
+            <p>
+                Словозв’яз безкоштовний. Якщо хочете підтримати сервер, розвиток гри та нові маленькі фічі, можна зробити добровільний донат через Monobank.
+            </p>
+            <div class="supportIconOffer">
+                <strong>Персональна Twitch-іконка</strong>
+                <p>
+                    За донат від 50 грн також можу додати персональну іконку до ніку, вкажіть у коментарі свій Twitch nickname і коротко опишіть, яку іконку хочете.
+                </p>
+                <p>
+                    Якщо маєте зображення, то можете просто додати посилання на нього. Посилання можна швидко отримати через будь-який сервіс для завантаження файлів, наприклад
+                    <a href="https://kappa.lol/" target="_blank" rel="noopener noreferrer">kappa.lol</a>.
+                </p>
+                <figure class="supportIconExample">
+                    <img
+                        src="{{ url_for('static', filename='images/support/example-added-icon.jpg') }}"
+                        alt="Приклад персональної Twitch-іконки біля ніку в таблиці лідерів"
+                    >
+                    <figcaption>Приклад того, як така іконка виглядає в таблиці лідерів.</figcaption>
+                </figure>
+            </div>
+            <a class="btn-wide supportPrimaryLink" href="https://send.monobank.ua/jar/5Z6Fs4ni16" target="_blank" rel="noopener noreferrer">
+                Відкрити Monobank
+            </a>
+        </div>
+    </div>
+</div>
+
 <!-- Основний скрипт -->
-    <script type="module" src="{{ url_for('static', filename='js/main.js', v='20260427-1') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/main.js', v='20260502-3') }}"></script>
 </body>
 </html>
