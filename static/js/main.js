@@ -1832,10 +1832,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             label: "Did_Mykhailo_69",
             svg: `<img src="/static/images/badges/did_mykhailo_69.png" alt="" class="twitchWinnerBadgeImage" loading="lazy" decoding="async">`
         },
-        "espero_n": {
-            className: "twitchWinnerBadge--espero_n",
-            label: "Espero_n",
-            svg: `<img src="/static/images/badges/espero_n.png" alt="" class="twitchWinnerBadgeImage" loading="lazy" decoding="async">`
+        "antoniovaleros": {
+            className: "twitchWinnerBadge--antoniovaleros",
+            label: "AntonioValeros",
+            svg: `<img src="/static/images/badges/antoniovaleros.png" alt="" class="twitchWinnerBadgeImage" loading="lazy" decoding="async">`
         },
         "nad1ch": {
             className: "twitchWinnerBadge--nad1ch",
