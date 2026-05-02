@@ -1,6 +1,5 @@
-const CACHE_NAME = 'slovozviaz-cache-v22';
+const CACHE_NAME = 'slovozviaz-cache-v23';
 const urlsToCache = [
-    '/',
     '/static/css/style.css',
     '/static/js/main.js',
     '/static/js/create_game.js',

@@ -887,6 +887,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     const pageContainer = document.querySelector(".container");
     const shareButton = document.getElementById("shareButton");
     const createGameBtn = document.getElementById("createGameBtn");
+    const supportProjectBtn = document.getElementById("supportProjectBtn");
+    const supportModal = document.getElementById("supportModal");
+    const closeSupportModal = document.getElementById("closeSupportModal");
     const settingsBtn = document.getElementById("settingsBtn");
     const settingsModal = document.getElementById("settingsModal");
     const closeSettingsModal = document.getElementById("closeSettingsModal");
@@ -1724,18 +1727,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                 </svg>
             `
         },
-        "espero_n": {
-            className: "twitchWinnerBadge--developer",
-            label: "Розробник",
-            svg: `
-                <svg viewBox="0 0 28 20" aria-hidden="true" focusable="false">
-                    <rect class="badgeDevScreen" x="1.35" y="2.25" width="25.3" height="15.5" rx="4"/>
-                    <path class="badgeDevGlyph" d="M10.2 6.65 6.8 10l3.4 3.35M17.8 6.65 21.2 10l-3.4 3.35"/>
-                    <path class="badgeDevSlash" d="M15.25 5.8 12.75 14.2"/>
-                    <path class="badgeDevNoise" d="M4.7 4.8h2.1M21.2 15.2h1.9"/>
-                </svg>
-            `
-        },
         "9imon41kk": {
             className: "twitchWinnerBadge--smiley",
             label: "Смайл",
@@ -1840,6 +1831,11 @@ document.addEventListener("DOMContentLoaded", async () => {
             className: "twitchWinnerBadge--did_mykhailo_69",
             label: "Did_Mykhailo_69",
             svg: `<img src="/static/images/badges/did_mykhailo_69.png" alt="" class="twitchWinnerBadgeImage" loading="lazy" decoding="async">`
+        },
+        "espero_n": {
+            className: "twitchWinnerBadge--espero_n",
+            label: "Espero_n",
+            svg: `<img src="/static/images/badges/espero_n.png" alt="" class="twitchWinnerBadgeImage" loading="lazy" decoding="async">`
         },
         "nad1ch": {
             className: "twitchWinnerBadge--nad1ch",
@@ -2633,6 +2629,25 @@ document.addEventListener("DOMContentLoaded", async () => {
         createGameBtn.addEventListener("click", () => {
             closeDropdownMenu();
             window.location.href = "/create-game";
+        });
+    }
+
+    if (supportProjectBtn) {
+        supportProjectBtn.addEventListener("click", () => {
+            if (supportModal) supportModal.classList.remove("hidden");
+            closeDropdownMenu();
+        });
+    }
+
+    if (closeSupportModal) {
+        closeSupportModal.addEventListener("click", () => {
+            if (supportModal) supportModal.classList.add("hidden");
+        });
+    }
+
+    if (supportModal) {
+        supportModal.addEventListener("click", e => {
+            if (e.target === supportModal) supportModal.classList.add("hidden");
         });
     }
 
