@@ -1747,6 +1747,11 @@ document.addEventListener("DOMContentLoaded", async () => {
             label: "Павлін",
             svg: `<img src="/static/images/badges/pavll1n.png" alt="" class="twitchWinnerBadgeImage" loading="lazy" decoding="async">`
         },
+        "t1zaro": {
+            className: "twitchWinnerBadge--t1zaro",
+            label: "T1zaro",
+            svg: `<img src="/static/images/badges/t1zaro.png" alt="" class="twitchWinnerBadgeImage" loading="lazy" decoding="async">`
+        },
         "janetty_y": {
             className: "twitchWinnerBadge--janetty_y",
             label: "Janetty_y",
@@ -2326,9 +2331,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                 setTwitchChatLastEvent(`Пропущено дубль: ${formatTwitchChatterLabel(chatterName, chatterLogin)} -> ${word}`);
             } else if (lastGuessDisplay && lastGuessWrapper) {
                 const errorMsgElement = document.createElement("div");
+                errorMsgElement.className = "guessFeedbackMessage";
                 errorMsgElement.textContent = `Слово "${word}" вже вгадано`;
                 if (guessInput) guessInput.value = "";
-                errorMsgElement.style.cssText = "color: #ffffff; padding: 0px 12px; text-align: left; font-style: italic;";
                 lastGuessDisplay.innerHTML = "";
                 lastGuessDisplay.appendChild(errorMsgElement);
                 lastGuessWrapper.classList.remove("hidden");
@@ -2343,8 +2348,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                 setTwitchChatLastEvent(`Пропущено невідоме слово: ${formatTwitchChatterLabel(chatterName, chatterLogin)} -> ${word}`);
             } else if (lastGuessDisplay && lastGuessWrapper) {
                 const errorMsgElement = document.createElement("div");
+                errorMsgElement.className = "guessFeedbackMessage";
                 errorMsgElement.textContent = "Вибачте, я не знаю цього слова";
-                errorMsgElement.style.cssText = "color: #ffffff; padding: 0px 12px; text-align: left; font-style: italic;";
                 lastGuessDisplay.innerHTML = "";
                 lastGuessDisplay.appendChild(errorMsgElement);
                 lastGuessWrapper.classList.remove("hidden");

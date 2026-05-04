@@ -593,6 +593,7 @@ h1 {
 .twitchWinnerBadge--smiley,
 .twitchWinnerBadge--baby,
 .twitchWinnerBadge--eagle,
+.twitchWinnerBadge--t1zaro,
 .twitchWinnerBadge--janetty_y,
 .twitchWinnerBadge--hikrop,
 .twitchWinnerBadge--lady_gaga_a,
@@ -1384,6 +1385,16 @@ h1 {
 }
 #lastGuessDisplay {
     margin: 10px 0;
+}
+
+.guessFeedbackMessage {
+    color: rgba(255, 255, 255, 0.92);
+    padding: 2px 12px;
+    text-align: left;
+    font-size: 0.95em;
+    font-style: italic;
+    font-weight: 650;
+    line-height: 1.35;
 }
 
 /* ====================
@@ -2637,6 +2648,11 @@ h1 {
         margin: 0.69vw 0;
     }
 
+    .guessFeedbackMessage {
+        padding: 0.14vw 0.83vw;
+        font-size: 1.02vw;
+    }
+
     .howToPlayBlock,
     .congratsBlock {
         padding: 1.25vw;
@@ -3034,8 +3050,12 @@ h1 {
 
     .twitchLeaderboardSidebar .twitchWinnerPlace,
     .twitchLeaderboardSidebar .twitchWinnerCount,
-    .twitchLeaderboardSidebar .twitchWinnerName {
+    .twitchLeaderboardSidebar .twitchWinnerNameLabel {
         font-size: 0.96em;
+    }
+
+    .twitchLeaderboardSidebar .twitchWinnerName {
+        font-size: 1em;
     }
 }
 
@@ -3101,8 +3121,12 @@ h1 {
 
     .twitchLeaderboardSidebar .twitchWinnerPlace,
     .twitchLeaderboardSidebar .twitchWinnerCount,
-    .twitchLeaderboardSidebar .twitchWinnerName {
+    .twitchLeaderboardSidebar .twitchWinnerNameLabel {
         font-size: 0.98vw;
+    }
+
+    .twitchLeaderboardSidebar .twitchWinnerName {
+        font-size: 1em;
     }
 }
 
