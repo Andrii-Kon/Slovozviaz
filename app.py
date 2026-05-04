@@ -68,7 +68,13 @@ if not db_uri:
 
 app.config["SQLALCHEMY_DATABASE_URI"] = db_uri
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-if db_uri.startswith("mysql"):
+if db_uri.startswith("sqlite"):
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+        "connect_args": {
+            "timeout": _env_int("SQLITE_BUSY_TIMEOUT_SECONDS", 30, minimum=1),
+        },
+    }
+elif db_uri.startswith("mysql"):
     app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
         "pool_pre_ping": True,
         "pool_recycle": int(os.getenv("DB_POOL_RECYCLE_SECONDS", "280"))
@@ -387,8 +393,22 @@ def ensure_twitch_chat_event_schema() -> None:
             for alter_sql in alter_sqls:
                 connection.exec_driver_sql(alter_sql)
 
+
+def configure_sqlite_runtime() -> None:
+    """Use WAL mode on SQLite deployments so reads are not blocked by short writes."""
+    if not db.engine.url.drivername.startswith("sqlite"):
+        return
+
+    try:
+        with db.engine.connect() as connection:
+            connection.exec_driver_sql("PRAGMA journal_mode=WAL")
+            connection.exec_driver_sql("PRAGMA synchronous=NORMAL")
+    except Exception as exc:
+        print(f"[DB INIT] Не вдалося налаштувати SQLite WAL: {exc}")
+
 # ──  Ініціалізація БД при імпорті (працює і для `flask run`)  ──────────────────
 with app.app_context():
+    configure_sqlite_runtime()
     # Гарантуємо наявність усіх таблиць, включно з новими службовими.
     db.create_all()
     ensure_twitch_chat_event_schema()

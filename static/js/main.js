@@ -2524,47 +2524,68 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
-    const todayStr = getCurrentKyivDateString();
-    if (!currentGameDate && !currentCustomGameId) {
-        currentGameDate = requestedDateFromUrl || todayStr;
-        resetRuntimeGameState();
-    }
-    dayNumber = computeGameNumber(todayStr);
-    updateGameDateLabel(); // Показуємо номер гри одразу, без очікування API
+    const guessInputDefaultPlaceholder = guessInput?.getAttribute("placeholder") || "Введіть слово";
 
-    // Великий словник вантажимо у фоні, щоб не блокувати перший рендер.
-    fetchAllowedWords();
-
-    let loadedInitialGame = false;
-    if (customGameIdFromUrl) {
-        loadedInitialGame = await startCustomGameByGameId(customGameIdFromUrl);
-    } else if (legacyCustomWordFromUrl) {
-        loadedInitialGame = await startCustomGameByWord(legacyCustomWordFromUrl);
+    function setGuessInputLoading(isLoading) {
+        if (!guessInput) return;
+        guessInput.disabled = isLoading;
+        guessInput.placeholder = isLoading ? "Завантаження гри..." : guessInputDefaultPlaceholder;
     }
 
-    if (!loadedInitialGame) {
-        try {
-            currentCustomGameId = null;
-            const dateParam = currentGameDate === todayStr ? null : currentGameDate;
-            const response = await fetchRankedWords(dateParam);
-            if (!Array.isArray(response)) throw new Error("Ranked words data is not an array");
-            applyLoadedRanking(response);
-            updateUrlForCurrentGame();
-            console.log(`Loaded ${rankedWords.length} ranked words for ${currentGameDate}. Max rank: ${MAX_RANK}`);
-        } catch (err) {
-            console.error(`[Error] fetchRankedWords failed for ${currentGameDate}:`, err);
-            if (guessInput) guessInput.disabled = true;
-            if (document.getElementById("gameDateLabel")) document.getElementById("gameDateLabel").textContent = "Помилка слів";
+    function warmAllowedWordsWhenIdle() {
+        const loadAllowedWords = () => {
+            fetchAllowedWords();
+        };
+        if ("requestIdleCallback" in window) {
+            window.requestIdleCallback(loadAllowedWords, { timeout: 5000 });
             return;
         }
+        window.setTimeout(loadAllowedWords, 1000);
     }
 
-    loadGameState(); // Це оновить видимість howToPlayBlock та privacyPolicyBlock
-    await loadTwitchConnectionState();
-    await initializeTwitchChatMode();
+    async function loadInitialGame() {
+        const todayStr = getCurrentKyivDateString();
+        if (!currentGameDate && !currentCustomGameId) {
+            currentGameDate = requestedDateFromUrl || todayStr;
+            resetRuntimeGameState();
+        }
+        dayNumber = computeGameNumber(todayStr);
+        updateGameDateLabel(); // Показуємо номер гри одразу, без очікування API
+        setGuessInputLoading(true);
+
+        let loadedInitialGame = false;
+        if (customGameIdFromUrl) {
+            loadedInitialGame = await startCustomGameByGameId(customGameIdFromUrl);
+        } else if (legacyCustomWordFromUrl) {
+            loadedInitialGame = await startCustomGameByWord(legacyCustomWordFromUrl);
+        }
+
+        if (!loadedInitialGame) {
+            try {
+                currentCustomGameId = null;
+                const dateParam = currentGameDate === todayStr ? null : currentGameDate;
+                const response = await fetchRankedWords(dateParam);
+                if (!Array.isArray(response)) throw new Error("Ranked words data is not an array");
+                applyLoadedRanking(response);
+                updateUrlForCurrentGame();
+                console.log(`Loaded ${rankedWords.length} ranked words for ${currentGameDate}. Max rank: ${MAX_RANK}`);
+            } catch (err) {
+                console.error(`[Error] fetchRankedWords failed for ${currentGameDate}:`, err);
+                if (guessInput) guessInput.disabled = true;
+                if (document.getElementById("gameDateLabel")) document.getElementById("gameDateLabel").textContent = "Помилка слів";
+                return;
+            }
+        }
+
+        loadGameState(); // Це оновить видимість howToPlayBlock та privacyPolicyBlock
+        setGuessInputLoading(false);
+        warmAllowedWordsWhenIdle();
+        loadTwitchConnectionState().then(initializeTwitchChatMode);
+    }
 
     async function handleSubmit() {
         if (!guessInput) return;
+        if (rankedWords.length === 0) return;
         await enqueueGuessSubmission(guessInput.value, { source: "manual" });
     }
 
@@ -3066,4 +3087,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         closeAuthorshipModalBtn.addEventListener('click', () => authorshipModal.classList.add('hidden'));
         authorshipModal.addEventListener('click', e => e.target === authorshipModal && authorshipModal.classList.add('hidden'));
     }
+
+    loadInitialGame().catch(err => {
+        console.error("[Error] loadInitialGame failed:", err);
+        setGuessInputLoading(false);
+    });
 });
