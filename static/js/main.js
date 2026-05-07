@@ -2,12 +2,13 @@ import {
     fetchRankedWords,
     fetchRankedWordsByWord,
     fetchRankedWordsByGameId,
+    fetchUnlimitedGame,
     normalizeWordToKnownLemma,
     fetchTwitchConnectionStatus,
     disconnectTwitchConnection,
     registerTwitchChatTarget,
     fetchTwitchChatEvents
-} from "./api.js?v=20260427-1";
+} from "./api.js?v=20260506-1";
 import { renderGuesses, createGuessItem } from "./ui.js?v=20260427-1";
 
 const weekdayFmt = new Intl.DateTimeFormat('uk-UA', { weekday: 'short' });
@@ -38,6 +39,7 @@ let MAX_RANK = 0;
 let dayNumber = null;
 let currentGameDate = null;
 let currentCustomGameId = null;
+let currentGameMode = "daily";
 let didWin = false;
 let didGiveUp = false;
 let giveUpWord = null;
@@ -259,6 +261,10 @@ function getCurrentGameNumber() {
     return computeGameNumber(currentGameDate);
 }
 
+function isUnlimitedMode() {
+    return currentGameMode === "unlimited";
+}
+
 function setCongratsMessage(message) {
     const congratsMessageElem = document.getElementById("congratsMessage");
     if (congratsMessageElem) {
@@ -267,7 +273,11 @@ function setCongratsMessage(message) {
 }
 
 function getCurrentGameStateKey() {
-    if (currentCustomGameId) return `gameState_custom_${currentCustomGameId}`;
+    if (currentCustomGameId) {
+        return isUnlimitedMode()
+            ? `gameState_unlimited_${currentCustomGameId}`
+            : `gameState_custom_${currentCustomGameId}`;
+    }
     if (!currentGameDate) return null;
     return `gameState_${currentGameDate}`;
 }
@@ -399,11 +409,17 @@ function updateUrlForCurrentGame() {
     const url = new URL(window.location.href);
     if (currentCustomGameId) {
         url.searchParams.set("game", currentCustomGameId);
+        if (isUnlimitedMode()) {
+            url.searchParams.set("mode", "unlimited");
+        } else {
+            url.searchParams.delete("mode");
+        }
         url.searchParams.delete("custom");
         url.searchParams.delete("date");
     } else {
         url.searchParams.delete("game");
         url.searchParams.delete("custom");
+        url.searchParams.delete("mode");
         const todayStr = getCurrentKyivDateString();
         if (currentGameDate && currentGameDate !== todayStr) {
             url.searchParams.set("date", currentGameDate);
@@ -419,7 +435,7 @@ function updateGameDateLabel() {
     if (!label) return;
 
     if (currentCustomGameId) {
-        label.textContent = "Кастом гра";
+        label.textContent = isUnlimitedMode() ? "Безлімітна гра" : "Кастом гра";
         return;
     }
 
@@ -766,6 +782,8 @@ function showWinMessageUI() {
         setCongratsMessage(
             gameNum
                 ? `Ви знайшли секретне слово #${gameNum} за ${gameState.guessCount} спроб(и)!`
+                : isUnlimitedMode()
+                    ? `Ви знайшли слово в безлімітній грі за ${gameState.guessCount} спроб(и)!`
                 : `Ви знайшли кастомне слово за ${gameState.guessCount} спроб(и)!`
         );
         congratsBlock.classList.remove("hidden");
@@ -791,6 +809,8 @@ function showLoseMessageUI(secretWord) {
     setCongratsMessage(
         gameNum
             ? `Ви здалися на слові #${gameNum} за ${gameState.guessCount} спроб(и).\nСлово було: "${secretWord}".`
+            : isUnlimitedMode()
+                ? `Ви здалися в безлімітній грі за ${gameState.guessCount} спроб(и).\nСлово було: "${secretWord}".`
             : `Ви здалися в кастомній грі за ${gameState.guessCount} спроб(и).\nСлово було: "${secretWord}".`
     );
     congratsBlock.classList.remove("hidden");
@@ -885,6 +905,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     const menuButton = document.getElementById("menuButton");
     const dropdownMenu = document.getElementById("dropdownMenu");
     const pageContainer = document.querySelector(".container");
+    const startScreen = document.getElementById("startScreen");
+    const gameContainer = document.getElementById("gameContainer") || pageContainer;
+    const dailyPlayBtn = document.getElementById("dailyPlayBtn");
+    const unlimitedPlayBtn = document.getElementById("unlimitedPlayBtn");
+    const dailyStartDateLabel = document.getElementById("dailyStartDateLabel");
+    const unlimitedStartStatus = document.getElementById("unlimitedStartStatus");
+    const startPreviousGamesBtn = document.getElementById("startPreviousGamesBtn");
+    const startRecentGamesRail = document.getElementById("startRecentGamesRail");
     const shareButton = document.getElementById("shareButton");
     const createGameBtn = document.getElementById("createGameBtn");
     const supportProjectBtn = document.getElementById("supportProjectBtn");
@@ -920,6 +948,141 @@ document.addEventListener("DOMContentLoaded", async () => {
     const twitchModeFromUrl = urlParams.get("twitch") === "1";
     const twitchChannelFromUrl = normalizeTwitchChannel(urlParams.get("twitch_channel"));
     twitchConnectionState.oauthEnabled = pageContainer?.dataset?.twitchOauthEnabled === "true";
+    const initialModeFromUrl = normalizeGameId(urlParams.get("mode"));
+    const hasInitialGameRequest = Boolean(
+        customGameIdFromUrl
+        || legacyCustomWordFromUrl
+        || requestedDateFromUrl
+        || urlParams.has("twitch_connected")
+        || twitchModeFromUrl
+    );
+    if (customGameIdFromUrl && initialModeFromUrl === "unlimited") {
+        currentGameMode = "unlimited";
+    } else if (customGameIdFromUrl || legacyCustomWordFromUrl) {
+        currentGameMode = "custom";
+    }
+
+    function showStartScreen() {
+        if (startScreen) startScreen.classList.remove("hidden");
+        if (gameContainer) gameContainer.classList.add("hidden");
+    }
+
+    function showGameShell() {
+        if (startScreen) startScreen.classList.add("hidden");
+        if (gameContainer) gameContainer.classList.remove("hidden");
+    }
+
+    if (dailyStartDateLabel) {
+        dailyStartDateLabel.textContent = getCurrentKyivDateString().split("-").reverse().join(".");
+    }
+
+    function getSavedDailyGameStatus(dateStr) {
+        try {
+            const saved = localStorage.getItem(`gameState_${dateStr}`);
+            if (!saved) return { label: "", kind: "" };
+
+            const state = JSON.parse(saved);
+            if (state?.didWin) return { label: "Відгадано", kind: "solved" };
+            if (state?.didGiveUp) return { label: "Здано", kind: "gave-up" };
+        } catch (e) {
+            console.warn("Cannot parse game state for", dateStr, e);
+        }
+        return { label: "", kind: "" };
+    }
+
+    function renderStartRecentState(message, isError = false) {
+        if (!startRecentGamesRail) return;
+        const state = document.createElement("span");
+        state.className = `startRecentState${isError ? " startRecentStateError" : ""}`;
+        state.textContent = message;
+        startRecentGamesRail.replaceChildren(state);
+    }
+
+    async function hydrateStartRecentGames() {
+        if (!startRecentGamesRail) return;
+        renderStartRecentState("Завантаження...");
+
+        try {
+            const todayStr = getCurrentKyivDateString();
+            const dates = await fetchArchiveDates();
+            const recentDates = dates
+                .filter(dateStr => /^\d{4}-\d{2}-\d{2}$/.test(dateStr) && dateStr <= todayStr)
+                .slice(0, 5);
+
+            if (recentDates.length === 0) {
+                renderStartRecentState("Попередніх ігор ще немає.");
+                return;
+            }
+
+            const fragment = document.createDocumentFragment();
+            for (const dateStr of recentDates) {
+                const dateObj = new Date(dateStr + "T00:00:00");
+                const gameNumber = computeGameNumber(dateStr);
+                const status = getSavedDailyGameStatus(dateStr);
+                const isToday = dateStr === todayStr;
+                const weekday = isToday ? "Сьогодні" : weekdayFmt.format(dateObj).replace(".", "");
+                const month = monthFmt.format(dateObj).replace(".", "");
+
+                const button = document.createElement("button");
+                const classes = ["startRecentGameButton"];
+                if (isToday) classes.push("startRecentGameButtonToday");
+                if (status.kind === "solved") classes.push("startRecentGameButtonSolved");
+                if (status.kind === "gave-up") classes.push("startRecentGameButtonGaveUp");
+                button.className = classes.join(" ");
+                button.type = "button";
+                button.dataset.date = dateStr;
+                button.setAttribute(
+                    "aria-label",
+                    `${isToday ? "Відкрити сьогоднішню гру" : "Відкрити гру"} #${gameNumber}, ${dateObj.getDate()} ${month}`
+                );
+
+                const weekdayEl = document.createElement("span");
+                weekdayEl.className = "startRecentWeekday";
+                weekdayEl.textContent = weekday;
+
+                const dayEl = document.createElement("span");
+                dayEl.className = "startRecentDay";
+                dayEl.textContent = String(dateObj.getDate());
+
+                const metaEl = document.createElement("span");
+                metaEl.className = "startRecentMeta";
+                metaEl.textContent = status.label || `#${gameNumber}`;
+
+                const dotEl = document.createElement("span");
+                dotEl.className = "startRecentStatusDot";
+                dotEl.setAttribute("aria-hidden", "true");
+
+                button.append(weekdayEl, dayEl, metaEl, dotEl);
+                fragment.append(button);
+            }
+
+            startRecentGamesRail.replaceChildren(fragment);
+        } catch (err) {
+            console.error("[Error] Failed to load start screen archive shortcuts:", err);
+            renderStartRecentState("Не вдалося завантажити останні ігри.", true);
+        }
+    }
+
+    if (startRecentGamesRail) {
+        startRecentGamesRail.addEventListener("click", async (e) => {
+            const btn = e.target.closest("button.startRecentGameButton");
+            if (!btn) return;
+
+            const dateStr = btn.dataset.date;
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr || "")) return;
+
+            btn.disabled = true;
+            try {
+                if (dateStr === getCurrentKyivDateString()) {
+                    await startDailyGame();
+                } else {
+                    await loadArchive(dateStr);
+                }
+            } finally {
+                btn.disabled = false;
+            }
+        });
+    }
 
     if (randomGameBtn) {
         const randomGameLabel = randomGameBtn.querySelector(".randomGameLabel");
@@ -1084,6 +1247,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             applyLoadedRanking(payload.data.ranking);
             currentCustomGameId = gameId;
+            currentGameMode = "custom";
             currentGameDate = null;
             resetRuntimeGameState();
             updateGameDateLabel();
@@ -1106,7 +1270,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
-    async function startCustomGameByGameId(rawGameId) {
+    async function startCustomGameByGameId(rawGameId, mode = "custom") {
         const gameId = normalizeGameId(rawGameId);
         if (!/^[0-9a-f]{64}$/.test(gameId)) return false;
 
@@ -1132,6 +1296,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             applyLoadedRanking(payload.data.ranking);
             currentCustomGameId = gameId;
+            currentGameMode = mode === "unlimited" ? "unlimited" : "custom";
             currentGameDate = null;
             resetRuntimeGameState();
             updateGameDateLabel();
@@ -1151,6 +1316,67 @@ document.addEventListener("DOMContentLoaded", async () => {
             alert("Помилка генерації live-гри. Див. консоль для деталей.");
             if (guessesContainer) guessesContainer.innerHTML = '<p style="text-align: center;">Помилка генерації.</p>';
             return false;
+        }
+    }
+
+    async function startUnlimitedGame() {
+        saveGameState();
+        currentCustomGameId = null;
+        currentGameDate = null;
+        currentGameMode = "unlimited";
+        resetRuntimeGameState();
+        showGameShell();
+
+        if (guessesContainer) guessesContainer.innerHTML = '<p style="text-align: center;">Підбираємо випадкове слово...</p>';
+        if (lastGuessWrapper) lastGuessWrapper.classList.add("hidden");
+        if (guessCountElem) guessCountElem.textContent = "...";
+        updateHintCountDisplay();
+        const labelElem = document.getElementById("gameDateLabel");
+        if (labelElem) labelElem.textContent = "Безлімітна гра";
+        setGuessInputLoading(true);
+
+        try {
+            const payload = await fetchUnlimitedGame();
+            if (!payload.ok) {
+                const errMsg = payload?.data?.error || "Не вдалося запустити безлімітну гру.";
+                alert(errMsg);
+                if (guessesContainer) guessesContainer.innerHTML = '<p style="text-align: center;">Помилка генерації.</p>';
+                return false;
+            }
+
+            if (!payload.data || !Array.isArray(payload.data.ranking)) {
+                throw new Error("Invalid unlimited ranking payload");
+            }
+
+            const gameId = normalizeGameId(payload.data.game_id);
+            if (!/^[0-9a-f]{64}$/.test(gameId)) {
+                throw new Error("Invalid unlimited game id");
+            }
+
+            applyLoadedRanking(payload.data.ranking);
+            currentCustomGameId = gameId;
+            currentGameDate = null;
+            currentGameMode = "unlimited";
+            resetRuntimeGameState();
+            updateGameDateLabel();
+            updateUrlForCurrentGame();
+
+            if (guessCountElem) guessCountElem.textContent = "0";
+            updateHintCountDisplay();
+            if (guessesContainer) guessesContainer.innerHTML = "";
+            if (lastGuessWrapper) lastGuessWrapper.classList.add("hidden");
+            showInitialInfoBlocks();
+            loadGameState();
+            if (twitchChatState.enabled) await syncTwitchChatScope();
+            if (guessInput) guessInput.focus();
+            return true;
+        } catch (err) {
+            console.error("[Error] startUnlimitedGame failed:", err);
+            alert("Помилка запуску безлімітної гри. Див. консоль для деталей.");
+            if (guessesContainer) guessesContainer.innerHTML = '<p style="text-align: center;">Помилка генерації.</p>';
+            return false;
+        } finally {
+            setGuessInputLoading(false);
         }
     }
 
@@ -1348,7 +1574,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             return `date:${dailyMatch[1]}`;
         }
 
-        const customMatch = /^gameState_custom_(.+)$/.exec(storageKey || "");
+        const customMatch = /^gameState_(?:custom|unlimited)_(.+)$/.exec(storageKey || "");
         if (customMatch) {
             return `custom:${customMatch[1].trim().toLowerCase()}`;
         }
@@ -1886,6 +2112,11 @@ document.addEventListener("DOMContentLoaded", async () => {
             className: "twitchWinnerBadge--smiley",
             label: "Volodymyr5059",
             svg: `<img src="/static/images/badges/volodymyr5059.png" alt="" class="twitchWinnerBadgeImage" loading="lazy" decoding="async">`
+        },
+        "lidusik_more": {
+            className: "twitchWinnerBadge--smiley",
+            label: "Lidusik_More",
+            svg: `<img src="/static/images/badges/lidusik_more.png" alt="" class="twitchWinnerBadgeImage" loading="lazy" decoding="async">`
         },
         "loftrindr": {
             className: "twitchWinnerBadge--rune",
@@ -2569,6 +2800,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     async function loadInitialGame() {
+        showGameShell();
         const todayStr = getCurrentKyivDateString();
         if (!currentGameDate && !currentCustomGameId) {
             currentGameDate = requestedDateFromUrl || todayStr;
@@ -2580,7 +2812,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         let loadedInitialGame = false;
         if (customGameIdFromUrl) {
-            loadedInitialGame = await startCustomGameByGameId(customGameIdFromUrl);
+            loadedInitialGame = await startCustomGameByGameId(customGameIdFromUrl, currentGameMode);
         } else if (legacyCustomWordFromUrl) {
             loadedInitialGame = await startCustomGameByWord(legacyCustomWordFromUrl);
         }
@@ -2588,6 +2820,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (!loadedInitialGame) {
             try {
                 currentCustomGameId = null;
+                currentGameMode = "daily";
                 const dateParam = currentGameDate === todayStr ? null : currentGameDate;
                 const response = await fetchRankedWords(dateParam);
                 if (!Array.isArray(response)) throw new Error("Ranked words data is not an array");
@@ -2608,6 +2841,15 @@ document.addEventListener("DOMContentLoaded", async () => {
         loadTwitchConnectionState().then(initializeTwitchChatMode);
     }
 
+    async function startDailyGame() {
+        saveGameState();
+        currentCustomGameId = null;
+        currentGameDate = getCurrentKyivDateString();
+        currentGameMode = "daily";
+        resetRuntimeGameState();
+        await loadInitialGame();
+    }
+
     async function handleSubmit() {
         if (!guessInput) return;
         if (rankedWords.length === 0) return;
@@ -2616,6 +2858,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     async function loadArchive(game_date) {
         saveGameState();
+        showGameShell();
         console.log(`Loading archive for date: ${game_date}`);
 
         if (guessesContainer) guessesContainer.innerHTML = '<p style="text-align: center;">Завантаження гри...</p>';
@@ -2654,6 +2897,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             applyLoadedRanking(archiveData.ranking);
             currentGameDate = game_date;
             currentCustomGameId = null;
+            currentGameMode = "daily";
             resetRuntimeGameState();
             updateUrlForCurrentGame();
 
@@ -2680,6 +2924,37 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     if (guessInput) guessInput.addEventListener("keypress", e => e.key === "Enter" && handleSubmit());
+
+    if (dailyPlayBtn) {
+        dailyPlayBtn.addEventListener("click", async () => {
+            dailyPlayBtn.disabled = true;
+            if (unlimitedPlayBtn) unlimitedPlayBtn.disabled = true;
+            try {
+                await startDailyGame();
+            } finally {
+                dailyPlayBtn.disabled = false;
+                if (unlimitedPlayBtn) unlimitedPlayBtn.disabled = false;
+            }
+        });
+    }
+
+    if (unlimitedPlayBtn) {
+        unlimitedPlayBtn.addEventListener("click", async () => {
+            unlimitedPlayBtn.disabled = true;
+            if (dailyPlayBtn) dailyPlayBtn.disabled = true;
+            if (unlimitedStartStatus) unlimitedStartStatus.textContent = "Підбираємо слово...";
+            try {
+                const started = await startUnlimitedGame();
+                if (!started && unlimitedStartStatus) {
+                    unlimitedStartStatus.textContent = "Не вдалося запустити. Спробуйте ще раз.";
+                }
+            } finally {
+                unlimitedPlayBtn.disabled = false;
+                if (dailyPlayBtn) dailyPlayBtn.disabled = false;
+                if (unlimitedStartStatus) unlimitedStartStatus.textContent = "Випадкова ціль зі щоденного словника.";
+            }
+        });
+    }
 
     if (createGameBtn) {
         createGameBtn.addEventListener("click", () => {
@@ -2842,78 +3117,63 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     });
 
-    // ─────────────────────────────────────────────────────────────────────
-    // ОНОВЛЕНО: Рендер списку архівів одним innerHTML + делегування кліків
-    // ─────────────────────────────────────────────────────────────────────
-    if (previousGamesBtn) {
-        previousGamesBtn.addEventListener("click", async () => {
-            if (previousGamesModal) previousGamesModal.classList.remove("hidden");
-            closeDropdownMenu();
-            if (previousGamesList) previousGamesList.innerHTML = '<p class="previousGamesState">Завантаження архіву...</p>';
-            try {
-                const filtered = await fetchArchiveDates();
+    async function openPreviousGamesModal() {
+        if (previousGamesModal) previousGamesModal.classList.remove("hidden");
+        closeDropdownMenu();
+        if (previousGamesList) previousGamesList.innerHTML = '<p class="previousGamesState">Завантаження архіву...</p>';
 
-                if (previousGamesList) {
-                    if (filtered.length === 0) {
-                        previousGamesList.innerHTML = '<p class="previousGamesState">Архівних ігор не знайдено.</p>';
-                    } else {
-                        const parts = new Array(filtered.length);
-                        for (let i = 0; i < filtered.length; i++) {
-                            const dateStr = filtered[i];
-                            const gameNumber = computeGameNumber(dateStr);
-                            const dateObj = new Date(dateStr + "T00:00:00");
-                            const weekday = weekdayFmt.format(dateObj);
-                            const month = monthFmt.format(dateObj).replace('.', '');
-                            const day = dateObj.getDate();
+        try {
+            const filtered = await fetchArchiveDates();
 
-                            // Дістаємо локальний стан гри.
-                            let statusLabel = "";
-                            let statusClass = "";
-                            try {
-                                const saved = localStorage.getItem(`gameState_${dateStr}`);
-                                if (saved) {
-                                    const state = JSON.parse(saved);
-                                    if (state.didWin) {
-                                        statusLabel = "Відгадав";
-                                        statusClass = "archive-right--solved";
-                                    } else if (state.didGiveUp) {
-                                        statusLabel = "Здався";
-                                        statusClass = "archive-right--gave-up";
-                                    }
-                                }
-                            } catch (e) {
-                                console.warn("Cannot parse game state for", dateStr, e);
-                            }
+            if (!previousGamesList) return;
+            const validArchiveDates = filtered.filter(dateStr => /^\d{4}-\d{2}-\d{2}$/.test(dateStr));
+            if (validArchiveDates.length === 0) {
+                previousGamesList.innerHTML = '<p class="previousGamesState">Архівних ігор не знайдено.</p>';
+                return;
+            }
 
-                            const statusMarkup = statusLabel
-                                ? `<span class="archive-right ${statusClass}">${statusLabel}</span>`
-                                : "";
+            const parts = new Array(validArchiveDates.length);
+            for (let i = 0; i < validArchiveDates.length; i++) {
+                const dateStr = validArchiveDates[i];
+                const gameNumber = computeGameNumber(dateStr);
+                const dateObj = new Date(dateStr + "T00:00:00");
+                const weekday = weekdayFmt.format(dateObj);
+                const month = monthFmt.format(dateObj).replace(".", "");
+                const day = dateObj.getDate();
+                const status = getSavedDailyGameStatus(dateStr);
+                const statusClass = status.kind === "solved"
+                    ? "archive-right--solved"
+                    : status.kind === "gave-up"
+                        ? "archive-right--gave-up"
+                        : "";
+                const statusMarkup = status.label
+                    ? `<span class="archive-right ${statusClass}">${status.label}</span>`
+                    : "";
 
-                            parts[i] =
-                                `<button class="archive-button" data-date="${dateStr}" aria-label="Відкрити гру #${gameNumber}, ${weekday}, ${day} ${month}">
+                parts[i] =
+                    `<button class="archive-button" data-date="${dateStr}" aria-label="Відкрити гру #${gameNumber}, ${weekday}, ${day} ${month}">
       <span class="archive-left">
           <span class="archive-number">#${gameNumber}</span>
           <span class="archive-date">${weekday}, ${day} ${month}</span>
       </span>
       <span class="archive-action">${statusMarkup}<span class="archive-chevron" aria-hidden="true"></span></span>
    </button>`;
-                        }
-                        previousGamesList.innerHTML = parts.join("");
-
-                        // делегування кліків
-                        previousGamesList.onclick = (e) => {
-                            const btn = e.target.closest('button.archive-button');
-                            if (!btn) return;
-                            loadArchive(btn.dataset.date);
-                        };
-                    }
-                }
-            } catch (err) {
-                console.error("[Error] Failed to fetch archive list:", err);
-                if (previousGamesList) previousGamesList.innerHTML = '<p class="previousGamesState previousGamesStateError">Помилка завантаження архіву.</p>';
             }
-        });
+
+            previousGamesList.innerHTML = parts.join("");
+            previousGamesList.onclick = (e) => {
+                const btn = e.target.closest("button.archive-button");
+                if (!btn) return;
+                loadArchive(btn.dataset.date);
+            };
+        } catch (err) {
+            console.error("[Error] Failed to fetch archive list:", err);
+            if (previousGamesList) previousGamesList.innerHTML = '<p class="previousGamesState previousGamesStateError">Помилка завантаження архіву.</p>';
+        }
     }
+
+    if (previousGamesBtn) previousGamesBtn.addEventListener("click", openPreviousGamesModal);
+    if (startPreviousGamesBtn) startPreviousGamesBtn.addEventListener("click", openPreviousGamesModal);
     if (closePreviousGamesModal) closePreviousGamesModal.addEventListener("click", () => previousGamesModal && previousGamesModal.classList.add("hidden"));
     if (previousGamesModal) previousGamesModal.addEventListener('click', e => e.target === previousGamesModal && previousGamesModal.classList.add('hidden'));
 
@@ -3082,7 +3342,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                 return;
             }
             const gameNum = currentGameDate ? computeGameNumber(currentGameDate) : null;
-            const shareTitle = gameNum ? `Словозв'яз #${gameNum}` : "Словозв'яз (кастом)";
+            const shareTitle = gameNum
+                ? `Словозв'яз #${gameNum}`
+                : (isUnlimitedMode() ? "Словозв'яз Unlimited" : "Словозв'яз (кастом)");
             let shareText = `${shareTitle}\nСпроб: ${gameState.guessCount}\nПідказок: ${gameState.hintCount}\n`;
             const closestGuessRank = gameState.guesses.filter(g => !g.error && g.rank !== 1 && g.rank !== Infinity).reduce((minRank, g) => Math.min(minRank, g.rank), Infinity);
             if (didWin) shareText += "✅ Знайдено!\n";
@@ -3113,8 +3375,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         authorshipModal.addEventListener('click', e => e.target === authorshipModal && authorshipModal.classList.add('hidden'));
     }
 
-    loadInitialGame().catch(err => {
-        console.error("[Error] loadInitialGame failed:", err);
-        setGuessInputLoading(false);
-    });
+    if (hasInitialGameRequest) {
+        loadInitialGame().catch(err => {
+            console.error("[Error] loadInitialGame failed:", err);
+            setGuessInputLoading(false);
+        });
+    } else {
+        dayNumber = computeGameNumber(getCurrentKyivDateString());
+        showStartScreen();
+        hydrateStartRecentGames();
+    }
 });
