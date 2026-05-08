@@ -655,25 +655,25 @@ function clearStoredGameState(storageKey) {
 
 function hideInitialInfoBlocks() {
     const howToPlayBlock = document.getElementById("howToPlayBlock");
-    const privacyPolicyBlock = document.getElementById("privacyPolicyBlock");
+    const siteFooter = document.getElementById("siteFooter");
 
     if (howToPlayBlock && howToPlayBlock.style.display !== "none") {
         howToPlayBlock.style.display = "none";
     }
-    if (privacyPolicyBlock && privacyPolicyBlock.style.display !== "none") {
-        privacyPolicyBlock.style.display = "none";
+    if (siteFooter && siteFooter.style.display !== "none") {
+        siteFooter.style.display = "none";
     }
 }
 
 function showInitialInfoBlocks() {
     const howToPlayBlock = document.getElementById("howToPlayBlock");
-    const privacyPolicyBlock = document.getElementById("privacyPolicyBlock");
+    const siteFooter = document.getElementById("siteFooter");
 
     if (howToPlayBlock) {
         howToPlayBlock.style.display = "";
     }
-    if (privacyPolicyBlock) {
-        privacyPolicyBlock.style.display = "";
+    if (siteFooter) {
+        siteFooter.style.display = "";
     }
 }
 
@@ -682,8 +682,6 @@ function showInitialInfoBlocks() {
         if (!storageKey) return;
 
         const guessCountElem = document.getElementById("guessCount");
-        const howToPlayBlock = document.getElementById("howToPlayBlock");
-        const privacyPolicyBlock = document.getElementById("privacyPolicyBlock");
         let savedState = null;
 
         try {
@@ -691,15 +689,13 @@ function showInitialInfoBlocks() {
         } catch (e) {
             console.warn("Cannot read game state from localStorage:", e);
             resetUIForActiveGame();
-            if (howToPlayBlock) howToPlayBlock.style.display = "";
-            if (privacyPolicyBlock) privacyPolicyBlock.style.display = "";
+            showInitialInfoBlocks();
             return;
         }
 
         if (!savedState) {
             resetUIForActiveGame();
-            if (howToPlayBlock) howToPlayBlock.style.display = ""; // Show on new game
-            if (privacyPolicyBlock) privacyPolicyBlock.style.display = ""; // Show on new game
+            showInitialInfoBlocks();
         return;
     }
 
@@ -724,8 +720,7 @@ function showInitialInfoBlocks() {
             if (guessCountElem) guessCountElem.textContent = "0";
             updateHintCountDisplay();
             renderCurrentGuesses();
-            if (howToPlayBlock) howToPlayBlock.style.display = "";
-            if (privacyPolicyBlock) privacyPolicyBlock.style.display = "";
+            showInitialInfoBlocks();
             return;
         }
 
@@ -745,11 +740,9 @@ function showInitialInfoBlocks() {
         renderCurrentGuesses();
 
         if (gameState.guesses.length > 0 || gameState.hints.length > 0 || didWin || didGiveUp) {
-            if (howToPlayBlock) howToPlayBlock.style.display = "none";
-            if (privacyPolicyBlock) privacyPolicyBlock.style.display = "none";
+            hideInitialInfoBlocks();
         } else {
-            if (howToPlayBlock) howToPlayBlock.style.display = "";
-            if (privacyPolicyBlock) privacyPolicyBlock.style.display = "";
+            showInitialInfoBlocks();
         }
 
         if (didGiveUp && giveUpWord) {
@@ -763,8 +756,7 @@ function showInitialInfoBlocks() {
             console.error("Failed to parse or apply saved game state:", e);
             clearStoredGameState(storageKey);
             resetUIForActiveGame();
-            if (howToPlayBlock) howToPlayBlock.style.display = "";
-            if (privacyPolicyBlock) privacyPolicyBlock.style.display = "";
+            showInitialInfoBlocks();
         }
     }
 
@@ -886,7 +878,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     const lastGuessWrapper = document.getElementById("lastGuessWrapper");
     const lastGuessDisplay = document.getElementById("lastGuessDisplay");
     const howToPlayBlock = document.getElementById("howToPlayBlock");
-    const privacyPolicyBlock = document.getElementById("privacyPolicyBlock"); // Отримуємо блок політики
     const closestWordsBtn = document.getElementById("closestWordsBtn");
     const hintButton = document.getElementById("hintButton");
     const previousGamesBtn = document.getElementById("previousGamesBtn");
@@ -2645,7 +2636,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
         }
 
-        loadGameState(); // Це оновить видимість howToPlayBlock та privacyPolicyBlock
+        loadGameState(); // Це оновить видимість howToPlayBlock
         setGuessInputLoading(false);
         warmAllowedWordsWhenIdle();
         loadTwitchConnectionState().then(initializeTwitchChatMode);

@@ -3496,3 +3496,65 @@ h1 {
         line-height: 1.6;
     }
 }
+
+.siteFooter {
+    margin-top: 32px;
+    padding: 22px 12px 28px;
+    border-top: 1px solid rgba(255, 255, 255, 0.09);
+    text-align: center;
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 0.88em;
+    line-height: 1.5;
+}
+
+.siteFooterNav {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 6px 14px;
+}
+
+.siteFooterNav a {
+    position: relative;
+    color: rgba(255, 255, 255, 0.82);
+    text-decoration: none;
+    padding: 2px 0;
+    transition: color 0.2s ease;
+}
+
+.siteFooterNav a::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 1px;
+    background: currentColor;
+    transform: scaleX(0);
+    transform-origin: center;
+    transition: transform 0.25s ease;
+}
+
+.siteFooterNav a:hover,
+.siteFooterNav a:focus-visible {
+    color: #fff;
+    outline: none;
+}
+
+.siteFooterNav a:hover::after,
+.siteFooterNav a:focus-visible::after {
+    transform: scaleX(1);
+}
+
+.siteFooterSeparator {
+    color: rgba(255, 255, 255, 0.28);
+    user-select: none;
+}
+
+.siteFooterCopy {
+    margin: 10px 0 0;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 0.92em;
+    letter-spacing: 0.02em;
+}

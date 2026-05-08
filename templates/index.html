@@ -24,8 +24,7 @@
         window.dataLayer = window.dataLayer || [];
         function gtag(){dataLayer.push(arguments);}
         gtag('js', new Date());
-        // debug_mode можна прибрати після тестування
-        gtag('config', 'G-P9SCTD149F', { debug_mode: true });
+        gtag('config', 'G-P9SCTD149F');
     </script>
 
     <!-- Тема та PWA-налаштування -->
@@ -33,7 +32,7 @@
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
 
     <!-- Основні стилі -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260509-7') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260509-11') }}">
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/favicon.png') }}">
 </head>
 <body>
@@ -253,6 +252,15 @@
              data-full-width-responsive="true"></ins>
     </aside>
 
+    <footer id="siteFooter" class="siteFooter" role="contentinfo">
+        <nav class="siteFooterNav" aria-label="Інформація про сайт">
+            <a href="{{ url_for('privacy_policy') }}">Політика конфіденційності</a>
+            <span class="siteFooterSeparator" aria-hidden="true">·</span>
+            <a href="mailto:slovozviaz@gmail.com">Контакти</a>
+        </nav>
+        <p class="siteFooterCopy">© 2026 Словозв'яз</p>
+    </footer>
+
 </div>
 <aside id="twitchLeaderboardSidebar" class="twitchLeaderboardSidebar hidden" aria-live="polite">
     <section class="twitchLeaderboardPanel twitchLeaderboardPanelDesktop">
@@ -466,7 +474,7 @@
 </div>
 
 <!-- Основний скрипт -->
-    <script type="module" src="{{ url_for('static', filename='js/main.js', v='20260508-11') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/main.js', v='20260509-2') }}"></script>
     <script>
         window.addEventListener("load", () => {
             const revealBottomAdIfFilled = () => {
