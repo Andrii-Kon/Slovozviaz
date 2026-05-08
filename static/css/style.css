@@ -27,6 +27,45 @@ body {
     position: relative;
 }
 
+.desktopAd {
+    display: none;
+}
+
+.slovozviazAdSlot {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.bottomAd {
+    display: none;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    height: 72px;
+    min-height: 72px;
+    margin: 0;
+    overflow: hidden;
+    z-index: 60;
+    border-radius: 0;
+    background: #1f1f1f;
+}
+
+.bottomAd.adSlotRendered {
+    display: block;
+}
+
+body.hasBottomAd {
+    padding-bottom: 88px;
+}
+
+.bottomAd .slovozviazAdSlot {
+    max-width: 728px;
+    margin: 0 auto;
+}
+
 /* ====================
    Верхня панель (header)
    ==================== */
@@ -3166,8 +3205,106 @@ h1 {
     }
 }
 
+@media (min-width: 1240px) {
+    .pageShell {
+        --game-column-width: 530px;
+        --ad-slot-width: clamp(240px, calc((100vw - var(--game-column-width)) / 2 - 52px), 300px);
+        --ad-slot-height: 160px;
+        --ad-side-gap: 36px;
+        --ad-top-offset: 112px;
+        --ad-bottom-offset: 104px;
+    }
+
+    .desktopAd {
+        display: block !important;
+        position: fixed;
+        width: var(--ad-slot-width) !important;
+        height: var(--ad-slot-height) !important;
+        min-height: var(--ad-slot-height) !important;
+        max-height: var(--ad-slot-height) !important;
+        z-index: 20;
+        overflow: hidden;
+        contain: layout paint size;
+        border-radius: 8px;
+    }
+
+    .desktopAd .slovozviazAdSlot {
+        height: var(--ad-slot-height) !important;
+        min-height: var(--ad-slot-height) !important;
+        max-height: var(--ad-slot-height) !important;
+    }
+
+    .desktopAdLeft {
+        top: var(--ad-top-offset) !important;
+        bottom: auto !important;
+        left: max(24px, calc(50vw - var(--game-column-width) / 2 - var(--ad-side-gap) - var(--ad-slot-width)));
+        height: var(--ad-slot-height) !important;
+        min-height: var(--ad-slot-height) !important;
+        max-height: var(--ad-slot-height) !important;
+    }
+
+    .desktopAdLeftBottom {
+        left: max(24px, calc(50vw - var(--game-column-width) / 2 - var(--ad-side-gap) - var(--ad-slot-width)));
+        top: auto !important;
+        bottom: var(--ad-bottom-offset) !important;
+        height: var(--ad-slot-height) !important;
+        min-height: var(--ad-slot-height) !important;
+        max-height: var(--ad-slot-height) !important;
+    }
+
+    .desktopAdRightTop {
+        top: var(--ad-top-offset) !important;
+        bottom: auto !important;
+        right: max(24px, calc(50vw - var(--game-column-width) / 2 - var(--ad-side-gap) - var(--ad-slot-width)));
+        height: var(--ad-slot-height) !important;
+        min-height: var(--ad-slot-height) !important;
+        max-height: var(--ad-slot-height) !important;
+    }
+
+    .desktopAdRightBottom {
+        right: max(24px, calc(50vw - var(--game-column-width) / 2 - var(--ad-side-gap) - var(--ad-slot-width)));
+        top: auto !important;
+        bottom: var(--ad-bottom-offset) !important;
+        height: var(--ad-slot-height) !important;
+        min-height: var(--ad-slot-height) !important;
+        max-height: var(--ad-slot-height) !important;
+    }
+
+    .bottomAd {
+        height: 72px;
+        min-height: 72px;
+    }
+}
+
+@media (min-width: 1440px) {
+    .pageShell {
+        --game-column-width: 35.8vw;
+        --ad-slot-width: clamp(260px, 17vw, 336px);
+        --ad-slot-height: clamp(160px, 10.8vw, 220px);
+        --ad-side-gap: 1.6vw;
+        --ad-top-offset: clamp(96px, 6.4vw, 132px);
+        --ad-bottom-offset: clamp(92px, 5.8vw, 124px);
+    }
+}
+
+@media (min-width: 2200px) {
+    .pageShell {
+        --ad-slot-width: clamp(336px, 15vw, 420px);
+        --ad-slot-height: clamp(220px, 9vw, 280px);
+        --ad-side-gap: 2vw;
+        --ad-top-offset: clamp(120px, 5.8vw, 180px);
+        --ad-bottom-offset: clamp(104px, 4.8vw, 160px);
+    }
+}
+
 @media (max-width: 1023px) {
     .twitchLeaderboardSidebar {
+        display: none !important;
+    }
+}
+
+@media (max-width: 1239px) {
+    .desktopAd {
         display: none !important;
     }
 }

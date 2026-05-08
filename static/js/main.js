@@ -932,6 +932,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     const twitchLeaderboardSidebar = document.getElementById("twitchLeaderboardSidebar");
     const twitchLeaderboardSidebarTitle = document.getElementById("twitchLeaderboardSidebarTitle");
     const twitchLeaderboardSidebarList = document.getElementById("twitchLeaderboardSidebarList");
+    const desktopAdRightTop = document.getElementById("desktopAdRightTop");
+    const desktopAdRightBottom = document.getElementById("desktopAdRightBottom");
     const clearTwitchLeaderboardSidebarButton = document.getElementById("clearTwitchLeaderboardSidebarButton");
     // const readMoreBtn = document.getElementById("readMoreBtn"); // Закоментовано, якщо не використовується
 
@@ -2067,6 +2069,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
         if (twitchLeaderboardSidebar) {
             twitchLeaderboardSidebar.classList.toggle("hidden", !shouldShow);
+        }
+        if (desktopAdRightTop) {
+            desktopAdRightTop.classList.toggle("hidden", shouldShow);
+        }
+        if (desktopAdRightBottom) {
+            desktopAdRightBottom.classList.toggle("hidden", shouldShow);
         }
         updateTwitchLeaderboardClearButtons();
     }

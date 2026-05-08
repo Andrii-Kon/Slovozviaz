@@ -33,12 +33,40 @@
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
 
     <!-- Основні стилі -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260508-9') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260509-7') }}">
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/favicon.png') }}">
 </head>
 <body>
 
 <div class="pageShell">
+<aside class="desktopAd desktopAdLeft" aria-label="Реклама">
+    <ins class="adsbygoogle slovozviazAdSlot"
+         data-ad-client="ca-pub-9092678831575255"
+         data-ad-slot="7968806739"
+         data-ad-format="auto"
+         data-full-width-responsive="false"></ins>
+</aside>
+<aside class="desktopAd desktopAdLeftBottom" aria-label="Реклама">
+    <ins class="adsbygoogle slovozviazAdSlot"
+         data-ad-client="ca-pub-9092678831575255"
+         data-ad-slot="6352472737"
+         data-ad-format="auto"
+         data-full-width-responsive="false"></ins>
+</aside>
+<aside id="desktopAdRightTop" class="desktopAd desktopAdRightTop" aria-label="Реклама">
+    <ins class="adsbygoogle slovozviazAdSlot"
+         data-ad-client="ca-pub-9092678831575255"
+         data-ad-slot="4847819379"
+         data-ad-format="auto"
+         data-full-width-responsive="false"></ins>
+</aside>
+<aside id="desktopAdRightBottom" class="desktopAd desktopAdRightBottom" aria-label="Реклама">
+    <ins class="adsbygoogle slovozviazAdSlot"
+         data-ad-client="ca-pub-9092678831575255"
+         data-ad-slot="2576879252"
+         data-ad-format="auto"
+         data-full-width-responsive="false"></ins>
+</aside>
 <div class="container" data-twitch-oauth-enabled="{{ 'true' if twitch_oauth_enabled else 'false' }}">
     <h1>Словозв'яз</h1>
 
@@ -216,6 +244,14 @@
 
     <!-- Список усіх спроб -->
     <div id="guessesContainer"></div>
+
+    <aside class="bottomAd" aria-label="Реклама">
+        <ins class="adsbygoogle slovozviazAdSlot"
+             data-ad-client="ca-pub-9092678831575255"
+             data-ad-slot="9862746443"
+             data-ad-format="auto"
+             data-full-width-responsive="true"></ins>
+    </aside>
 
 </div>
 <aside id="twitchLeaderboardSidebar" class="twitchLeaderboardSidebar hidden" aria-live="polite">
@@ -430,6 +466,36 @@
 </div>
 
 <!-- Основний скрипт -->
-    <script type="module" src="{{ url_for('static', filename='js/main.js', v='20260508-10') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/main.js', v='20260508-11') }}"></script>
+    <script>
+        window.addEventListener("load", () => {
+            const revealBottomAdIfFilled = () => {
+                const bottomAd = document.querySelector(".bottomAd");
+                const bottomAdSlot = bottomAd?.querySelector(".slovozviazAdSlot");
+                if (!bottomAd || !bottomAdSlot) return;
+
+                const hasRenderedFrame = Boolean(bottomAdSlot.querySelector("iframe"));
+                const hasAdStatus = bottomAdSlot.dataset.adsbygoogleStatus === "done";
+                const hasHeight = bottomAdSlot.getBoundingClientRect().height > 0;
+                if (hasRenderedFrame || (hasAdStatus && hasHeight)) {
+                    bottomAd.classList.add("adSlotRendered");
+                    document.body.classList.add("hasBottomAd");
+                }
+            };
+
+            document.querySelectorAll(".slovozviazAdSlot").forEach(adSlot => {
+                if (adSlot.dataset.adsbygoogleStatus) return;
+                const adContainer = adSlot.closest(".desktopAd, .bottomAd");
+                if (adContainer?.classList.contains("desktopAd") && window.getComputedStyle(adContainer).display === "none") return;
+                try {
+                    (window.adsbygoogle = window.adsbygoogle || []).push({});
+                } catch (err) {
+                    console.warn("AdSense slot initialization failed:", err);
+                }
+            });
+            window.setTimeout(revealBottomAdIfFilled, 1200);
+            window.setTimeout(revealBottomAdIfFilled, 3500);
+        });
+    </script>
 </body>
 </html>
