@@ -1,6 +1,7 @@
 # Local secrets/cache
 .env
 embeddings_cache.json
+.fasttext-venv/
 
 # Generated data
 precomputed/
@@ -9,6 +10,11 @@ instance/
 
 # Local embeddings model
 models/ubercorpus.cased.lemmatized.glove.300d
+models/fasttext/
+models/sentence-transformers/
+data/word_vectors_fasttext_uk_wordlist*.npz
+data/word_vectors_qwen3_*.npz
+data/qwen_test20_ranking_comparison.*
 
 # generated archives
 precomputed.tar.gz*

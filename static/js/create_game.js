@@ -137,6 +137,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         submitBtn.disabled = true;
         submitBtn.textContent = "Створюємо...";
+        resultSection.classList.add("hidden");
 
         try {
             const response = await fetch(`/api/ranked-by-word?word=${encodeURIComponent(word)}`, {

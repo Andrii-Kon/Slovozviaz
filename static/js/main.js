@@ -184,12 +184,12 @@ function getNextHintRank(currentBestRank, currentGuesses, currentRankedWords, cu
     const betterMinRank = 2;
     const betterMaxRank = currentBestRank - 1;
 
-    if (hintMode === "hard") {
+    if (hintMode === "medium") {
         return getRandomAvailableRank(usedRanks, betterMinRank, betterMaxRank)
             ?? getRandomAvailableRank(usedRanks, currentBestRank + 1, currentMaxRank);
     }
 
-    const targetRank = hintMode === "medium"
+    const targetRank = hintMode === "hard"
         ? currentBestRank - 1
         : Math.floor(currentBestRank / 2);
 
@@ -264,6 +264,23 @@ function setCongratsMessage(message) {
     if (congratsMessageElem) {
         congratsMessageElem.textContent = message;
     }
+}
+
+function formatUkrainianAttemptCount(count) {
+    const safeCount = Number.isFinite(Number(count)) ? Math.max(0, Math.trunc(Number(count))) : 0;
+    const lastTwoDigits = safeCount % 100;
+    const lastDigit = safeCount % 10;
+
+    if (lastTwoDigits >= 11 && lastTwoDigits <= 14) {
+        return `${safeCount} спроб`;
+    }
+    if (lastDigit === 1) {
+        return `${safeCount} спроба`;
+    }
+    if (lastDigit >= 2 && lastDigit <= 4) {
+        return `${safeCount} спроби`;
+    }
+    return `${safeCount} спроб`;
 }
 
 function getCurrentGameStateKey() {
@@ -763,10 +780,11 @@ function showWinMessageUI() {
         if (congratsTitle) congratsTitle.textContent = "Вітаємо!";
 
         const gameNum = getCurrentGameNumber();
+        const attemptCountText = formatUkrainianAttemptCount(gameState.guessCount);
         setCongratsMessage(
             gameNum
-                ? `Ви знайшли секретне слово #${gameNum} за ${gameState.guessCount} спроб(и)!`
-                : `Ви знайшли кастомне слово за ${gameState.guessCount} спроб(и)!`
+                ? `Ви знайшли секретне слово #${gameNum} за ${attemptCountText}!`
+                : `Ви знайшли кастомне слово за ${attemptCountText}!`
         );
         congratsBlock.classList.remove("hidden");
     }
@@ -774,6 +792,8 @@ function showWinMessageUI() {
     if (hintButton) hintButton.disabled = true;
     if (giveUpBtn) giveUpBtn.disabled = true;
     if (closestWordsBtn) closestWordsBtn.classList.remove("hidden");
+    const postGameRandomBtn = document.getElementById("postGameRandomBtn");
+    if (postGameRandomBtn) postGameRandomBtn.classList.remove("hidden");
 }
 
 function showLoseMessageUI(secretWord) {
@@ -788,10 +808,11 @@ function showLoseMessageUI(secretWord) {
     if (congratsTitle) congratsTitle.textContent = "Нехай щастить наступного разу!";
 
     const gameNum = getCurrentGameNumber();
+    const attemptCountText = formatUkrainianAttemptCount(gameState.guessCount);
     setCongratsMessage(
         gameNum
-            ? `Ви здалися на слові #${gameNum} за ${gameState.guessCount} спроб(и).\nСлово було: "${secretWord}".`
-            : `Ви здалися в кастомній грі за ${gameState.guessCount} спроб(и).\nСлово було: "${secretWord}".`
+            ? `Ви здалися на слові #${gameNum} за ${attemptCountText}.\nСлово було: "${secretWord}".`
+            : `Ви здалися в кастомній грі за ${attemptCountText}.\nСлово було: "${secretWord}".`
     );
     congratsBlock.classList.remove("hidden");
 
@@ -799,6 +820,8 @@ function showLoseMessageUI(secretWord) {
     if (hintButton) hintButton.disabled = true;
     if (giveUpBtn) giveUpBtn.disabled = true;
     if (closestWordsBtn) closestWordsBtn.classList.remove("hidden");
+    const postGameRandomBtn = document.getElementById("postGameRandomBtn");
+    if (postGameRandomBtn) postGameRandomBtn.classList.remove("hidden");
 }
 
 function resetUIForActiveGame() {
@@ -811,6 +834,8 @@ function resetUIForActiveGame() {
 
     if (congratsBlock) congratsBlock.classList.add("hidden");
     if (closestWordsBtn) closestWordsBtn.classList.add("hidden");
+    const postGameRandomBtn = document.getElementById("postGameRandomBtn");
+    if (postGameRandomBtn) postGameRandomBtn.classList.add("hidden");
 
     if (guessInput) guessInput.disabled = false;
     if (hintButton) hintButton.disabled = false;
@@ -885,7 +910,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const menuButton = document.getElementById("menuButton");
     const dropdownMenu = document.getElementById("dropdownMenu");
     const pageContainer = document.querySelector(".container");
-    const shareButton = document.getElementById("shareButton");
+    const postGameRandomBtn = document.getElementById("postGameRandomBtn");
     const createGameBtn = document.getElementById("createGameBtn");
     const supportProjectBtn = document.getElementById("supportProjectBtn");
     const supportModal = document.getElementById("supportModal");
@@ -1973,7 +1998,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     function renderTwitchWinnersListInto(listElem, titleElem, solvers, channel, options = {}) {
         const {
             limit = null,
-            emptyText = "Ще ніхто не відгадав слово."
+            emptyText = "Слово ще не відгадано."
         } = options;
 
         if (titleElem) {
@@ -2879,10 +2904,10 @@ document.addEventListener("DOMContentLoaded", async () => {
                                 if (saved) {
                                     const state = JSON.parse(saved);
                                     if (state.didWin) {
-                                        statusLabel = "Відгадав";
+                                        statusLabel = "Перемога";
                                         statusClass = "archive-right--solved";
                                     } else if (state.didGiveUp) {
-                                        statusLabel = "Здався";
+                                        statusLabel = "Поразка";
                                         statusClass = "archive-right--gave-up";
                                     }
                                 }
@@ -2922,23 +2947,25 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (closePreviousGamesModal) closePreviousGamesModal.addEventListener("click", () => previousGamesModal && previousGamesModal.classList.add("hidden"));
     if (previousGamesModal) previousGamesModal.addEventListener('click', e => e.target === previousGamesModal && previousGamesModal.classList.add('hidden'));
 
-    if (randomGameBtn) {
-        randomGameBtn.addEventListener("click", async () => {
-            closeDropdownMenu();
-            try {
-                const validDates = await fetchArchiveDates();
-                if (validDates.length === 0) {
-                    alert("Не знайдено доступних архівних ігор.");
-                    return;
-                }
-                const randomDate = validDates[Math.floor(Math.random() * validDates.length)];
-                await loadArchive(randomDate);
-            } catch (err) {
-                console.error("[Error] Failed to load random game:", err);
-                alert("Помилка при завантаженні випадкової гри.");
+    async function loadRandomArchiveGame() {
+        closeDropdownMenu();
+        if (previousGamesModal) previousGamesModal.classList.add("hidden");
+        try {
+            const validDates = await fetchArchiveDates();
+            if (validDates.length === 0) {
+                alert("Не знайдено доступних архівних ігор.");
+                return;
             }
-        });
+            const randomDate = validDates[Math.floor(Math.random() * validDates.length)];
+            await loadArchive(randomDate);
+        } catch (err) {
+            console.error("[Error] Failed to load random game:", err);
+            alert("Помилка при завантаженні випадкової гри.");
+        }
     }
+
+    if (randomGameBtn) randomGameBtn.addEventListener("click", loadRandomArchiveGame);
+    if (postGameRandomBtn) postGameRandomBtn.addEventListener("click", loadRandomArchiveGame);
 
     function showClosestWords() {
         const closestWordsList = document.getElementById("closestWordsList");
@@ -3079,32 +3106,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
         stopTwitchLeaderboardRefreshLoop();
     });
-
-    if (shareButton) {
-        shareButton.addEventListener('click', async () => {
-            if (!didWin && !didGiveUp) {
-                alert("Ви ще не завершили гру, щоб поділитися результатом!");
-                return;
-            }
-            const gameNum = currentGameDate ? computeGameNumber(currentGameDate) : null;
-            const shareTitle = gameNum ? `Словозв'яз #${gameNum}` : "Словозв'яз (кастом)";
-            let shareText = `${shareTitle}\nСпроб: ${gameState.guessCount}\nПідказок: ${gameState.hintCount}\n`;
-            const closestGuessRank = gameState.guesses.filter(g => !g.error && g.rank !== 1 && g.rank !== Infinity).reduce((minRank, g) => Math.min(minRank, g.rank), Infinity);
-            if (didWin) shareText += "✅ Знайдено!\n";
-            else if (didGiveUp) shareText += `🏳️ Здався. Найближче слово: ${closestGuessRank !== Infinity ? `(ранг ${closestGuessRank})` : '(немає)'}\n`;
-            shareText += `\n${window.location.href}`;
-            try {
-                if (navigator.share) await navigator.share({ title: shareTitle, text: shareText });
-                else {
-                    await navigator.clipboard.writeText(shareText);
-                    alert('Результат скопійовано до буферу обміну!');
-                }
-            } catch (err) {
-                console.error('Error sharing:', err);
-                alert('Не вдалося поділитися або скопіювати.');
-            }
-        });
-    }
 
     // const readMoreBtn = document.getElementById("readMoreBtn"); // Закоментовано, якщо не використовується
     // if (readMoreBtn) readMoreBtn.addEventListener('click', () => window.open('https://github.com/Konon-hub/Slovozviaz', '_blank'));

@@ -33,7 +33,7 @@
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
 
     <!-- Основні стилі -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260504-2') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260508-8') }}">
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/favicon.png') }}">
 </head>
 <body>
@@ -47,13 +47,15 @@
         <h2 id="congratsTitle">Вітаємо!</h2>
         <p id="congratsMessage">
             Ви відгадали слово #<span id="gameNumber">???</span> за
-            <span id="guessesUsed">0</span> спроб(и)!
+            <span id="guessesUsed">0</span> спроб!
         </p>
-        <button id="shareButton">Поділитися</button>
+        <div class="congratsActions">
+            <button id="closestWordsBtn" class="hidden" type="button">Найближчі слова</button>
+        </div>
     </div>
 
-    <!-- Кнопка для показу списку найближчих слів -->
-    <button id="closestWordsBtn" class="hidden">Найближчі слова</button>
+    <!-- Кнопка для запуску випадкової архівної гри після завершення -->
+    <button id="postGameRandomBtn" class="hidden" type="button">Грати випадкову гру</button>
 
     <!-- Інформація про гру: номер гри та лічильники -->
     <div class="game-info">
@@ -185,7 +187,7 @@
             </button>
         </div>
         <div id="twitchLeaderboardInlineList" class="twitchWinnersList twitchWinnersListCompact">
-            <p class="twitchWinnersEmpty">Ще ніхто не відгадав слово.</p>
+            <p class="twitchWinnersEmpty">Слово ще не відгадано.</p>
         </div>
     </section>
 
@@ -241,7 +243,7 @@
             </button>
         </div>
         <div id="twitchLeaderboardSidebarList" class="twitchWinnersList twitchWinnersListSidebar">
-            <p class="twitchWinnersEmpty">Ще ніхто не відгадав слово.</p>
+            <p class="twitchWinnersEmpty">Слово ще не відгадано.</p>
         </div>
     </section>
 </aside>
@@ -259,22 +261,22 @@
                 <label class="settings-option" for="hintModeEasy">
                     <input type="radio" id="hintModeEasy" name="hintMode" value="easy">
                     <span>
-                        <span class="settings-option-label">Легко</span>
+                        <span class="settings-option-label">Легкий</span>
                         <span class="settings-option-description">Підказка буде вдвічі ближчою за ваше найкраще слово.</span>
                     </span>
                 </label>
                 <label class="settings-option" for="hintModeMedium">
                     <input type="radio" id="hintModeMedium" name="hintMode" value="medium">
                     <span>
-                        <span class="settings-option-label">Середньо</span>
-                        <span class="settings-option-description">Підказка буде на одну позицію ближчою за ваше найкраще слово.</span>
+                        <span class="settings-option-label">Середній</span>
+                        <span class="settings-option-description">Підказка буде випадковою серед ще не відкритих позицій.</span>
                     </span>
                 </label>
                 <label class="settings-option" for="hintModeHard">
                     <input type="radio" id="hintModeHard" name="hintMode" value="hard">
                     <span>
-                        <span class="settings-option-label">Важко</span>
-                        <span class="settings-option-description">Підказка буде випадковою серед ще не відкритих позицій.</span>
+                        <span class="settings-option-label">Важкий</span>
+                        <span class="settings-option-description">Підказка буде на одну позицію ближчою за ваше найкраще слово.</span>
                     </span>
                 </label>
             </div>
@@ -428,6 +430,6 @@
 </div>
 
 <!-- Основний скрипт -->
-    <script type="module" src="{{ url_for('static', filename='js/main.js', v='20260505-1') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/main.js', v='20260508-9') }}"></script>
 </body>
 </html>

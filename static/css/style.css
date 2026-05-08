@@ -1051,7 +1051,7 @@ h1 {
    Кнопки (загальні)
    ==================== */
 .btn-wide,
-#shareButton,
+#postGameRandomBtn,
 #closestWordsBtn,
 #giveUpYesBtn,
 #giveUpNoBtn,
@@ -1077,7 +1077,7 @@ h1 {
 
 /* Hover-стани основних кнопок */
 .btn-wide:hover,
-#shareButton:hover,
+#postGameRandomBtn:hover,
 #closestWordsBtn:hover,
 #giveUpYesBtn:hover,
 #giveUpNoBtn:hover,
@@ -1090,7 +1090,7 @@ h1 {
 }
 
 .btn-wide:active,
-#shareButton:active,
+#postGameRandomBtn:active,
 #closestWordsBtn:active,
 #giveUpYesBtn:active,
 #giveUpNoBtn:active,
@@ -1099,7 +1099,7 @@ h1 {
 }
 
 .btn-wide:focus-visible,
-#shareButton:focus-visible,
+#postGameRandomBtn:focus-visible,
 #closestWordsBtn:focus-visible,
 #giveUpYesBtn:focus-visible,
 #giveUpNoBtn:focus-visible,
@@ -1462,8 +1462,20 @@ h1 {
     margin-bottom: 15px;
     white-space: pre-wrap; /* для коректних \n у тексті */
 }
-#closestWordsBtn {
+
+.congratsActions {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+#postGameRandomBtn {
     margin-top: 15px;
+}
+
+.congratsActions #closestWordsBtn {
+    margin-top: 0;
 }
 .hidden {
     display: none !important;
@@ -2247,62 +2259,159 @@ h1 {
 
 /* Модалка "Налаштування" */
 #settingsModal .modal-content {
-    max-width: 680px;
-    padding: clamp(22px, 2vw, 30px);
+    max-width: 640px;
+    padding: 24px;
+    background: #262626;
+}
+
+#settingsModal .modal-content h2 {
+    margin-bottom: 22px;
+    line-height: 1.2;
+}
+
+#settingsModal .close {
+    top: 14px;
+    right: 14px;
 }
 
 .settings-section {
     display: grid;
-    grid-template-columns: 160px 1fr;
-    gap: 14px 18px;
+    grid-template-columns: 128px minmax(0, 1fr);
+    gap: 12px 16px;
     align-items: start;
-    margin-bottom: 26px;
+    margin-bottom: 18px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.settings-section:first-of-type {
+    padding-top: 0;
+    border-top: 0;
 }
 
 .settings-section:last-child {
-    margin-bottom: 4px;
+    margin-bottom: 0;
 }
 
 .settings-section-title {
-    margin: 4px 0 0 0;
+    margin: 10px 0 0 0;
     text-align: left;
     color: #ffffff;
-    font-size: clamp(1.06rem, 1rem + 0.12vw, 1.15rem);
+    font-size: 1.05rem;
+    line-height: 1.25;
 }
 
 .settings-options {
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 8px;
 }
 
 .settings-option {
     display: grid;
-    grid-template-columns: 20px 1fr;
-    gap: 12px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
     align-items: start;
+    min-width: 0;
+    padding: 10px 12px;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.035);
     cursor: pointer;
     text-align: left;
+    transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.settings-option:hover {
+    border-color: rgba(143, 192, 255, 0.28);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.settings-option:has(input[type="radio"]:checked) {
+    border-color: rgba(33, 150, 243, 0.55);
+    background: rgba(33, 150, 243, 0.09);
+    box-shadow: inset 3px 0 0 #2196f3;
+}
+
+.settings-option > span {
+    min-width: 0;
 }
 
 .settings-option input[type="radio"] {
-    margin-top: 6px;
-    accent-color: #2196f3;
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
 }
 
 .settings-option-label {
     display: block;
     color: #ffffff;
     font-weight: 700;
-    font-size: clamp(1.02rem, 0.98rem + 0.12vw, 1.1rem);
+    font-size: 1rem;
+    line-height: 1.25;
 }
 
 .settings-option-description {
     display: block;
-    margin-top: 2px;
+    margin-top: 4px;
     color: #cfd7df;
-    font-size: clamp(0.95rem, 0.92rem + 0.08vw, 1rem);
-    line-height: 1.45;
+    font-size: 0.93rem;
+    line-height: 1.4;
+}
+
+@media (max-width: 560px) {
+    #settingsModal {
+        align-items: flex-start;
+        padding: 10px;
+    }
+
+    #settingsModal .modal-content {
+        max-width: none;
+        max-height: calc(100dvh - 20px);
+        padding: 18px 14px 16px;
+        border-radius: 8px;
+    }
+
+    #settingsModal .modal-content h2 {
+        margin: 0 34px 18px;
+        font-size: 1.28rem;
+    }
+
+    #settingsModal .close {
+        top: 10px;
+        right: 10px;
+        font-size: 28px;
+    }
+
+    .settings-section {
+        display: block;
+        margin-bottom: 16px;
+        padding-top: 14px;
+    }
+
+    .settings-section:first-of-type {
+        padding-top: 0;
+    }
+
+    .settings-section-title {
+        margin: 0 0 8px 0;
+        font-size: 1rem;
+    }
+
+    .settings-options {
+        gap: 8px;
+    }
+
+    .settings-option {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0;
+        padding: 10px;
+    }
+
+    .settings-option-description {
+        font-size: 0.9rem;
+        line-height: 1.38;
+    }
 }
 
 /* Модалка "Авторство" */
@@ -2581,7 +2690,7 @@ h1 {
     }
 
     .btn-wide,
-    #shareButton,
+    #postGameRandomBtn,
     #closestWordsBtn,
     #giveUpYesBtn,
     #giveUpNoBtn,
@@ -2700,8 +2809,8 @@ h1 {
     }
 
     #settingsModal .modal-content {
-        max-width: 47.22vw;
-        padding: 1.39vw;
+        max-width: 44.44vw;
+        padding: 1.67vw;
     }
 
     #supportModal .supportModalContent {
@@ -2720,38 +2829,35 @@ h1 {
     }
 
     .settings-section {
-        grid-template-columns: 11.11vw 1fr;
-        gap: 0.97vw 1.25vw;
-        margin-bottom: 1.81vw;
+        grid-template-columns: 8.89vw minmax(0, 1fr);
+        gap: 0.83vw 1.11vw;
+        margin-bottom: 1.25vw;
+        padding-top: 1.11vw;
     }
 
     .settings-section-title {
-        margin-top: 0.28vw;
-        font-size: 1.1vw;
-    }
-
-    .settings-options {
-        gap: 0.97vw;
-    }
-
-    .settings-option {
-        grid-template-columns: 1.39vw 1fr;
-        gap: 0.83vw;
-    }
-
-    .settings-option input[type="radio"] {
-        width: 1vw;
-        height: 1vw;
-        margin-top: 0.42vw;
-    }
-
-    .settings-option-label {
+        margin-top: 0.69vw;
         font-size: 1.05vw;
     }
 
+    .settings-options {
+        gap: 0.56vw;
+    }
+
+    .settings-option {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0;
+        padding: 0.69vw 0.83vw;
+        border-radius: 0.56vw;
+    }
+
+    .settings-option-label {
+        font-size: 0.97vw;
+    }
+
     .settings-option-description {
-        margin-top: 0.14vw;
-        font-size: 0.96vw;
+        margin-top: 0.21vw;
+        font-size: 0.9vw;
     }
 
     /* «Попередні ігри»: збігається з шириною основного контейнера гри (.container = 35.8vw) */
