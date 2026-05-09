@@ -1915,6 +1915,11 @@ document.addEventListener("DOMContentLoaded", async () => {
             label: "Yarosfactory",
             svg: `<img src="/static/images/badges/yarosfactory.png" alt="" class="twitchWinnerBadgeImage" loading="lazy" decoding="async">`
         },
+        "pavloviypp": {
+            className: "twitchWinnerBadge--smiley",
+            label: "PavloviyPP",
+            svg: `<img src="/static/images/badges/pavloviypp.png" alt="" class="twitchWinnerBadgeImage" loading="lazy" decoding="async">`
+        },
         "loftrindr": {
             className: "twitchWinnerBadge--rune",
             label: "Руна Кано",
