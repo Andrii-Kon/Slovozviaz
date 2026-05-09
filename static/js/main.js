@@ -937,6 +937,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const legacyCustomWordFromUrl = normalizeWord(urlParams.get("custom"));
     const twitchModeFromUrl = urlParams.get("twitch") === "1";
     const twitchChannelFromUrl = normalizeTwitchChannel(urlParams.get("twitch_channel"));
+    let twitchJustConnected = urlParams.get("twitch_connected") === "1";
     twitchConnectionState.oauthEnabled = pageContainer?.dataset?.twitchOauthEnabled === "true";
 
     if (randomGameBtn) {
@@ -2582,6 +2583,33 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
+    async function autoEnableTwitchChatAfterInitialLoad() {
+        if (twitchChatState.enabled) return;
+        if (!twitchConnectionState.connected) return;
+        const channel = twitchConnectionState.connection?.twitch_login;
+        if (!channel) return;
+
+        const isCustomGame = Boolean(currentCustomGameId);
+        if (!twitchJustConnected && !isCustomGame) return;
+
+        try {
+            await enableTwitchChatMode(channel);
+        } catch (err) {
+            console.error("[Error] Auto-enable Twitch chat after initial load failed:", err);
+        } finally {
+            if (twitchJustConnected) {
+                twitchJustConnected = false;
+                try {
+                    const url = new URL(window.location.href);
+                    url.searchParams.delete("twitch_connected");
+                    window.history.replaceState({}, "", url.toString());
+                } catch (err) {
+                    console.error("[Error] Failed to clean twitch_connected param:", err);
+                }
+            }
+        }
+    }
+
     function restartTwitchTargetHeartbeat() {
         if (twitchChatState.targetHeartbeatId) {
             window.clearInterval(twitchChatState.targetHeartbeatId);
@@ -2669,7 +2697,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         loadGameState(); // Це оновить видимість howToPlayBlock
         setGuessInputLoading(false);
         warmAllowedWordsWhenIdle();
-        loadTwitchConnectionState().then(initializeTwitchChatMode);
+        loadTwitchConnectionState()
+            .then(initializeTwitchChatMode)
+            .then(autoEnableTwitchChatAfterInitialLoad);
     }
 
     async function handleSubmit() {
