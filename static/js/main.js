@@ -1113,7 +1113,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (lastGuessWrapper) lastGuessWrapper.classList.add("hidden");
             showInitialInfoBlocks();
             loadGameState();
-            if (twitchChatState.enabled) await syncTwitchChatScope();
+            await ensureTwitchChatActiveForCustomGame();
             if (guessInput) guessInput.focus();
             return true;
         } catch (err) {
@@ -1161,7 +1161,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (lastGuessWrapper) lastGuessWrapper.classList.add("hidden");
             showInitialInfoBlocks();
             loadGameState();
-            if (twitchChatState.enabled) await syncTwitchChatScope();
+            await ensureTwitchChatActiveForCustomGame();
             if (guessInput) guessInput.focus();
             return true;
         } catch (err) {
@@ -2279,13 +2279,17 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
+    function isTwitchTabActive() {
+        return typeof document === "undefined" || document.visibilityState !== "hidden";
+    }
+
     function refreshTwitchPollTimer() {
         if (twitchChatState.pollTimerId) {
             window.clearInterval(twitchChatState.pollTimerId);
             twitchChatState.pollTimerId = null;
         }
 
-        if (!twitchChatState.enabled) return;
+        if (!twitchChatState.enabled || !isTwitchTabActive()) return;
         twitchChatState.pollTimerId = window.setInterval(
             pollTwitchChatEventsLoop,
             twitchChatState.pollIntervalMs
@@ -2475,7 +2479,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     async function pollTwitchChatEventsLoop() {
-        if (!twitchChatState.enabled || twitchChatState.isPolling) return;
+        if (!twitchChatState.enabled || twitchChatState.isPolling || !isTwitchTabActive()) return;
 
         twitchChatState.isPolling = true;
         try {
@@ -2528,6 +2532,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         const nextGameScope = getCurrentTwitchGameScope();
         twitchChatState.gameScope = nextGameScope;
 
+        // Background tabs must not claim the active-target slot. Otherwise multiple
+        // open tabs race for it and the bot routes chat messages to whichever tab
+        // last POSTed /api/twitch-chat/target — so guesses get split between tabs.
+        if (!isTwitchTabActive()) return;
+
         const pageUrl = `${window.location.origin}${window.location.pathname}${window.location.search}`;
         const payload = await registerTwitchChatTarget(
             twitchChatState.channel,
@@ -2557,13 +2566,29 @@ document.addEventListener("DOMContentLoaded", async () => {
         setTwitchChatLastEvent("");
     }
 
+    async function ensureTwitchChatActiveForCustomGame() {
+        if (twitchChatState.enabled) {
+            await syncTwitchChatScope();
+            return;
+        }
+
+        const channel = twitchConnectionState.connection?.twitch_login;
+        if (!channel) return;
+
+        try {
+            await enableTwitchChatMode(channel);
+        } catch (err) {
+            console.error("[Error] Auto-enable Twitch chat for custom game failed:", err);
+        }
+    }
+
     function restartTwitchTargetHeartbeat() {
         if (twitchChatState.targetHeartbeatId) {
             window.clearInterval(twitchChatState.targetHeartbeatId);
             twitchChatState.targetHeartbeatId = null;
         }
 
-        if (!twitchChatState.enabled) return;
+        if (!twitchChatState.enabled || !isTwitchTabActive()) return;
 
         twitchChatState.targetHeartbeatId = window.setInterval(async () => {
             try {
@@ -3114,6 +3139,37 @@ document.addEventListener("DOMContentLoaded", async () => {
             twitchChatState.targetHeartbeatId = null;
         }
         stopTwitchLeaderboardRefreshLoop();
+    });
+
+    document.addEventListener("visibilitychange", () => {
+        if (!twitchChatState.enabled) return;
+
+        if (document.visibilityState === "hidden") {
+            if (twitchChatState.pollTimerId) {
+                window.clearInterval(twitchChatState.pollTimerId);
+                twitchChatState.pollTimerId = null;
+            }
+            if (twitchChatState.targetHeartbeatId) {
+                window.clearInterval(twitchChatState.targetHeartbeatId);
+                twitchChatState.targetHeartbeatId = null;
+            }
+            return;
+        }
+
+        (async () => {
+            try {
+                await syncTwitchChatScope();
+            } catch (err) {
+                console.error("[Error] Twitch resume sync failed:", err);
+            }
+            restartTwitchTargetHeartbeat();
+            refreshTwitchPollTimer();
+            try {
+                await pollTwitchChatEventsLoop();
+            } catch (err) {
+                console.error("[Error] Twitch resume poll failed:", err);
+            }
+        })();
     });
 
     // const readMoreBtn = document.getElementById("readMoreBtn"); // Закоментовано, якщо не використовується
