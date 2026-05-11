@@ -17,7 +17,10 @@ body {
 body {
     background-color: #1e1e1e;
     color: #fff;
-    font-family: "Open Sans", sans-serif;
+    font-family: "Inter", "Open Sans", "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     line-height: 1.5;
 }
 
@@ -96,9 +99,9 @@ body.hasBottomAd {
 }
 
 h1 {
-    margin-bottom: 10px;
-    font-size: 1.4em;
-    margin-top: 25px;
+    margin-bottom: 8px;
+    font-size: 1.35em;
+    margin-top: 18px;
     letter-spacing: -0.02em;
     text-shadow: 0 2px 18px rgba(33, 150, 243, 0.12);
 }
@@ -1441,45 +1444,256 @@ h1 {
    Блок "Як грати?"
    ==================== */
 .howToPlayBlock {
-    background-color: #272727;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 10px;
-    padding: 14px 16px;
-    margin-bottom: 20px;
+    background: linear-gradient(180deg, #2a2a2a 0%, #232323 100%);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 14px;
+    padding: 16px 19px;
+    margin-bottom: 14px;
     text-align: left;
-    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.12);
+    box-shadow: 0 12px 26px rgba(0, 0, 0, 0.18);
 }
-.howToPlayBlock h2 {
-    margin-top: 0;
-    margin-bottom: 8px;
-    font-size: 1.08em;
+.howToPlayTitle {
+    margin: 0 0 12px 0;
+    font-size: 1.18em;
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    color: rgba(255, 255, 255, 0.96);
+    line-height: 1.25;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.howToPlayEyebrow {
+    font-size: 0.62em;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
     color: #2196f3;
 }
-.howToPlayBlock p {
-    margin-bottom: 12px;
-    font-size: 0.93em;
-    line-height: 1.58;
-    color: rgba(255, 255, 255, 0.92);
+.howToPlaySteps {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
 }
-.howToPlayBlock details {
-    margin-bottom: 10px;
-    padding: 9px 12px;
-    background-color: #1f1f1f;
-    border-radius: 6px;
-    border: 1px solid #333;
+.howToPlayStep {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
 }
-.howToPlayBlock details summary {
-    cursor: pointer;
+.howToPlayStepNum {
+    flex-shrink: 0;
+    display: inline-block;
+    min-width: 18px;
+    color: #6cb6f6;
+    font-size: 0.95em;
     font-weight: 700;
-    color: rgba(255, 255, 255, 0.96);
-    margin-bottom: 4px;
-    font-size: 0.94em;
+    line-height: 1.5;
+    font-feature-settings: "tnum";
+    padding-top: 1px;
 }
-.howToPlayBlock details p {
-    margin: 6px 0 0 0;
-    font-size: 0.84em;
-    color: rgba(255, 255, 255, 0.8);
-    line-height: 1.48;
+.howToPlayStepNum::after {
+    content: ".";
+}
+.howToPlayStepBody {
+    flex: 1;
+    font-size: 0.92em;
+    line-height: 1.5;
+    color: rgba(255, 255, 255, 0.88);
+}
+.infoCardTitle {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+}
+.infoCardIcon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    color: #2196f3;
+    flex-shrink: 0;
+}
+.infoCardIcon svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+/* ====================
+   Блок "Поширені запитання" (FAQ)
+   ==================== */
+.faqBlock {
+    background: none;
+    border: none;
+    border-radius: 0;
+    padding: 8px 4px 0;
+    margin-bottom: 12px;
+    text-align: left;
+    box-shadow: none;
+}
+.faqTitle {
+    margin: 0 0 9px 0;
+    font-size: 1.18em;
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    color: rgba(255, 255, 255, 0.96);
+    line-height: 1.25;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.faqEyebrow {
+    font-size: 0.62em;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #2196f3;
+}
+.faqList {
+    display: flex;
+    flex-direction: column;
+}
+.faqItem {
+    padding: 3px 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+    transition: background-color 0.18s ease;
+}
+.faqItem:first-child {
+    border-top: none;
+}
+.faqItem summary {
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 8px 6px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.92em;
+    color: rgba(255, 255, 255, 0.92);
+    line-height: 1.35;
+    transition: background-color 0.18s ease;
+}
+.faqItem summary::-webkit-details-marker {
+    display: none;
+}
+.faqItem summary:hover {
+    background-color: rgba(33, 150, 243, 0.07);
+}
+.faqItemToggle {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    color: #6cb6f6;
+}
+.faqItemToggle svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+    overflow: visible;
+}
+.faqItemToggle line {
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: square;
+    shape-rendering: crispEdges;
+}
+.faqToggleV {
+    transform-origin: 7px 7px;
+    transition: transform 0.2s ease;
+}
+.faqItem[open] .faqToggleV {
+    transform: scaleY(0);
+}
+.faqItemQuestion {
+    flex: 1;
+}
+.faqItem p {
+    margin: 4px 0 8px 31px;
+    font-size: 0.85em;
+    color: rgba(255, 255, 255, 0.76);
+    line-height: 1.55;
+}
+.faqReadMoreBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 10px auto 0;
+    background: none;
+    border: none;
+    padding: 5px 4px;
+    color: #6cb6f6;
+    font-family: inherit;
+    font-size: 0.9em;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    cursor: pointer;
+    transition: color 0.18s ease;
+}
+.faqReadMoreBtn:hover {
+    color: #ffffff;
+}
+.faqReadMoreBtn:hover .faqReadMoreArrow {
+    transform: translateX(2px);
+}
+.faqReadMoreArrow {
+    width: 14px;
+    height: 14px;
+    transition: transform 0.18s ease;
+}
+.faqBlock {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+}
+.faqBlock > .faqReadMoreBtn {
+    align-self: center;
+}
+
+/* FAQ modal */
+.faqModalContent {
+    background-color: #2a2a2a;
+    scrollbar-gutter: stable;
+    scrollbar-color: rgba(255, 255, 255, 0.26) rgba(255, 255, 255, 0.035);
+    scrollbar-width: thin;
+}
+.faqModalContent::-webkit-scrollbar {
+    width: 8px;
+}
+.faqModalContent::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.035);
+    border-radius: 999px;
+}
+.faqModalContent::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.26);
+    border: 2px solid rgba(42, 42, 42, 0.98);
+    border-radius: 999px;
+    background-clip: padding-box;
+}
+.faqModalContent::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(143, 192, 255, 0.45);
+}
+.faqModalContent .faqModalTitle {
+    margin: 0 0 14px 0;
+    font-size: 1.22em;
+    color: rgba(255, 255, 255, 0.96);
+}
+.faqListModal .faqItem {
+    padding: 2px 0;
+}
+.faqListModal .faqItem summary {
+    font-size: 0.95em;
+}
+.faqListModal .faqItem p {
+    font-size: 0.88em;
 }
 
 /* ====================
@@ -2299,7 +2513,6 @@ h1 {
 
 /* Модалка "Налаштування" */
 #settingsModal .modal-content {
-    max-width: 640px;
     padding: 24px;
     background: #262626;
 }
@@ -2315,10 +2528,7 @@ h1 {
 }
 
 .settings-section {
-    display: grid;
-    grid-template-columns: 128px minmax(0, 1fr);
-    gap: 12px 16px;
-    align-items: start;
+    display: block;
     margin-bottom: 18px;
     padding-top: 16px;
     border-top: 1px solid rgba(255, 255, 255, 0.08);
@@ -2334,7 +2544,7 @@ h1 {
 }
 
 .settings-section-title {
-    margin: 10px 0 0 0;
+    margin: 0 0 10px 0;
     text-align: left;
     color: #ffffff;
     font-size: 1.05rem;
@@ -2802,41 +3012,79 @@ h1 {
         font-size: 1.02vw;
     }
 
-    .howToPlayBlock,
+    .howToPlayBlock {
+        padding: 0.97vw 1.18vw;
+        margin-bottom: 0.83vw;
+        border-radius: 0.9vw;
+    }
     .congratsBlock {
         padding: 1.25vw;
         margin-bottom: 1.39vw;
         border-radius: 0.56vw;
     }
+    .howToPlayTitle {
+        margin: 0 0 0.69vw 0;
+        font-size: 1.25vw;
+    }
+    .howToPlaySteps {
+        gap: 0.52vw;
+    }
+    .howToPlayStep {
+        gap: 0.76vw;
+    }
+    .howToPlayStepNum {
+        min-width: 1.18vw;
+        font-size: 1.04vw;
+    }
+    .howToPlayStepBody {
+        font-size: 1vw;
+    }
 
-    .howToPlayBlock h2,
+    .faqBlock {
+        padding: 0.49vw 0.28vw 0;
+        margin-bottom: 0.63vw;
+    }
+    .faqTitle {
+        margin: 0 0 0.52vw 0;
+        font-size: 1.25vw;
+    }
+    .faqItem {
+        padding: 0.17vw 0;
+    }
+    .faqItem summary {
+        gap: 0.72vw;
+        padding: 0.49vw 0.38vw;
+        font-size: 1vw;
+        border-radius: 0.49vw;
+    }
+    .faqItemToggle {
+        width: 0.9vw;
+        height: 0.9vw;
+    }
+    .faqItem p {
+        margin: 0.24vw 0 0.49vw 2.05vw;
+        font-size: 0.93vw;
+    }
+    .faqReadMoreBtn {
+        margin-top: 0.55vw;
+        padding: 0.31vw 0.24vw;
+        font-size: 0.95vw;
+        gap: 0.38vw;
+    }
+    .faqReadMoreArrow {
+        width: 0.9vw;
+        height: 0.9vw;
+    }
+
     .congratsBlock h2,
     .modal-content h2 {
         font-size: 1.33vw;
     }
-
-    .howToPlayBlock p,
     .congratsBlock p,
     #closestWordsList,
     #authorshipContent,
     .supportContent p {
         font-size: 1.06vw;
-    }
-
-    .howToPlayBlock details {
-        margin-bottom: 0.69vw;
-        padding: 0.69vw 0.83vw;
-        border-radius: 0.42vw;
-    }
-
-    .howToPlayBlock details summary {
-        margin-bottom: 0.28vw;
-        font-size: 1.02vw;
-    }
-
-    .howToPlayBlock details p {
-        margin-top: 0.42vw;
-        font-size: 0.98vw;
     }
 
     .modal {
@@ -2849,7 +3097,6 @@ h1 {
     }
 
     #settingsModal .modal-content {
-        max-width: 44.44vw;
         padding: 1.67vw;
     }
 
@@ -2869,14 +3116,12 @@ h1 {
     }
 
     .settings-section {
-        grid-template-columns: 8.89vw minmax(0, 1fr);
-        gap: 0.83vw 1.11vw;
         margin-bottom: 1.25vw;
         padding-top: 1.11vw;
     }
 
     .settings-section-title {
-        margin-top: 0.69vw;
+        margin: 0 0 0.69vw 0;
         font-size: 1.05vw;
     }
 
@@ -3134,6 +3379,25 @@ h1 {
     .close {
         font-size: 1.94vw;
     }
+
+    .faqModalContent .faqModalTitle {
+        margin: 0 0 0.97vw 0;
+        font-size: 1.46vw;
+    }
+    .faqModalContent {
+        max-width: 40vw;
+        padding: 1.53vw 1.74vw;
+    }
+    .faqListModal .faqItem {
+        padding: 0.14vw 0;
+    }
+    .faqListModal .faqItem summary {
+        font-size: 1.11vw;
+    }
+    .faqListModal .faqItem p {
+        font-size: 1vw;
+    }
+
 }
 
 @media (min-width: 1024px) {
@@ -3500,7 +3764,6 @@ h1 {
 .siteFooter {
     margin-top: 32px;
     padding: 22px 12px 28px;
-    border-top: 1px solid rgba(255, 255, 255, 0.09);
     text-align: center;
     color: rgba(255, 255, 255, 0.55);
     font-size: 0.88em;
@@ -3557,4 +3820,25 @@ h1 {
     color: rgba(255, 255, 255, 0.4);
     font-size: 0.92em;
     letter-spacing: 0.02em;
+}
+
+@media (min-width: 1440px) {
+    .siteFooter {
+        margin-top: 2.22vw;
+        padding: 1.53vw 0.83vw 1.94vw;
+        font-size: 1vw;
+    }
+    .siteFooterNav {
+        gap: 0.42vw 0.97vw;
+    }
+    .siteFooterNav a {
+        padding: 0.14vw 0;
+    }
+    .siteFooterSeparator {
+        font-size: 1.1em;
+    }
+    .siteFooterCopy {
+        margin-top: 0.69vw;
+        font-size: 0.92em;
+    }
 }

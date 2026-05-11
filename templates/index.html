@@ -31,8 +31,13 @@
     <meta name="theme-color" content="#1f1f1f">
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
 
+    <!-- Шрифти -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+
     <!-- Основні стилі -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260509-11') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260512-12') }}">
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/favicon.png') }}">
 </head>
 <body>
@@ -220,20 +225,62 @@
 
     <!-- Інструкція «Як грати?» -->
     <div id="howToPlayBlock" class="howToPlayBlock">
-        <h2>Як грати?</h2>
-        <p>
-            Знайдіть секретне слово. Кількість спроб необмежена.<br>
-            Слова відсортовані за схожістю до секретного слова. Секретне слово — номер 1.<br>
-            Після введення слова ви побачите його позицію (ранг).
-        </p>
-        <details>
-            <summary>Як визначається порядок слів?</summary>
-            <p>Гра використовує алгоритм, навчений на великій кількості текстів, щоб оцінити, наскільки слова близькі до секретного. Близькість залежить не лише від прямого значення, а й від того, в яких контекстах ці слова часто вживаються. Тому різні слова з однієї теми можуть бути дуже близько, а синоніми іноді опиняються далеко.</p>
-        </details>
-        <details>
-            <summary>Як попросити підказку?</summary>
-            <p>Натисніть на три крапки у верхньому правому куті та виберіть «Підказка».</p>
-        </details>
+        <h2 class="howToPlayTitle">Як грати?</h2>
+        <ol class="howToPlaySteps">
+            <li class="howToPlayStep">
+                <span class="howToPlayStepNum">1</span>
+                <span class="howToPlayStepBody">Знайдіть секретне слово. У вас необмежена кількість спроб.</span>
+            </li>
+            <li class="howToPlayStep">
+                <span class="howToPlayStepNum">2</span>
+                <span class="howToPlayStepBody">Слова відсортовані алгоритмом машинного навчання за схожістю до секретного слова.</span>
+            </li>
+            <li class="howToPlayStep">
+                <span class="howToPlayStepNum">3</span>
+                <span class="howToPlayStepBody">Після введення слова ви побачите його позицію. Секретне слово — під номером 1.</span>
+            </li>
+            <li class="howToPlayStep">
+                <span class="howToPlayStepNum">4</span>
+                <span class="howToPlayStepBody">Алгоритм проаналізував мільйони текстів. Він використовує контекст, у якому вживаються слова, щоб обчислити схожість між ними.</span>
+            </li>
+        </ol>
+    </div>
+
+    <!-- Поширені запитання -->
+    <div id="faqBlock" class="faqBlock">
+        <h2 class="faqTitle">Поширені запитання</h2>
+        <div class="faqList" id="faqList">
+            <details class="faqItem">
+                <summary>
+                    <span class="faqItemToggle" aria-hidden="true">
+                        <svg viewBox="0 0 14 14" focusable="false">
+                            <line class="faqToggleH" x1="1" y1="7" x2="13" y2="7"/>
+                            <line class="faqToggleV" x1="7" y1="1" x2="7" y2="13"/>
+                        </svg>
+                    </span>
+                    <span class="faqItemQuestion">Як визначається порядок слів?</span>
+                </summary>
+                <p>Гра використовує алгоритм, навчений на великій кількості текстів, щоб оцінити, наскільки слова близькі до секретного. Близькість залежить не лише від прямого значення, а й від того, в яких контекстах ці слова часто вживаються. Тому різні слова з однієї теми можуть бути дуже близько, а синоніми іноді опиняються далеко.</p>
+            </details>
+            <details class="faqItem">
+                <summary>
+                    <span class="faqItemToggle" aria-hidden="true">
+                        <svg viewBox="0 0 14 14" focusable="false">
+                            <line class="faqToggleH" x1="1" y1="7" x2="13" y2="7"/>
+                            <line class="faqToggleV" x1="7" y1="1" x2="7" y2="13"/>
+                        </svg>
+                    </span>
+                    <span class="faqItemQuestion">Як попросити підказку?</span>
+                </summary>
+                <p>Натисніть на три крапки у верхньому правому куті та виберіть «Підказка».</p>
+            </details>
+        </div>
+        <button type="button" class="faqReadMoreBtn" id="faqReadMoreBtn">
+            <span>Усі питання</span>
+            <svg class="faqReadMoreArrow" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M13 6l6 6-6 6"/>
+            </svg>
+        </button>
     </div>
 
     <!-- Відображення останньої спроби -->
@@ -404,6 +451,76 @@
     </div>
 </div>
 
+<!-- Модалка: FAQ -->
+<div id="faqModal" class="modal hidden" aria-hidden="true">
+    <div class="modal-content faqModalContent" role="dialog" aria-modal="true" aria-labelledby="faqModalTitle">
+        <button id="closeFaqModal" class="close" type="button" aria-label="Закрити">×</button>
+        <h2 id="faqModalTitle" class="faqTitle faqModalTitle">Поширені запитання</h2>
+        <div class="faqList faqListModal">
+            <details class="faqItem">
+                <summary>
+                    <span class="faqItemToggle" aria-hidden="true">
+                        <svg viewBox="0 0 14 14" focusable="false">
+                            <line class="faqToggleH" x1="1" y1="7" x2="13" y2="7"/>
+                            <line class="faqToggleV" x1="7" y1="1" x2="7" y2="13"/>
+                        </svg>
+                    </span>
+                    <span class="faqItemQuestion">Як визначається порядок слів?</span>
+                </summary>
+                <p>Гра використовує алгоритм, навчений на великій кількості текстів, щоб оцінити, наскільки слова близькі до секретного. Близькість залежить не лише від прямого значення, а й від того, в яких контекстах ці слова часто вживаються. Тому різні слова з однієї теми можуть бути дуже близько, а синоніми іноді опиняються далеко.</p>
+            </details>
+            <details class="faqItem">
+                <summary>
+                    <span class="faqItemToggle" aria-hidden="true">
+                        <svg viewBox="0 0 14 14" focusable="false">
+                            <line class="faqToggleH" x1="1" y1="7" x2="13" y2="7"/>
+                            <line class="faqToggleV" x1="7" y1="1" x2="7" y2="13"/>
+                        </svg>
+                    </span>
+                    <span class="faqItemQuestion">Як попросити підказку?</span>
+                </summary>
+                <p>Натисніть на три крапки у верхньому правому куті та виберіть «Підказка».</p>
+            </details>
+            <details class="faqItem">
+                <summary>
+                    <span class="faqItemToggle" aria-hidden="true">
+                        <svg viewBox="0 0 14 14" focusable="false">
+                            <line class="faqToggleH" x1="1" y1="7" x2="13" y2="7"/>
+                            <line class="faqToggleV" x1="7" y1="1" x2="7" y2="13"/>
+                        </svg>
+                    </span>
+                    <span class="faqItemQuestion">Я не зміг відгадати слово. Чи можу я дізнатися відповідь?</span>
+                </summary>
+                <p>Так. Якщо ви не хочете продовжувати спроби, натисніть на три крапки у верхньому правому куті та виберіть «Здатися» — секретне слово буде показано на екрані.</p>
+            </details>
+            <details class="faqItem">
+                <summary>
+                    <span class="faqItemToggle" aria-hidden="true">
+                        <svg viewBox="0 0 14 14" focusable="false">
+                            <line class="faqToggleH" x1="1" y1="7" x2="13" y2="7"/>
+                            <line class="faqToggleV" x1="7" y1="1" x2="7" y2="13"/>
+                        </svg>
+                    </span>
+                    <span class="faqItemQuestion">Чи можна зіграти більше однієї гри на день?</span>
+                </summary>
+                <p>Так. Можна грати в ігри попередніх днів або в довільну гру. Для цього натисніть на три крапки у верхньому правому куті та виберіть «Попередні ігри». Там можна обрати гру за конкретний день або зіграти у випадковому режимі.</p>
+            </details>
+            <details class="faqItem">
+                <summary>
+                    <span class="faqItemToggle" aria-hidden="true">
+                        <svg viewBox="0 0 14 14" focusable="false">
+                            <line class="faqToggleH" x1="1" y1="7" x2="13" y2="7"/>
+                            <line class="faqToggleV" x1="7" y1="1" x2="7" y2="13"/>
+                        </svg>
+                    </span>
+                    <span class="faqItemQuestion">Я пропустив учорашній день. Чи можна ще зіграти в ту гру?</span>
+                </summary>
+                <p>Так, попередні ігри доступні в будь-який час. Натисніть на три крапки у верхньому правому куті та виберіть «Попередні ігри».</p>
+            </details>
+        </div>
+    </div>
+</div>
+
 <!-- Модалка: авторство -->
 <div id="authorshipModal" class="modal hidden">
     <div class="modal-content">
@@ -474,7 +591,7 @@
 </div>
 
 <!-- Основний скрипт -->
-    <script type="module" src="{{ url_for('static', filename='js/main.js', v='20260510-3') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/main.js', v='20260512-2') }}"></script>
     <script>
         window.addEventListener("load", () => {
             const revealBottomAdIfFilled = () => {

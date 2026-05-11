@@ -655,10 +655,14 @@ function clearStoredGameState(storageKey) {
 
 function hideInitialInfoBlocks() {
     const howToPlayBlock = document.getElementById("howToPlayBlock");
+    const faqBlock = document.getElementById("faqBlock");
     const siteFooter = document.getElementById("siteFooter");
 
     if (howToPlayBlock && howToPlayBlock.style.display !== "none") {
         howToPlayBlock.style.display = "none";
+    }
+    if (faqBlock && faqBlock.style.display !== "none") {
+        faqBlock.style.display = "none";
     }
     if (siteFooter && siteFooter.style.display !== "none") {
         siteFooter.style.display = "none";
@@ -667,15 +671,52 @@ function hideInitialInfoBlocks() {
 
 function showInitialInfoBlocks() {
     const howToPlayBlock = document.getElementById("howToPlayBlock");
+    const faqBlock = document.getElementById("faqBlock");
     const siteFooter = document.getElementById("siteFooter");
 
     if (howToPlayBlock) {
         howToPlayBlock.style.display = "";
     }
+    if (faqBlock) {
+        faqBlock.style.display = "";
+    }
     if (siteFooter) {
         siteFooter.style.display = "";
     }
 }
+
+(function setupFaqModal() {
+    const init = () => {
+        const btn = document.getElementById("faqReadMoreBtn");
+        const modal = document.getElementById("faqModal");
+        const closeBtn = document.getElementById("closeFaqModal");
+        if (!btn || !modal) return;
+
+        const openModal = () => {
+            modal.classList.remove("hidden");
+            modal.setAttribute("aria-hidden", "false");
+        };
+        const closeModal = () => {
+            modal.classList.add("hidden");
+            modal.setAttribute("aria-hidden", "true");
+            modal.querySelectorAll("details[open]").forEach(d => d.removeAttribute("open"));
+        };
+
+        btn.addEventListener("click", openModal);
+        if (closeBtn) closeBtn.addEventListener("click", closeModal);
+        modal.addEventListener("click", e => {
+            if (e.target === modal) closeModal();
+        });
+        document.addEventListener("keydown", e => {
+            if (e.key === "Escape" && !modal.classList.contains("hidden")) closeModal();
+        });
+    };
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", init);
+    } else {
+        init();
+    }
+})();
 
     function loadGameState() {
         const storageKey = getCurrentGameStateKey();
@@ -2641,12 +2682,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
-    const guessInputDefaultPlaceholder = guessInput?.getAttribute("placeholder") || "Введіть слово";
-
     function setGuessInputLoading(isLoading) {
         if (!guessInput) return;
         guessInput.disabled = isLoading;
-        guessInput.placeholder = isLoading ? "Завантаження гри..." : guessInputDefaultPlaceholder;
     }
 
     function warmAllowedWordsWhenIdle() {
@@ -3011,6 +3049,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (closePreviousGamesModal) closePreviousGamesModal.addEventListener("click", () => previousGamesModal && previousGamesModal.classList.add("hidden"));
     if (previousGamesModal) previousGamesModal.addEventListener('click', e => e.target === previousGamesModal && previousGamesModal.classList.add('hidden'));
 
+    function isArchiveDateFinished(dateStr) {
+        try {
+            const saved = localStorage.getItem(`gameState_${dateStr}`);
+            if (!saved) return false;
+            const state = JSON.parse(saved);
+            return Boolean(state && (state.didWin || state.didGiveUp));
+        } catch (e) {
+            return false;
+        }
+    }
+
     async function loadRandomArchiveGame() {
         closeDropdownMenu();
         if (previousGamesModal) previousGamesModal.classList.add("hidden");
@@ -3020,7 +3069,12 @@ document.addEventListener("DOMContentLoaded", async () => {
                 alert("Не знайдено доступних архівних ігор.");
                 return;
             }
-            const randomDate = validDates[Math.floor(Math.random() * validDates.length)];
+            const eligible = validDates.filter(d => d !== currentGameDate && !isArchiveDateFinished(d));
+            if (eligible.length === 0) {
+                alert("Усі архівні ігри вже завершені. Спробуйте зіграти конкретну гру з архіву.");
+                return;
+            }
+            const randomDate = eligible[Math.floor(Math.random() * eligible.length)];
             await loadArchive(randomDate);
         } catch (err) {
             console.error("[Error] Failed to load random game:", err);
