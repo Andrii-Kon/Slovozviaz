@@ -42,7 +42,7 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
 
     <!-- Основні стилі -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260512-12') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260513-7') }}">
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/favicon.png') }}">
 </head>
 <body>
@@ -223,24 +223,12 @@
     <!-- Інструкція «Як грати?» -->
     <div id="howToPlayBlock" class="howToPlayBlock">
         <h2 class="howToPlayTitle">Як грати?</h2>
-        <ol class="howToPlaySteps">
-            <li class="howToPlayStep">
-                <span class="howToPlayStepNum">1</span>
-                <span class="howToPlayStepBody">Знайдіть секретне слово. У вас необмежена кількість спроб.</span>
-            </li>
-            <li class="howToPlayStep">
-                <span class="howToPlayStepNum">2</span>
-                <span class="howToPlayStepBody">Слова відсортовані алгоритмом машинного навчання за схожістю до секретного слова.</span>
-            </li>
-            <li class="howToPlayStep">
-                <span class="howToPlayStepNum">3</span>
-                <span class="howToPlayStepBody">Після введення слова ви побачите його позицію. Секретне слово — під номером 1.</span>
-            </li>
-            <li class="howToPlayStep">
-                <span class="howToPlayStepNum">4</span>
-                <span class="howToPlayStepBody">Алгоритм проаналізував мільйони текстів. Він використовує контекст, у якому вживаються слова, щоб обчислити схожість між ними.</span>
-            </li>
-        </ol>
+        <div class="howToPlaySteps">
+            <p class="howToPlayStep">Знайдіть секретне слово. У вас необмежена кількість спроб.</p>
+            <p class="howToPlayStep">Слова відсортовані алгоритмом машинного навчання за схожістю до секретного слова.</p>
+            <p class="howToPlayStep">Після введення слова ви побачите його позицію. Секретне слово — під номером 1.</p>
+            <p class="howToPlayStep">Алгоритм проаналізував мільйони текстів. Він використовує контекст, у якому вживаються слова, щоб обчислити схожість між ними.</p>
+        </div>
     </div>
 
     <!-- Поширені запитання -->

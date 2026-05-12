@@ -638,6 +638,7 @@ h1 {
 .twitchWinnerBadge--t1zaro,
 .twitchWinnerBadge--tekknicall,
 .twitchWinnerBadge--rqwear,
+.twitchWinnerBadge--espero_n,
 .twitchWinnerBadge--janetty_y,
 .twitchWinnerBadge--hikrop,
 .twitchWinnerBadge--lady_gaga_a,
@@ -1450,17 +1451,17 @@ h1 {
     background: linear-gradient(180deg, #2a2a2a 0%, #232323 100%);
     border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 14px;
-    padding: 16px 19px;
+    padding: 18px 20px;
     margin-bottom: 14px;
     text-align: left;
     box-shadow: 0 12px 26px rgba(0, 0, 0, 0.18);
 }
 .howToPlayTitle {
-    margin: 0 0 12px 0;
+    margin: 0 0 13px 0;
     font-size: 1.18em;
     font-weight: 700;
     letter-spacing: -0.015em;
-    color: rgba(255, 255, 255, 0.96);
+    color: #6AB7F6;
     line-height: 1.25;
     display: flex;
     flex-direction: column;
@@ -1474,34 +1475,14 @@ h1 {
     color: #2196f3;
 }
 .howToPlaySteps {
-    list-style: none;
     margin: 0;
     padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 9px;
+    gap: 10px;
 }
 .howToPlayStep {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-}
-.howToPlayStepNum {
-    flex-shrink: 0;
-    display: inline-block;
-    min-width: 18px;
-    color: #6cb6f6;
-    font-size: 0.95em;
-    font-weight: 700;
-    line-height: 1.5;
-    font-feature-settings: "tnum";
-    padding-top: 1px;
-}
-.howToPlayStepNum::after {
-    content: ".";
-}
-.howToPlayStepBody {
-    flex: 1;
+    margin: 0;
     font-size: 0.92em;
     line-height: 1.5;
     color: rgba(255, 255, 255, 0.88);
@@ -3036,13 +3017,6 @@ h1 {
         gap: 0.52vw;
     }
     .howToPlayStep {
-        gap: 0.76vw;
-    }
-    .howToPlayStepNum {
-        min-width: 1.18vw;
-        font-size: 1.04vw;
-    }
-    .howToPlayStepBody {
         font-size: 1vw;
     }
 
