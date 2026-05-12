@@ -1102,6 +1102,7 @@ h1 {
 #giveUpNoBtn,
 #randomGameBtn {
     appearance: none;
+    font-family: inherit;
     padding: 9px 16px;
     min-height: 42px;
     cursor: pointer;
@@ -2058,7 +2059,10 @@ h1 {
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045), 0 8px 20px rgba(0, 0, 0, 0.16);
     white-space: nowrap;
     text-decoration: none;
+    font-family: inherit;
+    font-size: 0.95em;
     font-weight: 800;
+    line-height: 1.2;
 }
 
 .create-game-copy-btn:hover,

@@ -275,7 +275,7 @@ function formatUkrainianAttemptCount(count) {
         return `${safeCount} спроб`;
     }
     if (lastDigit === 1) {
-        return `${safeCount} спроба`;
+        return `${safeCount} спробу`;
     }
     if (lastDigit >= 2 && lastDigit <= 4) {
         return `${safeCount} спроби`;
@@ -415,10 +415,10 @@ function resetRuntimeGameState() {
 function updateUrlForCurrentGame() {
     const url = new URL(window.location.href);
     if (currentCustomGameId) {
-        url.searchParams.set("game", currentCustomGameId);
-        url.searchParams.delete("custom");
-        url.searchParams.delete("date");
+        history.replaceState({}, "", `/game/${encodeURIComponent(currentCustomGameId)}${url.hash}`);
+        return;
     } else {
+        url.pathname = "/";
         url.searchParams.delete("game");
         url.searchParams.delete("custom");
         const todayStr = getCurrentKyivDateString();
@@ -973,7 +973,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const authorshipModal = document.getElementById('authorshipModal');
     const closeAuthorshipModalBtn = document.getElementById('closeAuthorshipModal');
     const urlParams = new URLSearchParams(window.location.search);
-    const customGameIdFromUrl = normalizeGameId(urlParams.get("game"));
+    const customGameIdFromUrl = normalizeGameId(urlParams.get("game") || pageContainer?.dataset?.customGameId);
     const requestedDateFromUrl = normalizeDateParam(urlParams.get("date"));
     const legacyCustomWordFromUrl = normalizeWord(urlParams.get("custom"));
     const twitchModeFromUrl = urlParams.get("twitch") === "1";

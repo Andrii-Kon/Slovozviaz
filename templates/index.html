@@ -9,11 +9,16 @@
 
     <!-- Верифікація Google -->
     <meta name="google-site-verification" content="RYpQuOFzgs0S4FSOn-16PxxfgXEE67Mm30CHu42MStM" />
-    <link rel="canonical" href="https://slovozviaz.com/">
+    <link rel="canonical" href="{{ canonical_url }}">
+    {% if noindex %}
+    <meta name="robots" content="noindex,follow">
+    {% endif %}
 
+    {% if ads_enabled %}
     <!-- Google AdSense -->
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9092678831575255"
             crossorigin="anonymous"></script>
+    {% endif %}
 
     <title>Словозв'яз</title>
 
@@ -43,17 +48,11 @@
 <body>
 
 <div class="pageShell">
+{% if ads_enabled %}
 <aside class="desktopAd desktopAdLeft" aria-label="Реклама">
     <ins class="adsbygoogle slovozviazAdSlot"
          data-ad-client="ca-pub-9092678831575255"
          data-ad-slot="7968806739"
-         data-ad-format="auto"
-         data-full-width-responsive="false"></ins>
-</aside>
-<aside class="desktopAd desktopAdLeftBottom" aria-label="Реклама">
-    <ins class="adsbygoogle slovozviazAdSlot"
-         data-ad-client="ca-pub-9092678831575255"
-         data-ad-slot="6352472737"
          data-ad-format="auto"
          data-full-width-responsive="false"></ins>
 </aside>
@@ -64,14 +63,12 @@
          data-ad-format="auto"
          data-full-width-responsive="false"></ins>
 </aside>
-<aside id="desktopAdRightBottom" class="desktopAd desktopAdRightBottom" aria-label="Реклама">
-    <ins class="adsbygoogle slovozviazAdSlot"
-         data-ad-client="ca-pub-9092678831575255"
-         data-ad-slot="2576879252"
-         data-ad-format="auto"
-         data-full-width-responsive="false"></ins>
-</aside>
-<div class="container" data-twitch-oauth-enabled="{{ 'true' if twitch_oauth_enabled else 'false' }}">
+{% endif %}
+<div
+    class="container"
+    data-twitch-oauth-enabled="{{ 'true' if twitch_oauth_enabled else 'false' }}"
+    data-custom-game-id="{{ initial_custom_game_id }}"
+>
     <h1>Словозв'яз</h1>
 
     <!-- Блок фінального повідомлення (перемога або здача) -->
@@ -291,19 +288,13 @@
     <!-- Список усіх спроб -->
     <div id="guessesContainer"></div>
 
-    <aside class="bottomAd" aria-label="Реклама">
-        <ins class="adsbygoogle slovozviazAdSlot"
-             data-ad-client="ca-pub-9092678831575255"
-             data-ad-slot="9862746443"
-             data-ad-format="auto"
-             data-full-width-responsive="true"></ins>
-    </aside>
-
     <footer id="siteFooter" class="siteFooter" role="contentinfo">
         <nav class="siteFooterNav" aria-label="Інформація про сайт">
-            <a href="{{ url_for('privacy_policy') }}">Політика конфіденційності</a>
+            <a href="{{ url_for('about_page') }}">Про гру</a>
             <span class="siteFooterSeparator" aria-hidden="true">·</span>
-            <a href="mailto:slovozviaz@gmail.com">Контакти</a>
+            <a href="{{ url_for('contact_page') }}">Контакти</a>
+            <span class="siteFooterSeparator" aria-hidden="true">·</span>
+            <a href="{{ url_for('privacy_policy') }}">Політика конфіденційності</a>
         </nav>
         <p class="siteFooterCopy">© 2026 Словозв'яз</p>
     </footer>
@@ -591,7 +582,8 @@
 </div>
 
 <!-- Основний скрипт -->
-    <script type="module" src="{{ url_for('static', filename='js/main.js', v='20260512-2') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/main.js', v='20260513-2') }}"></script>
+    {% if ads_enabled %}
     <script>
         window.addEventListener("load", () => {
             const revealBottomAdIfFilled = () => {
@@ -622,5 +614,6 @@
             window.setTimeout(revealBottomAdIfFilled, 3500);
         });
     </script>
+    {% endif %}
 </body>
 </html>

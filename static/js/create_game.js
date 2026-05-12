@@ -162,7 +162,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-            const shareUrl = `${window.location.origin}/?game=${encodeURIComponent(gameId)}`;
+            const shareUrl = `${window.location.origin}/game/${encodeURIComponent(gameId)}`;
 
             linkInput.value = shareUrl;
             openLink.href = shareUrl;

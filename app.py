@@ -1597,6 +1597,63 @@ LEGACY_NOTICE_BYPASS_PATHS = {
 }
 
 
+def _request_has_query_params() -> bool:
+    return bool(request.query_string)
+
+
+def _archive_game_exists(game_date: date) -> bool:
+    if game_date in RANKING_CACHE:
+        return True
+
+    try:
+        return bool(
+            _run_db_query_with_retry(
+                lambda: ArchivedGame.query
+                .options(load_only(ArchivedGame.id))
+                .filter_by(game_date=game_date)
+                .first()
+            )
+        )
+    except Exception:
+        return False
+
+
+def _is_valid_custom_game_id(game_id: str) -> bool:
+    normalized_game_id = _normalize_game_id(game_id)
+    if not re.fullmatch(r"[0-9a-f]{64}", normalized_game_id):
+        return False
+
+    try:
+        return normalized_game_id in _get_custom_game_id_map()
+    except RuntimeError:
+        return False
+
+
+def _can_monetize_index_request() -> bool:
+    """Only show ads on publisher-controlled game pages with available content."""
+    if request.args.get("game") or request.args.get("custom"):
+        return False
+
+    if (
+        request.args.get("twitch")
+        or request.args.get("twitch_channel")
+        or request.args.get("twitch_connected")
+        or request.args.get("twitch_error")
+    ):
+        return False
+
+    requested_date = request.args.get("date")
+    if not requested_date:
+        return True
+
+    try:
+        game_date = datetime.strptime(requested_date, "%Y-%m-%d").date()
+    except ValueError:
+        return False
+
+    return _archive_game_exists(game_date)
+
+
 @app.before_request
 def _legacy_host_notice():
     force = _env_flag("LEGACY_NOTICE_FORCE")
@@ -1617,15 +1674,49 @@ def _legacy_host_notice():
 # ── Маршрути ───────────────────────────────────────────────────────────────────
 @app.route("/")
 def index():
+    legacy_game_id = _normalize_game_id(request.args.get("game"))
+    if legacy_game_id and _is_valid_custom_game_id(legacy_game_id):
+        return redirect(url_for("custom_game_page", game_id=legacy_game_id), code=302)
+
     return render_template(
         "index.html",
         twitch_oauth_enabled=_is_twitch_oauth_enabled(),
+        ads_enabled=_can_monetize_index_request(),
+        noindex=_request_has_query_params(),
+        initial_custom_game_id="",
+        canonical_url="https://slovozviaz.com/",
+    )
+
+
+@app.route("/game/<string:game_id>")
+def custom_game_page(game_id):
+    normalized_game_id = _normalize_game_id(game_id)
+    if not _is_valid_custom_game_id(normalized_game_id):
+        abort(404)
+
+    return render_template(
+        "index.html",
+        twitch_oauth_enabled=_is_twitch_oauth_enabled(),
+        ads_enabled=True,
+        noindex=False,
+        initial_custom_game_id=normalized_game_id,
+        canonical_url=f"https://slovozviaz.com/game/{normalized_game_id}",
     )
 
 
 @app.route("/create-game")
 def create_game_page():
     return render_template("create_game.html")
+
+
+@app.route("/about.html")
+def about_page():
+    return render_template("about.html")
+
+
+@app.route("/contact.html")
+def contact_page():
+    return render_template("contact.html")
 
 
 @app.route("/auth/twitch/start")
@@ -2427,6 +2518,8 @@ def sitemap_xml():
     xml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>{base_url}/</loc><lastmod>{last_mod}</lastmod><changefreq>daily</changefreq><priority>1.0</priority></url>
+  <url><loc>{base_url}/about.html</loc><lastmod>{last_mod}</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>{base_url}/contact.html</loc><lastmod>{last_mod}</lastmod><changefreq>monthly</changefreq><priority>0.6</priority></url>
   <url><loc>{base_url}/privacy.html</loc><lastmod>{last_mod}</lastmod><changefreq>monthly</changefreq><priority>0.5</priority></url>
 </urlset>"""
     return Response(xml, mimetype="application/xml")

@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="canonical" href="https://slovozviaz.com/contact.html">
+    <title>Контакти - Словозв'яз</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/privacy_style.css') }}">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/favicon.png') }}">
+</head>
+<body>
+<main class="privacy-content-wrapper">
+    <h1>Контакти</h1>
+
+    <h2>Зв'язок із розробником</h2>
+    <p>Якщо у вас є питання щодо гри «Словозв'яз», пропозиція для покращення словника або повідомлення про технічну помилку, напишіть на електронну пошту:</p>
+    <p><a href="mailto:slovozviaz@gmail.com">slovozviaz@gmail.com</a></p>
+
+    <h2>Що варто додати до повідомлення</h2>
+    <p>Щоб швидше розібратися з проблемою, бажано вказати дату гри або посилання на конкретну гру, слово, яке викликало питання, і короткий опис того, що саме здається неправильним.</p>
+    <p>Для технічних помилок корисно додати назву браузера, тип пристрою та послідовність дій, після якої сталася проблема. Якщо йдеться про Twitch-режим, вкажіть назву каналу та чи була гра щоденною, архівною або створеною за персональним посиланням.</p>
+
+    <h2>Політика відповідей</h2>
+    <p>Я читаю повідомлення, пов'язані з роботою гри, словником, приватністю та доступністю сайту. Відповіді можуть займати певний час, особливо якщо звернення потребує перевірки рейтингу або повторення технічної помилки.</p>
+
+    <div class="privacy-footer-link">
+        <a href="{{ url_for('index') }}">Повернутися до гри</a>
+        ·
+        <a href="{{ url_for('about_page') }}">Про гру</a>
+        ·
+        <a href="{{ url_for('privacy_policy') }}">Політика конфіденційності</a>
+    </div>
+</main>
+</body>
+</html>
