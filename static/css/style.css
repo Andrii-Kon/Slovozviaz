@@ -416,12 +416,15 @@ h1 {
     overflow: visible;
 }
 
-/* Same horizontal slot as the first-place crown: out of flow, anchored left of the nickname */
 .twitchWinnerNameLabel:not(.twitchWinnerNameLabel--crowned) .twitchWinnerBadge {
     position: absolute;
-    right: calc(100% + 6px);
+    right: calc(100% + 4px);
     top: 50%;
     transform: translateY(calc(-50% - 1px));
+}
+
+.twitchWinnerNameLabel--crowned .twitchWinnerBadge {
+    margin-right: 4px;
 }
 
 .twitchWinnerBadge--monkey {
@@ -727,7 +730,9 @@ h1 {
 }
 
 .twitchWinnerCrown {
-    position: relative;
+    position: absolute;
+    right: calc(100% + 4px);
+    top: 50%;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -735,17 +740,10 @@ h1 {
     height: 1.56em;
     flex-shrink: 0;
     color: #ffd166;
-    transform: translateY(-2px);
+    transform: translateY(calc(-50% - 2px));
     filter:
         drop-shadow(0 3px 7px rgba(255, 190, 62, 0.26))
         drop-shadow(0 0 12px rgba(255, 209, 102, 0.14));
-}
-
-.twitchWinnerNameLabel--crowned .twitchWinnerCrown {
-    position: absolute;
-    right: calc(100% + 6px);
-    top: 50%;
-    transform: translateY(calc(-50% - 2px));
 }
 
 .twitchWinnerCrown::before {
