@@ -1827,6 +1827,11 @@ document.addEventListener("DOMContentLoaded", async () => {
             label: "Espero_n",
             svg: `<img src="/static/images/badges/espero_n.png" alt="" class="twitchWinnerBadgeImage" loading="lazy" decoding="async">`
         },
+        "rostyslavkos": {
+            className: "twitchWinnerBadge--rostyslavkos",
+            label: "RostyslavKOs",
+            svg: `<img src="/static/images/badges/rostyslavkos.png" alt="" class="twitchWinnerBadgeImage" loading="lazy" decoding="async">`
+        },
         "burkostia": {
             className: "twitchWinnerBadge--t1zaro twitchWinnerBadge--burkostia",
             label: "Burkostia",
