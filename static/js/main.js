@@ -96,7 +96,8 @@ const ARCHIVE_DATES_CACHE_TTL_MS = 5 * 60 * 1000;
 const SETTINGS_STORAGE_KEY = "slovozviazSettings_v1";
 const DEFAULT_SETTINGS = {
     hintMode: "easy",
-    sortMode: "similarity"
+    sortMode: "similarity",
+    blurGameNumber: false
 };
 const settings = { ...DEFAULT_SETTINGS };
 
@@ -108,6 +109,10 @@ function normalizeSortMode(value) {
     return ["similarity", "guess-order"].includes(value) ? value : DEFAULT_SETTINGS.sortMode;
 }
 
+function normalizeBoolean(value, fallback = false) {
+    return typeof value === "boolean" ? value : fallback;
+}
+
 function loadSettings() {
     try {
         const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
@@ -116,6 +121,10 @@ function loadSettings() {
         const parsed = JSON.parse(raw);
         settings.hintMode = normalizeHintMode(parsed?.hintMode);
         settings.sortMode = normalizeSortMode(parsed?.sortMode);
+        settings.blurGameNumber = normalizeBoolean(
+            parsed?.blurGameNumber,
+            normalizeBoolean(parsed?.hideGameNumber, DEFAULT_SETTINGS.blurGameNumber)
+        );
     } catch (err) {
         console.warn("Cannot load settings from localStorage:", err);
     }
@@ -393,9 +402,25 @@ function renderCurrentGuesses() {
 function applySettingsToForm() {
     const hintRadio = document.querySelector(`input[name="hintMode"][value="${settings.hintMode}"]`);
     const sortRadio = document.querySelector(`input[name="sortMode"][value="${settings.sortMode}"]`);
+    const blurGameNumberCheckbox = document.getElementById("blurGameNumber");
 
     if (hintRadio) hintRadio.checked = true;
     if (sortRadio) sortRadio.checked = true;
+    if (blurGameNumberCheckbox) blurGameNumberCheckbox.checked = settings.blurGameNumber;
+}
+
+function setBlurGameNumberSetting(shouldBlur) {
+    const nextValue = Boolean(shouldBlur);
+    if (settings.blurGameNumber === nextValue) return;
+
+    settings.blurGameNumber = nextValue;
+    saveSettings();
+    applySettingsToForm();
+    updateGameDateLabel();
+}
+
+function toggleBlurGameNumberSetting() {
+    setBlurGameNumberSetting(!settings.blurGameNumber);
 }
 
 function resetRuntimeGameState() {
@@ -441,7 +466,31 @@ function updateGameDateLabel() {
     }
 
     const gameNum = currentGameDate ? computeGameNumber(currentGameDate) : dayNumber;
-    label.textContent = gameNum ? `Гра: #${gameNum}` : "Гра: #?";
+    const gameNumberText = gameNum ? `#${gameNum}` : "#?";
+    const gameNumberSpan = document.createElement("span");
+
+    gameNumberSpan.className = "game-number-value";
+    if (settings.blurGameNumber) {
+        gameNumberSpan.classList.add("game-number-value-blurred");
+    }
+    gameNumberSpan.textContent = gameNumberText;
+    gameNumberSpan.setAttribute("role", "button");
+    gameNumberSpan.setAttribute("tabindex", "0");
+    gameNumberSpan.setAttribute("aria-pressed", String(settings.blurGameNumber));
+    gameNumberSpan.setAttribute(
+        "aria-label",
+        settings.blurGameNumber ? "Показати номер гри" : "Розмити номер гри"
+    );
+    gameNumberSpan.title = settings.blurGameNumber ? "Показати номер гри" : "Розмити номер гри";
+    gameNumberSpan.addEventListener("click", toggleBlurGameNumberSetting);
+    gameNumberSpan.addEventListener("keydown", event => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        toggleBlurGameNumberSetting();
+    });
+
+    label.textContent = "Гра: ";
+    label.appendChild(gameNumberSpan);
 }
 
 async function fetchAllowedWords() {
@@ -2899,6 +2948,13 @@ document.addEventListener("DOMContentLoaded", async () => {
             renderCurrentGuesses();
         });
     });
+
+    const blurGameNumberInput = document.getElementById("blurGameNumber");
+    if (blurGameNumberInput) {
+        blurGameNumberInput.addEventListener("change", event => {
+            setBlurGameNumberSetting(event.target.checked);
+        });
+    }
 
     if (hintButton) {
         hintButton.addEventListener("click", () => {

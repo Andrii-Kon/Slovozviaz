@@ -325,51 +325,67 @@
         <span id="closeSettingsModal" class="close">×</span>
         <h2>Налаштування</h2>
 
-        <div class="settings-section">
+        <div class="settings-layout">
+        <div class="settings-section settings-section-hints">
             <h3 class="settings-section-title">Підказки</h3>
-            <div class="settings-options" role="radiogroup" aria-label="Складність підказок">
+            <div class="settings-options settings-options-hints" role="radiogroup" aria-label="Складність підказок">
                 <label class="settings-option" for="hintModeEasy">
                     <input type="radio" id="hintModeEasy" name="hintMode" value="easy">
                     <span>
                         <span class="settings-option-label">Легкий</span>
-                        <span class="settings-option-description">Підказка буде вдвічі ближчою за ваше найкраще слово.</span>
+                        <span class="settings-option-description">Вдвічі ближче за найкраще слово.</span>
                     </span>
                 </label>
                 <label class="settings-option" for="hintModeMedium">
                     <input type="radio" id="hintModeMedium" name="hintMode" value="medium">
                     <span>
                         <span class="settings-option-label">Середній</span>
-                        <span class="settings-option-description">Підказка буде випадковою серед ще не відкритих позицій.</span>
+                        <span class="settings-option-description">Випадкова невідкрита позиція.</span>
                     </span>
                 </label>
                 <label class="settings-option" for="hintModeHard">
                     <input type="radio" id="hintModeHard" name="hintMode" value="hard">
                     <span>
                         <span class="settings-option-label">Важкий</span>
-                        <span class="settings-option-description">Підказка буде на одну позицію ближчою за ваше найкраще слово.</span>
+                        <span class="settings-option-description">На одну позицію ближче.</span>
                     </span>
                 </label>
             </div>
         </div>
 
-        <div class="settings-section">
+        <div class="settings-section settings-section-sort">
             <h3 class="settings-section-title">Сортування</h3>
-            <div class="settings-options" role="radiogroup" aria-label="Сортування списку спроб">
+            <div class="settings-options settings-options-sort" role="radiogroup" aria-label="Сортування списку спроб">
                 <label class="settings-option" for="sortModeSimilarity">
                     <input type="radio" id="sortModeSimilarity" name="sortMode" value="similarity">
                     <span>
                         <span class="settings-option-label">За схожістю</span>
-                        <span class="settings-option-description">Найближчі слова будуть зверху списку.</span>
+                        <span class="settings-option-description">Найближчі слова зверху.</span>
                     </span>
                 </label>
                 <label class="settings-option" for="sortModeGuessOrder">
                     <input type="radio" id="sortModeGuessOrder" name="sortMode" value="guess-order">
                     <span>
                         <span class="settings-option-label">За порядком спроб</span>
-                        <span class="settings-option-description">Слова відображатимуться в тій послідовності, у якій ви їх вводили.</span>
+                        <span class="settings-option-description">Нові слова додаються в кінець.</span>
                     </span>
                 </label>
             </div>
+        </div>
+
+        <div class="settings-section settings-section-display">
+            <h3 class="settings-section-title">Відображення</h3>
+            <div class="settings-options">
+                <label class="settings-option settings-toggle-option" for="blurGameNumber">
+                    <input type="checkbox" id="blurGameNumber" name="blurGameNumber">
+                    <span>
+                        <span class="settings-option-label">Розмивати номер гри</span>
+                        <span class="settings-option-description">Номер лишається на місці.</span>
+                    </span>
+                    <span class="settings-switch" aria-hidden="true"></span>
+                </label>
+            </div>
+        </div>
         </div>
     </div>
 </div>
